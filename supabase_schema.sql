@@ -97,7 +97,8 @@ CREATE POLICY "Public Access" ON storage.objects FOR SELECT USING ( bucket_id = 
 
 -- Permitir upload apenas para usuários autenticados
 DROP POLICY IF EXISTS "Authenticated Upload" ON storage.objects;
-CREATE POLICY "Authenticated Upload" ON storage.objects FOR INSERT WITH CHECK ( bucket_id = 'avatars' AND auth.role() = 'authenticated' );
+DROP POLICY IF EXISTS "Authenticated All" ON storage.objects;
+CREATE POLICY "Authenticated All" ON storage.objects FOR ALL USING ( bucket_id = 'avatars' AND auth.role() = 'authenticated' ) WITH CHECK ( bucket_id = 'avatars' AND auth.role() = 'authenticated' );
 
 -- Salva todas as alterações se chegar até aqui sem erros
 COMMIT;
