@@ -1,11 +1,10 @@
--- =====================================================
--- SOLUÇÃO FINAL - Usando Admin API do Supabase
--- =====================================================
+-- CORRECAO FINAL: Insere TODOS os campos de uma vez
+-- Execute no SQL Editor do Supabase
 
--- Remove função antiga
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
+
 DROP FUNCTION IF EXISTS public.create_technician_user(text,text,text,text,numeric,numeric,text,text,text);
 
--- Nova função usando extensão do Supabase
 CREATE OR REPLACE FUNCTION public.create_technician_user(
     new_email TEXT,
     new_password TEXT,
@@ -20,132 +19,99 @@ CREATE OR REPLACE FUNCTION public.create_technician_user(
 RETURNS JSON
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
     caller_empresa_id UUID;
     new_user_id UUID;
-    user_data JSONB;
+    existing_user_id UUID;
 BEGIN
-    -- Pega empresa_id do admin
     SELECT empresa_id INTO caller_empresa_id 
     FROM public.usuarios 
     WHERE id = auth.uid();
     
     IF caller_empresa_id IS NULL THEN
-        RETURN json_build_object('success', false, 'error', 'Empresa não encontrada');
+        RETURN json_build_object('success', false, 'error', 'Empresa nao encontrada');
     END IF;
     
-    -- Verifica email duplicado
-    IF EXISTS (SELECT 1 FROM auth.users WHERE email = new_email) THEN
-        RETURN json_build_object('success', false, 'error', 'Email já cadastrado');
+    SELECT id INTO existing_user_id FROM auth.users WHERE email = LOWER(new_email);
+    IF existing_user_id IS NOT NULL THEN
+        RETURN json_build_object('success', false, 'error', 'Email ja cadastrado');
     END IF;
     
-    -- Cria usuário usando ADMIN API (mais confiável)
-    BEGIN
-        -- Usa a extensão http para chamar a API do Supabase
-        -- OU insere com TODOS os campos necessários
-        new_user_id := gen_random_uuid();
-        
-        INSERT INTO auth.users (
-            instance_id,
-            id,
-            aud,
-            role,
-            email,
-            encrypted_password,
-            email_confirmed_at,
-            invited_at,
-            confirmation_token,
-            confirmation_sent_at,
-            recovery_token,
-            recovery_sent_at,
-            email_change_token_new,
-            email_change,
-            email_change_sent_at,
-            last_sign_in_at,
-            raw_app_meta_data,
-            raw_user_meta_data,
-            is_super_admin,
-            created_at,
-            updated_at,
-            phone,
-            phone_confirmed_at,
-            phone_change,
-            phone_change_token,
-            phone_change_sent_at,
-            email_change_token_current,
-            email_change_confirm_status,
-            banned_until,
-            reauthentication_token,
-            reauthentication_sent_at,
-            is_sso_user,
-            deleted_at
-        ) VALUES (
-            '00000000-0000-0000-0000-000000000000',
-            new_user_id,
-            'authenticated',
-            'authenticated',
-            new_email,
-            crypt(new_password, gen_salt('bf')),
-            NOW(),
-            NULL,
-            '',
-            NULL,
-            '',
-            NULL,
-            '',
-            '',
-            NULL,
-            NULL,
-            '{"provider":"email","providers":["email"]}'::jsonb,
-            json_build_object('full_name', new_name)::jsonb,
-            false,
-            NOW(),
-            NOW(),
-            NULL,
-            NULL,
-            '',
-            '',
-            NULL,
-            '',
-            0,
-            NULL,
-            '',
-            NULL,
-            false,
-            NULL
-        );
-        
-    EXCEPTION WHEN OTHERS THEN
-        RETURN json_build_object('success', false, 'error', 'Erro ao criar usuário: ' || SQLERRM);
-    END;
+    new_user_id := gen_random_uuid();
     
-    -- Cria perfil
+    INSERT INTO auth.users (
+        instance_id,
+        id,
+        aud,
+        role,
+        email,
+        encrypted_password,
+        email_confirmed_at,
+        raw_app_meta_data,
+        raw_user_meta_data,
+        is_super_admin,
+        created_at,
+        updated_at,
+        confirmation_token,
+        recovery_token,
+        email_change_token_new,
+        email_change,
+        email_change_token_current,
+        email_change_confirm_status,
+        reauthentication_token,
+        is_sso_user
+    ) VALUES (
+        '00000000-0000-0000-0000-000000000000',
+        new_user_id,
+        'authenticated',
+        'authenticated',
+        LOWER(new_email),
+        extensions.crypt(new_password, extensions.gen_salt('bf')),
+        NOW(),
+        '{"provider":"email","providers":["email"]}'::jsonb,
+        json_build_object('full_name', new_name)::jsonb,
+        false,
+        NOW(),
+        NOW(),
+        '',
+        '',
+        '',
+        '',
+        '',
+        0,
+        '',
+        false
+    );
+    
+    -- Insere TUDO de uma vez, incluindo campos opcionais
     INSERT INTO public.usuarios (
         id,
         empresa_id,
         cargo,
-        nome,
         email,
+        nome_completo,
         telefone,
-        commission_rate,
-        base_salary,
+        percentual_comissao,
+        salario_base,
         pix_key,
         avatar,
-        signature_url
+        signature_url,
+        status
     ) VALUES (
         new_user_id,
         caller_empresa_id,
         'tecnico',
+        LOWER(new_email),
         new_name,
-        new_email,
         new_phone,
         new_commission_rate,
         new_base_salary,
         new_pix_key,
         new_avatar_url,
-        new_signature_url
+        new_signature_url,
+        true
     );
     
     RETURN json_build_object('success', true, 'user_id', new_user_id);
@@ -154,3 +120,5 @@ EXCEPTION WHEN OTHERS THEN
     RETURN json_build_object('success', false, 'error', SQLERRM);
 END;
 $$;
+
+SELECT 'Funcao corrigida para inserir todos os campos!' AS resultado;

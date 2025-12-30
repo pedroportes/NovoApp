@@ -19,14 +19,15 @@ import { SignaturePad } from '@/components/ui/signature-pad'
 
 interface Technician {
     id: string
-    nome: string
+    nome_completo: string
     email: string
     telefone?: string
-    commission_rate?: number
-    base_salary?: number
+    percentual_comissao?: number
+    salario_base?: number
     pix_key?: string
     avatar?: string
     signature_url?: string
+    placa_carro?: string
 }
 
 export function Technicians() {
@@ -48,7 +49,8 @@ export function Technicians() {
         phone: '',
         commission_rate: '0',
         base_salary: '0',
-        pix_key: ''
+        pix_key: '',
+        placa_carro: ''
     }
     const [formData, setFormData] = useState(initialFormState)
 
@@ -101,7 +103,7 @@ export function Technicians() {
                 .from('usuarios')
                 .select('*')
                 .eq('empresa_id', userData.empresa_id)
-                .eq('cargo', 'tecnico')
+                .in('cargo', ['tecnico', 'admin'])
 
             if (error) throw error
             setTechs(data as Technician[])
@@ -116,13 +118,14 @@ export function Technicians() {
     const handleEdit = (tech: Technician) => {
         setEditingTechId(tech.id)
         setFormData({
-            name: tech.nome || '',
+            name: tech.nome_completo || '',
             email: tech.email || '',
             password: '',
             phone: tech.telefone || '',
-            commission_rate: tech.commission_rate?.toString() || '0',
-            base_salary: tech.base_salary?.toString() || '0',
-            pix_key: tech.pix_key || ''
+            commission_rate: tech.percentual_comissao?.toString() || '0',
+            base_salary: tech.salario_base?.toString() || '0',
+            pix_key: tech.pix_key || '',
+            placa_carro: tech.placa_carro || ''
         })
         setAvatarPreview(tech.avatar || null)
         setCurrentSignatureUrl(tech.signature_url || null)
@@ -196,42 +199,75 @@ export function Technicians() {
                 newSignatureUrl = await uploadFile(signatureBlob, `tech-sig`)
             }
 
-            let response: { data: any; error: any };
-
             if (editingTechId) {
-                // UPDATE
-                response = await (supabase.rpc as any)('update_technician', {
-                    target_user_id: editingTechId,
-                    new_name: formData.name,
-                    new_phone: formData.phone,
-                    new_commission_rate: commRate,
-                    new_base_salary: salary,
-                    new_pix_key: formData.pix_key,
-                    new_password: formData.password,
-                    new_avatar_url: newAvatarUrl,
-                    new_signature_url: newSignatureUrl
-                })
+                // UPDATE EXISTENTE
+                const { error: updateError } = await supabase
+                    .from('usuarios')
+                    .update({
+                        nome_completo: formData.name,
+                        telefone: formData.phone,
+                        percentual_comissao: commRate,
+                        salario_base: salary,
+                        pix_key: formData.pix_key,
+                        avatar: newAvatarUrl,
+                        signature_url: newSignatureUrl,
+                        placa_carro: formData.placa_carro
+                    })
+                    .eq('id', editingTechId)
+
+                if (updateError) throw updateError
+
+                // Atualizar senha se fornecida
+                if (formData.password) {
+                    const { error: pwdError } = await supabase.auth.admin.updateUserById(
+                        editingTechId,
+                        { password: formData.password }
+                    )
+                    if (pwdError) console.warn('Erro ao atualizar senha:', pwdError)
+                }
+
+                alert('Técnico atualizado!')
             } else {
-                // CREATE
-                response = await (supabase.rpc as any)('create_technician_user', {
-                    new_email: formData.email,
-                    new_password: formData.password,
-                    new_name: formData.name,
-                    new_phone: formData.phone,
-                    new_commission_rate: commRate,
-                    new_base_salary: salary,
-                    new_pix_key: formData.pix_key,
-                    new_avatar_url: newAvatarUrl,
-                    new_signature_url: newSignatureUrl
+                // CRIAR NOVO - Usar signup simples
+                const { data: signupData, error: signupError } = await supabase.auth.signUp({
+                    email: formData.email,
+                    password: formData.password,
+                    options: {
+                        data: {
+                            full_name: formData.name
+                        }
+                    }
                 })
+
+                if (signupError) throw signupError
+                if (!signupData.user) throw new Error('Erro ao criar usuário')
+
+                // Aguardar trigger criar perfil base
+                await new Promise(resolve => setTimeout(resolve, 1000))
+
+                // Atualizar perfil com dados completos
+                const { error: profileError } = await supabase
+                    .from('usuarios')
+                    .update({
+                        empresa_id: userData!.empresa_id,
+                        cargo: 'tecnico',
+                        nome_completo: formData.name,
+                        telefone: formData.phone,
+                        percentual_comissao: commRate,
+                        salario_base: salary,
+                        pix_key: formData.pix_key,
+                        avatar: newAvatarUrl,
+                        signature_url: newSignatureUrl,
+                        placa_carro: formData.placa_carro,
+                        status: true
+                    })
+                    .eq('id', signupData.user.id)
+
+                if (profileError) throw profileError
+
+                alert('Técnico criado com sucesso!')
             }
 
-            const { data, error } = response
-
-            if (error) throw error
-            if (data && !data.success) throw new Error(data.error)
-
-            alert(editingTechId ? 'Técnico atualizado!' : 'Técnico criado com sucesso!')
             setIsDialogOpen(false)
             fetchTechs()
 
@@ -243,7 +279,7 @@ export function Technicians() {
     }
 
     const filteredTechs = techs.filter(tech =>
-        tech.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        tech.nome_completo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         tech.telefone?.toLowerCase().includes(searchTerm.toLowerCase())
     )
 
@@ -252,12 +288,14 @@ export function Technicians() {
             <div className="flex justify-end mb-4">
 
                 <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                    <DialogTrigger asChild>
-                        <Button className="hidden md:flex h-14 text-base md:w-auto w-full shadow-lg" onClick={openNewTechDialog}>
-                            <Plus className="mr-2 h-5 w-5" />
-                            Novo Técnico
-                        </Button>
-                    </DialogTrigger>
+                    {userData?.cargo?.toLowerCase() === 'admin' && (
+                        <DialogTrigger asChild>
+                            <Button className="hidden md:flex h-14 text-base md:w-auto w-full shadow-lg" onClick={openNewTechDialog}>
+                                <Plus className="mr-2 h-5 w-5" />
+                                Novo Técnico
+                            </Button>
+                        </DialogTrigger>
+                    )}
                     <DialogContent className="w-[95%] max-w-[600px] h-[90vh] overflow-y-auto rounded-xl">
                         <DialogHeader>
                             <DialogTitle>{editingTechId ? 'Editar Técnico' : 'Novo Técnico'}</DialogTitle>
@@ -322,6 +360,17 @@ export function Technicians() {
                                         autoComplete="off"
                                     />
                                 </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="placa">Placa do Carro (Opcional)</Label>
+                                <Input
+                                    id="placa"
+                                    className="h-12 text-lg"
+                                    value={formData.placa_carro}
+                                    onChange={(e) => setFormData({ ...formData, placa_carro: e.target.value })}
+                                    placeholder="ABC-1234"
+                                />
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -427,27 +476,25 @@ export function Technicians() {
                     Nenhum técnico encontrado. Cadastre o primeiro!
                 </div>
             ) : (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                     {filteredTechs.map((tech) => (
-                        <div key={tech.id} className="group relative flex flex-col justify-between rounded-xl border border-border bg-card p-6 shadow-md hover:shadow-lg transition-all active:scale-[0.98]">
+                        <div key={tech.id} className="group relative flex flex-col justify-between rounded-[24px] bg-white/80 backdrop-blur-md border border-white/20 p-6 shadow-sm hover:shadow-xl transition-all duration-300">
                             <div className="space-y-4">
                                 <div className="flex items-center gap-4">
-                                    <div className="h-16 w-16 rounded-full bg-muted overflow-hidden flex-shrink-0 border border-border">
+                                    <div className="h-16 w-16 rounded-full bg-gray-50 flex-shrink-0 border border-gray-100 flex items-center justify-center overflow-hidden">
                                         {tech.avatar ? (
-                                            <img src={tech.avatar} alt={tech.nome} className="h-full w-full object-cover" />
+                                            <img src={tech.avatar} alt={tech.nome_completo} className="h-full w-full object-cover" />
                                         ) : (
-                                            <div className="h-full w-full flex items-center justify-center bg-primary/10">
-                                                <UserIcon className="h-8 w-8 text-primary" />
-                                            </div>
+                                            <UserIcon className="h-8 w-8 text-gray-400" />
                                         )}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <h3 className="font-bold text-xl truncate">{tech.nome || 'Sem Nome'}</h3>
-                                        <p className="text-sm text-muted-foreground flex items-center gap-1 truncate">
+                                        <h3 className="font-bold text-lg truncate text-gray-900">{tech.nome_completo || 'Sem Nome'}</h3>
+                                        <p className="text-sm text-gray-500 flex items-center gap-1 truncate">
                                             <Mail className="h-3 w-3" /> {tech.email}
                                         </p>
                                         {tech.telefone && (
-                                            <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1 truncate">
+                                            <p className="text-sm text-gray-500 flex items-center gap-1 mt-1 truncate">
                                                 <Phone className="h-3 w-3" /> {tech.telefone}
                                             </p>
                                         )}
@@ -457,22 +504,24 @@ export function Technicians() {
 
                             {/* Mostra se tem assinatura cadastrada */}
                             {tech.signature_url && (
-                                <div className="mt-2 p-2 bg-muted/20 rounded border border-dashed border-border flex flex-col items-center">
-                                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Assinatura Cadastrada</p>
-                                    <img src={tech.signature_url} className="h-8 object-contain opacity-70" alt="Assinatura" />
+                                <div className="mt-4 p-2 bg-gray-50/50 rounded-lg border border-dashed border-gray-200 flex flex-col items-center">
+                                    <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-1">Assinatura Digital</p>
+                                    <img src={tech.signature_url} className="h-8 object-contain opacity-60" alt="Assinatura" />
                                 </div>
                             )}
 
-                            <div className="mt-6 flex items-center gap-3 pt-4 border-t border-border">
-                                <Button variant="outline" className="flex-1 h-12 text-base font-medium" onClick={() => handleEdit(tech)}>
-                                    <Pencil className="mr-2 h-4 w-4" />
-                                    Editar
-                                </Button>
-                                <Button variant="destructive" className="flex-1 h-12 text-base font-medium" onClick={() => handleDelete(tech.id, tech.nome)}>
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    Excluir
-                                </Button>
-                            </div>
+                            {userData?.cargo === 'admin' && (
+                                <div className="mt-6 flex items-center gap-3 pt-4 border-t border-gray-100">
+                                    <Button variant="outline" className="flex-1 h-10 text-sm font-medium rounded-xl border-gray-200 hover:bg-gray-50 hover:text-primary transition-colors" onClick={() => handleEdit(tech)}>
+                                        <Pencil className="mr-2 h-3 w-3" />
+                                        Editar
+                                    </Button>
+                                    <Button variant="destructive" className="flex-1 h-10 text-sm font-medium rounded-xl bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 border border-red-100 shadow-none transition-colors" onClick={() => handleDelete(tech.id, tech.nome_completo)}>
+                                        <Trash2 className="mr-2 h-3 w-3" />
+                                        Excluir
+                                    </Button>
+                                </div>
+                            )}
                         </div>
                     ))}
                 </div>

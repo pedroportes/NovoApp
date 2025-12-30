@@ -40,7 +40,7 @@ export function NewServiceOrder() {
     })
 
     const [items, setItems] = useState<ServiceItem[]>([])
-    const [photos, setPhotos] = useState<{ antes: string | null, depois: string | null }>({ antes: null, depois: null })
+    const [photos, setPhotos] = useState<{ antes: string[], depois: string[] }>({ antes: [], depois: [] })
     const [signatureBlob, setSignatureBlob] = useState<Blob | null>(null)
     const [initialSignatureUrl, setInitialSignatureUrl] = useState<string | null>(null)
 
@@ -225,7 +225,12 @@ export function NewServiceOrder() {
                     desconto: osData.desconto ? osData.desconto.toString() : ''
                 })
                 setItems((osData.itens as ServiceItem[]) || [])
-                setPhotos(osData.fotos as any || { antes: null, depois: null })
+                // Handle JSONB photos structure (backward compatible if null)
+                const loadedPhotos = osData.fotos as any || { antes: [], depois: [] }
+                setPhotos({
+                    antes: Array.isArray(loadedPhotos.antes) ? loadedPhotos.antes : (loadedPhotos.antes ? [loadedPhotos.antes] : []),
+                    depois: Array.isArray(loadedPhotos.depois) ? loadedPhotos.depois : (loadedPhotos.depois ? [loadedPhotos.depois] : [])
+                })
                 if (osData.assinatura_cliente_url) {
                     setInitialSignatureUrl(osData.assinatura_cliente_url)
                 }
@@ -295,9 +300,11 @@ export function NewServiceOrder() {
         setItems(items.filter((_, i) => i !== index))
     }
 
+    // ...
+
     const handlePhotoUpload = async (file: File, type: 'antes' | 'depois') => {
         try {
-            const fileName = `os-evidence-${Date.now()}-${type}`
+            const fileName = `os-evidence-${Date.now()}-${type}-${Math.random().toString(36).substring(7)}`
             const { error: uploadError } = await supabase.storage
                 .from('avatars')
                 .upload(fileName, file)
@@ -308,11 +315,21 @@ export function NewServiceOrder() {
                 .from('avatars')
                 .getPublicUrl(fileName)
 
-            setPhotos(prev => ({ ...prev, [type]: publicUrl }))
+            setPhotos(prev => ({
+                ...prev,
+                [type]: [...(prev[type] || []), publicUrl]
+            }))
 
         } catch (error) {
             alert('Erro ao enviar foto: ' + error)
         }
+    }
+
+    const removePhoto = (type: 'antes' | 'depois', index: number) => {
+        setPhotos(prev => ({
+            ...prev,
+            [type]: prev[type].filter((_, i) => i !== index)
+        }))
     }
 
     const handleSubmit = async () => {
@@ -349,7 +366,7 @@ export function NewServiceOrder() {
                 observacoes: formData.observacoes,
                 desconto: discountPercent,
                 itens: items,
-                fotos: { antes: photos.antes ? [photos.antes] : [], depois: photos.depois ? [photos.depois] : [] },
+                fotos: { antes: photos.antes, depois: photos.depois },
                 valor_total: total
             }
 
@@ -691,29 +708,44 @@ export function NewServiceOrder() {
                     <h2 className="text-xl font-bold text-slate-800">Fotos do Serviço</h2>
                 </div>
 
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* ANTES SECTION */}
                     <div className="space-y-3">
-                        <div className="border-2 border-dashed border-slate-200 hover:border-emerald-400 rounded-3xl bg-slate-50 aspect-[3/4] relative flex flex-col items-center justify-center overflow-hidden transition-colors group">
-                            {photos.antes ?
-                                <img src={photos.antes} className="absolute inset-0 w-full h-full object-cover" />
-                                : <div className="text-center p-4">
-                                    <div className="w-12 h-12 bg-white rounded-full shadow-sm flex items-center justify-center mx-auto mb-2 text-slate-400 group-hover:text-emerald-500 transition-colors"><Camera className="h-6 w-6" /></div>
-                                    <span className="text-xs font-bold text-slate-400">ANTES</span>
+                        <Label className="font-bold text-slate-600 ml-1">ANTES (Evidências)</Label>
+                        <div className="grid grid-cols-2 gap-2">
+                            {photos.antes.map((url, idx) => (
+                                <div key={idx} className="relative aspect-square rounded-2xl overflow-hidden group shadow-sm">
+                                    <img src={url} className="w-full h-full object-cover" />
+                                    <button onClick={() => removePhoto('antes', idx)} className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <Trash2 className="h-3 w-3" />
+                                    </button>
                                 </div>
-                            }
-                            <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={e => e.target.files?.[0] && handlePhotoUpload(e.target.files[0], 'antes')} />
+                            ))}
+                            <div className="border-2 border-dashed border-slate-200 hover:border-emerald-400 rounded-2xl bg-slate-50 aspect-square relative flex flex-col items-center justify-center overflow-hidden transition-colors cursor-pointer">
+                                <div className="w-10 h-10 bg-white rounded-full shadow-sm flex items-center justify-center mb-1 text-slate-400"><Camera className="h-5 w-5" /></div>
+                                <span className="text-[10px] font-bold text-slate-400">ADICIONAR</span>
+                                <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={e => e.target.files?.[0] && handlePhotoUpload(e.target.files[0], 'antes')} />
+                            </div>
                         </div>
                     </div>
+
+                    {/* DEPOIS SECTION */}
                     <div className="space-y-3">
-                        <div className="border-2 border-dashed border-slate-200 hover:border-emerald-400 rounded-3xl bg-slate-50 aspect-[3/4] relative flex flex-col items-center justify-center overflow-hidden transition-colors group">
-                            {photos.depois ?
-                                <img src={photos.depois} className="absolute inset-0 w-full h-full object-cover" />
-                                : <div className="text-center p-4">
-                                    <div className="w-12 h-12 bg-white rounded-full shadow-sm flex items-center justify-center mx-auto mb-2 text-slate-400 group-hover:text-emerald-500 transition-colors"><Camera className="h-6 w-6" /></div>
-                                    <span className="text-xs font-bold text-slate-400">DEPOIS</span>
+                        <Label className="font-bold text-slate-600 ml-1">DEPOIS (Evidências)</Label>
+                        <div className="grid grid-cols-2 gap-2">
+                            {photos.depois.map((url, idx) => (
+                                <div key={idx} className="relative aspect-square rounded-2xl overflow-hidden group shadow-sm">
+                                    <img src={url} className="w-full h-full object-cover" />
+                                    <button onClick={() => removePhoto('depois', idx)} className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <Trash2 className="h-3 w-3" />
+                                    </button>
                                 </div>
-                            }
-                            <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={e => e.target.files?.[0] && handlePhotoUpload(e.target.files[0], 'depois')} />
+                            ))}
+                            <div className="border-2 border-dashed border-slate-200 hover:border-emerald-400 rounded-2xl bg-slate-50 aspect-square relative flex flex-col items-center justify-center overflow-hidden transition-colors cursor-pointer">
+                                <div className="w-10 h-10 bg-white rounded-full shadow-sm flex items-center justify-center mb-1 text-slate-400"><Camera className="h-5 w-5" /></div>
+                                <span className="text-[10px] font-bold text-slate-400">ADICIONAR</span>
+                                <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={e => e.target.files?.[0] && handlePhotoUpload(e.target.files[0], 'depois')} />
+                            </div>
                         </div>
                     </div>
                 </div>

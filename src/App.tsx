@@ -10,10 +10,11 @@ import { NewServiceOrder } from './pages/NewServiceOrder'
 import { Services } from '@/pages/Services'
 import { PrintServiceOrder } from '@/pages/PrintServiceOrder'
 import { Settings } from './pages/Settings'
-import { FinancialClosing } from './pages/FinancialClosing'
+import { Financial } from './pages/Financial'
 import { ThemeProvider } from "@/components/theme-provider"
 import { AuthProvider } from '@/contexts/AuthContext'
 import { TechnicianDashboard } from './pages/TechnicianDashboard'
+import { TechnicianExpenses } from './pages/TechnicianExpenses'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 
 function App() {
@@ -40,8 +41,10 @@ function App() {
                             <Route path="/service-orders/new" element={<NewServiceOrder />} />
                             <Route path="/service-orders/:id" element={<NewServiceOrder />} />
                             <Route path="/settings" element={<Settings />} />
-                            <Route path="/financial" element={<FinancialClosing />} />
+                            <Route path="/financial" element={<Financial />} />
+                            <Route path="/tecnico/dashboard" element={<TechnicianDashboard />} />
                             <Route path="/tech-dashboard" element={<TechnicianDashboard />} />
+                            <Route path="/expenses" element={<TechnicianExpenses />} />
                         </Route>
 
                         {/* Print Route (Authenticated but no Layout) */}

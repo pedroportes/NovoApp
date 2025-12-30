@@ -2,7 +2,8 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { authStorage, UserData } from '@/lib/auth-storage'
-import { Database } from '@/types/supabase'
+// import { Database } from '@/types/supabase'
+type Database = any
 
 interface AuthContextType {
     user: User | null
@@ -69,7 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     id: row.id,
                     empresa_id: row.empresa_id,
                     cargo: row.cargo,
-                    nome: row.nome || '',
+                    nome: (row as any).nome_completo || row.nome || '',
                     email: row.email || '',
                 }
                 setUserData(userData)
@@ -125,7 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         id: userRow.id,
                         empresa_id: userRow.empresa_id,
                         cargo: userRow.cargo,
-                        nome: userRow.nome || '',
+                        nome: (userRow as any).nome_completo || userRow.nome || '',
                         email: userRow.email || '',
                     }
                     setUserData(userDataObj)

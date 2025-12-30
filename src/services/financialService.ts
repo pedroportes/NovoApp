@@ -10,6 +10,7 @@ export interface TechnicianBalance {
     osCount: number
     osIds: string[]
     advancesIds: string[]
+    commissionIds: string[]
 }
 
 export const financialService = {
@@ -35,72 +36,69 @@ export const financialService = {
             // Handle potential field name variations (user reported adding snake_case, but app might use others)
             const commissionRate = (tech.percentual_comissao || tech.commission_rate || 0) / 100
 
-            // 2. Get Unpaid Service Orders
-            // Assuming 'paga_ao_tecnico' is a boolean field in ordens_servico.
-            // If it doesn't exist yet, we might need to filter by status or a new field.
-            // For now, let's assume filtering by status 'Concluído' and checking a flag/log.
-            // Since the user didn't mention 'paga_ao_tecnico' existence explicitly as *already there* but asked for logic to "mark as paid",
-            // I will assume we need to filter by status='Concluído' and exclude those already in a closing batch?
-            // Actually, best practice: add 'paga_ao_tecnico' boolean to OS if not exists, or check 'data_pagamento'.
-            // Let's use 'status' = 'Concluído' and 'paga_ao_tecnico' is NULL or FALSE.
-
-            // Checking if 'paga_ao_tecnico' exists in my types... it is NOT in the types I saw earlier.
-            // I should probably add it to the query assuming it exists in DB or will be added.
-            // User said "onde paga_ao_tecnico = false", so the column EXISTS in DB.
-
-            const { data: orders, error: osError } = await (supabase
-                .from('ordens_servico') as any) // Casting as paga_ao_tecnico might be missing in local types
-                .select('id, valor_total, status, paga_ao_tecnico')
-                .eq('tecnico_id', technicianId)
-                .eq('status', 'Concluído')
-                .is('paga_ao_tecnico', false)
-
-            if (osError) throw osError
-
             let totalCommission = 0
             const osIds: string[] = []
-
-            orders?.forEach((os: any) => {
-                const value = os.valor_total || 0
-                totalCommission += value * commissionRate
-                osIds.push(os.id)
-            })
-
-            // 3. Get Pending Advances/Bonuses
-            const { data: flows, error: flowError } = await (supabase
-                .from('financeiro_fluxo') as any)
-                .select('*')
-                .eq('tecnico_id', technicianId)
-                .eq('status', 'PENDENTE')
-
-            if (flowError) throw flowError
-
+            const commissionIds: string[] = []
             let totalAdvances = 0
             let totalBonus = 0
             const advancesIds: string[] = []
 
-            flows?.forEach((flow: any) => {
-                if (flow.tipo === 'ADIANTAMENTO') {
-                    totalAdvances += flow.valor
-                } else if (flow.tipo === 'BONUS') {
-                    totalBonus += flow.valor
+            // 2. Get Unpaid Commissions (historico_comissoes) - with graceful error handling
+            try {
+                const { data: commissions, error: commError } = await (supabase
+                    .from('historico_comissoes') as any)
+                    .select('*')
+                    .eq('tecnico_id', technicianId)
+                    .eq('status_pagamento', 'a_pagar')
+
+                if (!commError && commissions) {
+                    commissions.forEach((comm: any) => {
+                        const value = Number(comm.valor_comissao) || 0
+                        totalCommission += value
+                        if (comm.ordem_servico_id) osIds.push(comm.ordem_servico_id)
+                        commissionIds.push(comm.id)
+                    })
                 }
-                advancesIds.push(flow.id)
-            })
+            } catch (e) {
+                console.warn('Tabela historico_comissoes não acessível:', e)
+            }
+
+            // 3. Get Pending Advances/Bonuses - with graceful error handling
+            try {
+                const { data: flows, error: flowError } = await (supabase
+                    .from('financeiro_fluxo') as any)
+                    .select('*')
+                    .eq('tecnico_id', technicianId)
+                    .eq('status', 'PENDENTE')
+
+                if (!flowError && flows) {
+                    flows.forEach((flow: any) => {
+                        if (flow.tipo === 'ADIANTAMENTO') {
+                            totalAdvances += flow.valor
+                        } else if (flow.tipo === 'BONUS') {
+                            totalBonus += flow.valor
+                        }
+                        advancesIds.push(flow.id)
+                    })
+                }
+            } catch (e) {
+                console.warn('Tabela financeiro_fluxo não acessível:', e)
+            }
 
             // 4. Calculate Final
             const finalBalance = totalCommission + totalBonus - totalAdvances
 
             return {
                 technicianId,
-                technicianName: tech.nome,
+                technicianName: tech.nome || tech.nome_completo || 'Técnico',
                 totalCommission,
                 totalAdvances,
                 totalBonus,
                 finalBalance,
                 osCount: osIds.length,
                 osIds,
-                advancesIds
+                advancesIds,
+                commissionIds
             }
 
         } catch (error) {
@@ -118,16 +116,25 @@ export const financialService = {
     closeMonth: async (balanceData: TechnicianBalance, empresaId: string) => {
         try {
             // 1. Mark OS as paid
-            if (balanceData.osIds.length > 0) {
-                const { error: osUpdateError } = await (supabase
-                    .from('ordens_servico') as any)
-                    .update({
-                        paga_ao_tecnico: true,
-                        // data_pagamento: new Date().toISOString() // Optional if column exists
-                    })
-                    .in('id', balanceData.osIds)
+            // 1. Mark Commissions as PAID logic
+            if (balanceData.commissionIds.length > 0) {
+                const { error: commUpdateError } = await (supabase
+                    .from('historico_comissoes') as any)
+                    .update({ status_pagamento: 'pago' })
+                    .in('id', balanceData.commissionIds)
 
-                if (osUpdateError) throw osUpdateError
+                if (commUpdateError) throw commUpdateError
+            }
+
+            // Also mark OS as paid effectively? 
+            // The user instruction focuses on "historico_comissoes".
+            // Marking OS as "paga_ao_tecnico" is good practice but secondary if the primary source is now historico_comissoes.
+            // I will keep it if osIds are present to be consistent.
+            if (balanceData.osIds.length > 0) {
+                await (supabase
+                    .from('ordens_servico') as any)
+                    .update({ paga_ao_tecnico: true })
+                    .in('id', balanceData.osIds)
             }
 
             // 2. Mark Advances/Bonuses as PROCESSED

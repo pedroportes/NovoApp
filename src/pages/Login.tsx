@@ -105,9 +105,13 @@ export function Login() {
                 }
 
                 // Redirecionamento correto
+                // Redirecionamento correto conforme solicitado
                 if (userRole === 'tecnico') {
-                    navigate('/tech-dashboard')
+                    navigate('/tecnico/dashboard')
+                } else if (userRole === 'admin') {
+                    navigate('/') // Admin Dashboard
                 } else {
+                    // Fallback
                     navigate('/')
                 }
             } else {
