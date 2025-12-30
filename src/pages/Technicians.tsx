@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Plus, Search, Pencil, Trash2, Phone, Mail, User as UserIcon } from 'lucide-react'
+import { compressImage } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { Input } from '@/components/ui/input'
@@ -149,7 +150,11 @@ export function Technicians() {
 
         if (uploadError) {
             console.error(uploadError)
-            throw new Error('Falha no upload. Verifique se o bucket "avatars" existe.')
+            if (uploadError) {
+                console.error('Erro detalhado do upload:', uploadError)
+                alert(`Erro no upload: ${uploadError.message}`)
+                throw uploadError
+            }
         }
 
         const { data } = supabase.storage
@@ -173,7 +178,8 @@ export function Technicians() {
 
             // 1. Upload Avatar
             if (avatarFile) {
-                newAvatarUrl = await uploadFile(avatarFile, `tech-avatar`)
+                const compressedBlob = await compressImage(avatarFile)
+                newAvatarUrl = await uploadFile(compressedBlob, `tech-avatar`)
             }
 
             // 2. Upload Signature (If changed)

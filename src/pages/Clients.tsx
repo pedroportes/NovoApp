@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Plus, Search, Pencil, Trash2, Phone, Mail, User as UserIcon, MapPin, FileText } from 'lucide-react'
+import { compressImage } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { Input } from '@/components/ui/input'
@@ -144,7 +145,11 @@ export function Clients() {
             .from('avatars')
             .upload(filePath, file)
 
-        if (uploadError) throw new Error('Falha no upload.')
+        if (uploadError) {
+            console.error('Erro detalhado do upload:', uploadError)
+            alert(`Erro no upload: ${uploadError.message}`)
+            throw uploadError
+        }
 
         const { data } = supabase.storage
             .from('avatars')
@@ -168,7 +173,9 @@ export function Clients() {
             let newSignatureUrl = currentSignatureUrl
 
             if (avatarFile) {
-                newAvatarUrl = await uploadFile(avatarFile, `client-avatar`)
+                // Compress before upload
+                const compressedBlob = await compressImage(avatarFile)
+                newAvatarUrl = await uploadFile(compressedBlob, `client-avatar`)
             }
 
             if (signatureBlob) {
