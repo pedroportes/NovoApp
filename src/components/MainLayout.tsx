@@ -44,10 +44,8 @@ export function MainLayout() {
         setFabActionState(() => action)
     }
 
-    // Reset FAB action when route changes to avoid stale actions or race conditions
-    useEffect(() => {
-        setFabActionState(null)
-    }, [location.pathname])
+    // Reset FAB action removed to prevent race conditions with child components
+    // Children are responsible for cleaning up their own actions on unmount.
 
     const handleFabClick = () => {
         if (fabAction) {

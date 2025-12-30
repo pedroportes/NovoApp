@@ -70,6 +70,7 @@ export function Clients() {
 
     useEffect(() => {
         setFabAction(() => openNewClientDialog)
+        return () => setFabAction(null)
     }, [])
 
     useEffect(() => {

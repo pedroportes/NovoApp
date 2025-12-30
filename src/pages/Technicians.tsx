@@ -70,6 +70,7 @@ export function Technicians() {
 
     useEffect(() => {
         setFabAction(() => openNewTechDialog)
+        return () => setFabAction(null)
     }, [])
 
     useEffect(() => {
