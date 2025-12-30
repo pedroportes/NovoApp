@@ -33,6 +33,48 @@ export function Settings() {
 
     const { setFabAction } = useOutletContext<{ setFabAction: (action: (() => void) | null) => void }>() ?? { setFabAction: () => { } }
 
+    const handleSubmit = useCallback(async () => {
+        setSaving(true)
+        try {
+            let logoUrl = logoPreview
+
+            if (logoFile) {
+                const compressedFile = await compressImage(logoFile, 500, 0.8)
+                const fileExt = logoFile.name.split('.').pop()
+                const fileName = `company_logo_${userData!.empresa_id}_${Date.now()}.${fileExt}`
+
+                const { error: uploadError } = await supabase.storage
+                    .from('avatars')
+                    .upload(fileName, compressedFile)
+
+                if (uploadError) throw uploadError
+
+                const { data: urlData } = supabase.storage
+                    .from('avatars')
+                    .getPublicUrl(fileName)
+
+                logoUrl = urlData.publicUrl
+            }
+
+            const { error } = await (supabase
+                .from('empresas') as any)
+                .update({
+                    ...formData,
+                    logo_url: logoUrl
+                })
+                .eq('id', userData!.empresa_id)
+
+            if (error) throw error
+
+            alert('Configurações salvas com sucesso!')
+        } catch (error: any) {
+            console.error('Erro ao salvar:', error)
+            alert('Erro ao salvar: ' + error.message)
+        } finally {
+            setSaving(false)
+        }
+    }, [formData, logoFile, logoPreview, userData])
+
     useEffect(() => {
         // FAB Action for Settings is just Save
         setFabAction(() => handleSubmit)
