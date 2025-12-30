@@ -89,7 +89,9 @@ export function MainLayout() {
                                 <span className="font-bold text-lg">{userData?.nome?.[0] || 'F'}</span>
                             </div>
                             <div>
-                                <p className="text-xs text-emerald-100 font-medium opacity-90">Bem-vindo de volta,</p>
+                                <p className="text-xs text-emerald-100 font-medium opacity-90">
+                                    {location.pathname === '/' ? 'Bem-vindo de volta,' : 'Gerenciamento'}
+                                </p>
                                 <h1 className="text-xl font-bold leading-tight">{getPageTitle()}</h1>
                             </div>
                         </div>

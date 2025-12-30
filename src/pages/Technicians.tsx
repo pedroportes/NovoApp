@@ -241,7 +241,7 @@ export function Technicians() {
     return (
         <div className="space-y-6 pb-20 md:pb-0">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div>
+                <div className="hidden md:block">
                     <h1 className="text-3xl font-bold tracking-tight">Equipe Técnica</h1>
                     <p className="text-muted-foreground">Gerencie os técnicos da sua empresa</p>
                 </div>
