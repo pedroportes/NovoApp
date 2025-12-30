@@ -120,8 +120,8 @@ export function Clients() {
         if (!confirm(`Tem certeza que deseja excluir o cliente ${name}?`)) return
 
         try {
-            const { error } = await supabase
-                .from('clientes')
+            const { error } = await (supabase
+                .from('clientes') as any)
                 .delete()
                 .eq('id', id)
                 .eq('empresa_id', userData!.empresa_id)
@@ -192,16 +192,16 @@ export function Clients() {
 
             if (editingClientId) {
                 // UPDATE
-                const { error: updateError } = await supabase
-                    .from('clientes')
+                const { error: updateError } = await (supabase
+                    .from('clientes') as any)
                     .update(payload)
                     .eq('id', editingClientId)
                     .eq('empresa_id', userData.empresa_id)
                 error = updateError
             } else {
                 // CREATE
-                const { error: insertError } = await supabase
-                    .from('clientes')
+                const { error: insertError } = await (supabase
+                    .from('clientes') as any)
                     .insert([payload])
                 error = insertError
             }

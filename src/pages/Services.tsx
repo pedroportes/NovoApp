@@ -66,14 +66,14 @@ export function Services() {
             }
 
             if (editingService) {
-                const { error } = await supabase
-                    .from('servicos')
+                const { error } = await (supabase
+                    .from('servicos') as any)
                     .update(payload)
                     .eq('id', editingService.id)
                 if (error) throw error
             } else {
-                const { error } = await supabase
-                    .from('servicos')
+                const { error } = await (supabase
+                    .from('servicos') as any)
                     .insert(payload)
                 if (error) throw error
             }

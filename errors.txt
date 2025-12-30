@@ -1,0 +1,8 @@
+src/contexts/AuthContext.tsx(72,21): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+src/contexts/AuthContext.tsx(128,25): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+src/contexts/AuthContext.tsx(156,76): error TS2322: Type '(email: string, password: string) => Promise<{ success: boolean; error: string; } | { success: boolean; error?: undefined; } | undefined>' is not assignable to type '(email: string, password: string) => Promise<{ success: boolean; error?: string | undefined; }>'.
+  Type 'Promise<{ success: boolean; error: string; } | { success: boolean; error?: undefined; } | undefined>' is not assignable to type 'Promise<{ success: boolean; error?: string | undefined; }>'.
+    Type '{ success: boolean; error: string; } | { success: boolean; error?: undefined; } | undefined' is not assignable to type '{ success: boolean; error?: string | undefined; }'.
+      Type 'undefined' is not assignable to type '{ success: boolean; error?: string | undefined; }'.

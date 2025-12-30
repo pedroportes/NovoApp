@@ -69,8 +69,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     id: row.id,
                     empresa_id: row.empresa_id,
                     cargo: row.cargo,
-                    nome: row.nome,
-                    email: row.email,
+                    nome: row.nome || '',
+                    email: row.email || '',
                 }
                 setUserData(userData)
                 setEmpresaId(row.empresa_id)
@@ -125,8 +125,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         id: userRow.id,
                         empresa_id: userRow.empresa_id,
                         cargo: userRow.cargo,
-                        nome: userRow.nome,
-                        email: userRow.email,
+                        nome: userRow.nome || '',
+                        email: userRow.email || '',
                     }
                     setUserData(userDataObj)
                     setEmpresaId(userRow.empresa_id)
@@ -134,10 +134,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 }
 
                 return { success: true }
+                return { success: true }
             }
 
-
-
+            return { success: false, error: 'Erro inesperado' }
         } catch (error) {
             console.error('Sign in error:', error)
             return { success: false, error: 'Erro de conexão. Tente novamente' }

@@ -353,14 +353,14 @@ export function NewServiceOrder() {
 
             if (id) {
                 delete payload.status
-                const result = await supabase
-                    .from('ordens_servico')
+                const result = await (supabase
+                    .from('ordens_servico') as any)
                     .update(payload)
                     .eq('id', id)
                 error = result.error
             } else {
-                const result = await supabase
-                    .from('ordens_servico')
+                const result = await (supabase
+                    .from('ordens_servico') as any)
                     .insert(payload)
                 error = result.error
             }

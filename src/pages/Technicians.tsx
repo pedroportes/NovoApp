@@ -79,11 +79,13 @@ export function Technicians() {
     }
 
     const fetchTechs = async () => {
+        if (!userData?.empresa_id) return
+
         try {
             const { data, error } = await supabase
                 .from('usuarios')
                 .select('*')
-                .eq('empresa_id', userData!.empresa_id)
+                .eq('empresa_id', userData.empresa_id)
                 .eq('cargo', 'tecnico')
 
             if (error) throw error
@@ -101,7 +103,7 @@ export function Technicians() {
         setIsDialogOpen(true)
     }
 
-    const handleEdit = (tech: any) => {
+    const handleEdit = (tech: Technician) => {
         setEditingTechId(tech.id)
         setFormData({
             name: tech.nome || '',
@@ -121,7 +123,7 @@ export function Technicians() {
         if (!confirm(`Tem certeza que deseja excluir o técnico ${name}?`)) return
 
         try {
-            const { data, error } = await supabase.rpc('delete_technician', {
+            const { data, error } = await (supabase.rpc as any)('delete_technician', {
                 target_user_id: id
             })
 
@@ -137,7 +139,7 @@ export function Technicians() {
 
     // Helper de Upload
     const uploadFile = async (file: File | Blob, path: string) => {
-        const fileExt = file instanceof File ? file.name.split('.').pop() : 'png'
+        const fileExt = (file instanceof File ? file.name.split('.').pop() : 'png') || 'png'
         const fileName = `${path}_${Date.now()}.${fileExt}`
         const filePath = `${fileName}`
 
@@ -179,11 +181,11 @@ export function Technicians() {
                 newSignatureUrl = await uploadFile(signatureBlob, `tech-sig`)
             }
 
-            let response;
+            let response: { data: any; error: any };
 
             if (editingTechId) {
                 // UPDATE
-                response = await supabase.rpc('update_technician', {
+                response = await (supabase.rpc as any)('update_technician', {
                     target_user_id: editingTechId,
                     new_name: formData.name,
                     new_phone: formData.phone,
@@ -196,7 +198,7 @@ export function Technicians() {
                 })
             } else {
                 // CREATE
-                response = await supabase.rpc('create_technician_user', {
+                response = await (supabase.rpc as any)('create_technician_user', {
                     new_email: formData.email,
                     new_password: formData.password,
                     new_name: formData.name,

@@ -21,11 +21,13 @@ export function PrintServiceOrder() {
     const fetchData = async () => {
         try {
             // 1. Fetch OS Details
-            const { data: osData, error: osError } = await supabase
+            const { data: rawOsData, error: osError } = await supabase
                 .from('ordens_servico')
                 .select('*')
-                .eq('id', id)
+                .eq('id', id!)
                 .single()
+
+            const osData: any = rawOsData
 
             if (osError) throw osError
 

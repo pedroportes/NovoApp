@@ -237,7 +237,40 @@ export interface Database {
             [_ in never]: never
         }
         Functions: {
-            [_ in never]: never
+            create_technician_user: {
+                Args: {
+                    new_email: string
+                    new_password: string
+                    new_name: string
+                    new_phone: string
+                    new_commission_rate: number
+                    new_base_salary: number
+                    new_pix_key: string
+                    new_avatar_url: string | null
+                    new_signature_url: string | null
+                }
+                Returns: Json
+            }
+            update_technician: {
+                Args: {
+                    target_user_id: string
+                    new_name: string
+                    new_phone: string
+                    new_commission_rate: number
+                    new_base_salary: number
+                    new_pix_key: string
+                    new_password?: string
+                    new_avatar_url: string | null
+                    new_signature_url: string | null
+                }
+                Returns: Json
+            }
+            delete_technician: {
+                Args: {
+                    target_user_id: string
+                }
+                Returns: Json
+            }
         }
         Enums: {
             [_ in never]: never
