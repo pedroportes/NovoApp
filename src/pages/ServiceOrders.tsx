@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useOutletContext } from 'react-router-dom'
 import { Plus, Search, FileText, Calendar, User, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,6 +18,13 @@ export function ServiceOrders() {
     const [orders, setOrders] = useState<ServiceOrder[]>([])
     const [loading, setLoading] = useState(true)
     const [searchTerm, setSearchTerm] = useState('')
+
+    const { setFabAction } = useOutletContext<{ setFabAction: (action: (() => void) | null) => void }>() ?? { setFabAction: () => { } }
+
+    useEffect(() => {
+        setFabAction(() => () => navigate('/service-orders/new'))
+        return () => setFabAction(null)
+    }, [setFabAction])
 
     useEffect(() => {
         if (userData?.empresa_id) {

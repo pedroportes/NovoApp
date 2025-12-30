@@ -71,7 +71,7 @@ export function Technicians() {
     useEffect(() => {
         setFabAction(() => openNewTechDialog)
         return () => setFabAction(null)
-    }, [])
+    }, [setFabAction])
 
     useEffect(() => {
         if (isDialogOpen && !editingTechId) {

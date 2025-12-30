@@ -58,7 +58,7 @@ export function NewServiceOrder() {
     useEffect(() => {
         setFabAction(() => handleSubmit)
         return () => setFabAction(null)
-    }, [formData, items, photos, signatureBlob]) // Re-bind on state change
+    }, [formData, items, photos, signatureBlob, setFabAction]) // Re-bind on state change
 
     // Initialize inputs when data loads or subtotal changes (if inputs are empty/clean)
     useEffect(() => {

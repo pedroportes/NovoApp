@@ -36,7 +36,7 @@ export function Services() {
     useEffect(() => {
         setFabAction(() => () => openModal())
         return () => setFabAction(null)
-    }, [])
+    }, [setFabAction])
 
     useEffect(() => {
         if (userData?.empresa_id) {

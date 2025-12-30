@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import { LayoutDashboard, Users, ClipboardList, Settings, Menu, LogOut, Plus, Wrench, Wallet } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -40,9 +40,9 @@ export function MainLayout() {
     const [fabAction, setFabActionState] = useState<(() => void) | null>(null)
 
     // Helper to safely set state, handling function updates correctly
-    const setFabAction = (action: (() => void) | null) => {
+    const setFabAction = useCallback((action: (() => void) | null) => {
         setFabActionState(() => action)
-    }
+    }, [])
 
     // Reset FAB action removed to prevent race conditions with child components
     // Children are responsible for cleaning up their own actions on unmount.
