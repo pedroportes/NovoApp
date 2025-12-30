@@ -389,7 +389,7 @@ export function NewServiceOrder() {
     if (loading) return <div className="p-8 text-center">Carregando dados da OS...</div>
 
     return (
-        <div className="pb-20 md:pb-10 max-w-4xl mx-auto space-y-6">
+        <div className="pb-20 md:pb-10 max-w-4xl mx-auto space-y-6 pt-6 md:pt-0">
             {/* Header with Print Button */}
             <div className="flex items-center gap-4 mb-6">
                 <Button variant="ghost" size="icon" onClick={() => navigate('/service-orders')}>

@@ -1,6 +1,16 @@
-import { TrendingUp, Users, ClipboardList, Wallet, ArrowUpRight, ArrowDownRight } from 'lucide-react'
+import { TrendingUp, Users, ClipboardList, Wallet, ArrowUpRight } from 'lucide-react'
+import { useNavigate, useOutletContext } from 'react-router-dom'
+import { useEffect } from 'react'
 
 export function Dashboard() {
+    const navigate = useNavigate()
+    const { setFabAction } = useOutletContext<{ setFabAction: (action: (() => void) | null) => void }>() ?? { setFabAction: () => { } }
+
+    useEffect(() => {
+        setFabAction(() => () => navigate('/service-orders/new'))
+        return () => setFabAction(null)
+    }, [])
+
     return (
         <div className="space-y-6">
             {/* GRID DE CARDS PRINCIPAIS */}
