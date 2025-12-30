@@ -48,6 +48,7 @@ export function MainLayout() {
     // Children are responsible for cleaning up their own actions on unmount.
 
     const handleFabClick = () => {
+        console.log('FAB Clicked. Action:', fabAction)
         if (fabAction) {
             fabAction()
         }

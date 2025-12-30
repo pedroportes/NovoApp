@@ -135,8 +135,8 @@ export function Settings() {
                 logoUrl = urlData.publicUrl
             }
 
-            const { error } = await supabase
-                .from('empresas')
+            const { error } = await (supabase
+                .from('empresas') as any)
                 .update({
                     ...formData,
                     logo_url: logoUrl

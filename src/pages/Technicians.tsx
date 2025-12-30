@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { Plus, Search, Pencil, Trash2, Phone, Mail, User as UserIcon } from 'lucide-react'
 import { compressImage } from '@/lib/utils'
@@ -66,12 +66,18 @@ export function Technicians() {
         }
     }, [userData?.empresa_id])
 
-    const { setFabAction } = useOutletContext<{ setFabAction: (action: (() => void) | null) => void }>()
+    const openNewTechDialog = useCallback(() => {
+        setEditingTechId(null)
+        resetForm()
+        setIsDialogOpen(true)
+    }, [])
+
+    const { setFabAction } = useOutletContext<{ setFabAction: (action: (() => void) | null) => void }>() ?? { setFabAction: () => { } }
 
     useEffect(() => {
         setFabAction(() => openNewTechDialog)
         return () => setFabAction(null)
-    }, [setFabAction])
+    }, [openNewTechDialog, setFabAction])
 
     useEffect(() => {
         if (isDialogOpen && !editingTechId) {
@@ -106,11 +112,6 @@ export function Technicians() {
         }
     }
 
-    const openNewTechDialog = () => {
-        setEditingTechId(null)
-        resetForm()
-        setIsDialogOpen(true)
-    }
 
     const handleEdit = (tech: Technician) => {
         setEditingTechId(tech.id)

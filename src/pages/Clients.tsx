@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { Plus, Search, Pencil, Trash2, Phone, Mail, User as UserIcon, MapPin, FileText } from 'lucide-react'
 import { compressImage } from '@/lib/utils'
@@ -66,12 +66,18 @@ export function Clients() {
         }
     }, [userData?.empresa_id])
 
-    const { setFabAction } = useOutletContext<{ setFabAction: (action: (() => void) | null) => void }>()
+    const openNewClientDialog = useCallback(() => {
+        setEditingClientId(null)
+        resetForm()
+        setIsDialogOpen(true)
+    }, [])
+
+    const { setFabAction } = useOutletContext<{ setFabAction: (action: (() => void) | null) => void }>() ?? { setFabAction: () => { } }
 
     useEffect(() => {
         setFabAction(() => openNewClientDialog)
         return () => setFabAction(null)
-    }, [setFabAction])
+    }, [openNewClientDialog, setFabAction])
 
     useEffect(() => {
         if (isDialogOpen && !editingClientId) {
@@ -104,11 +110,6 @@ export function Clients() {
         }
     }
 
-    const openNewClientDialog = () => {
-        setEditingClientId(null)
-        resetForm()
-        setIsDialogOpen(true)
-    }
 
     const handleEdit = (client: Client) => {
         setEditingClientId(client.id)
