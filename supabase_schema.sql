@@ -1,3 +1,7 @@
+-- Início da Transação (Ponte de Retorno)
+-- Se qualquer comando falhar, TUDO é cancelado automaticamente.
+BEGIN;
+
 -- Arquivo de Referência do Banco de Dados (Supabase)
 -- Essas são as tabelas e funções que criamos para corrigir o erro de Signup
 
@@ -79,3 +83,6 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
 AFTER INSERT ON auth.users
 FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- Salva todas as alterações se chegar até aqui sem erros
+COMMIT;
