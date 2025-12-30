@@ -242,7 +242,7 @@ export function Technicians() {
 
     const filteredTechs = techs.filter(tech =>
         tech.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        tech.email?.toLowerCase().includes(searchTerm.toLowerCase())
+        tech.telefone?.toLowerCase().includes(searchTerm.toLowerCase())
     )
 
     return (
@@ -411,7 +411,7 @@ export function Technicians() {
             <div className="relative">
                 <Search className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
                 <Input
-                    placeholder="Buscar por nome ou e-mail..."
+                    placeholder="Buscar por nome ou telefone..."
                     className="pl-10 h-14 text-lg shadow-sm"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}

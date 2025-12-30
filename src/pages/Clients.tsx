@@ -236,8 +236,7 @@ export function Clients() {
 
     const filteredClients = clients.filter(client =>
         client.nome_razao?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        client.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        client.cpf_cnpj?.includes(searchTerm)
+        client.whatsapp?.toLowerCase().includes(searchTerm.toLowerCase())
     )
 
     return (
@@ -390,7 +389,7 @@ export function Clients() {
             <div className="relative">
                 <Search className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
                 <Input
-                    placeholder="Buscar cliente..."
+                    placeholder="Buscar por nome ou telefone..."
                     className="pl-10 h-14 text-lg shadow-sm"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
