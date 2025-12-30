@@ -719,7 +719,7 @@ export function NewServiceOrder() {
                 </div>
             </div>
 
-            <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/95 backdrop-blur-md border-t border-border flex gap-4 md:static md:bg-transparent md:border-0 md:p-0 z-50 pb-8 md:pb-0">
+            <div className="fixed bottom-24 left-4 right-4 md:left-0 md:right-0 md:bottom-0 p-0 md:p-0 flex gap-4 md:static z-[100] md:z-0">
                 <Button variant="outline" className="flex-1 h-12" onClick={() => navigate(-1)} disabled={submitting}>Cancelar</Button>
                 <Button className="flex-1 h-12 font-bold shadow-lg" onClick={handleSubmit} disabled={submitting}>{submitting ? 'Salvando...' : 'Salvar OS'}</Button>
             </div>

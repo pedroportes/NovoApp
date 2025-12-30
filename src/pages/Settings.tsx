@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
@@ -37,7 +37,7 @@ export function Settings() {
         // FAB Action for Settings is just Save
         setFabAction(() => handleSubmit)
         return () => setFabAction(null)
-    }, [formData, logoFile]) // Re-bind when data changes to capture latest state closure
+    }, [handleSubmit, setFabAction])
 
     useEffect(() => {
         if (userData?.empresa_id) {
@@ -112,47 +112,6 @@ export function Settings() {
         }
     }
 
-    const handleSubmit = async () => {
-        setSaving(true)
-        try {
-            let logoUrl = logoPreview
-
-            if (logoFile) {
-                const compressedFile = await compressImage(logoFile, 500, 0.8)
-                const fileExt = logoFile.name.split('.').pop()
-                const fileName = `company_logo_${userData!.empresa_id}_${Date.now()}.${fileExt}`
-
-                const { error: uploadError } = await supabase.storage
-                    .from('avatars')
-                    .upload(fileName, compressedFile)
-
-                if (uploadError) throw uploadError
-
-                const { data: urlData } = supabase.storage
-                    .from('avatars')
-                    .getPublicUrl(fileName)
-
-                logoUrl = urlData.publicUrl
-            }
-
-            const { error } = await (supabase
-                .from('empresas') as any)
-                .update({
-                    ...formData,
-                    logo_url: logoUrl
-                })
-                .eq('id', userData!.empresa_id)
-
-            if (error) throw error
-
-            alert('Configurações salvas com sucesso!')
-        } catch (error: any) {
-            console.error('Erro ao salvar:', error)
-            alert('Erro ao salvar: ' + error.message)
-        } finally {
-            setSaving(false)
-        }
-    }
 
     if (loading) return <div className="p-8 text-center">Carregando...</div>
 
