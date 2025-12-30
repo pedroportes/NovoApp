@@ -56,7 +56,7 @@ export function NewServiceOrder() {
     const { setFabAction } = useOutletContext<{ setFabAction: (action: (() => void) | null) => void }>() ?? { setFabAction: () => { } }
 
     useEffect(() => {
-        setFabAction(() => handleSubmit)
+        setFabAction(handleSubmit)
         return () => setFabAction(null)
     }, [formData, items, photos, signatureBlob, setFabAction]) // Re-bind on state change
 

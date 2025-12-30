@@ -75,7 +75,7 @@ export function Technicians() {
     const { setFabAction } = useOutletContext<{ setFabAction: (action: (() => void) | null) => void }>() ?? { setFabAction: () => { } }
 
     useEffect(() => {
-        setFabAction(() => openNewTechDialog)
+        setFabAction(openNewTechDialog)
         return () => setFabAction(null)
     }, [openNewTechDialog, setFabAction])
 

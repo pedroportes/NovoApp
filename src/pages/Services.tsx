@@ -34,7 +34,7 @@ export function Services() {
     const { setFabAction } = useOutletContext<{ setFabAction: (action: (() => void) | null) => void }>() ?? { setFabAction: () => { } }
 
     useEffect(() => {
-        setFabAction(() => () => openModal())
+        setFabAction(() => openModal())
         return () => setFabAction(null)
     }, [setFabAction])
 

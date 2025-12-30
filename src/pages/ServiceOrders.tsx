@@ -22,7 +22,7 @@ export function ServiceOrders() {
     const { setFabAction } = useOutletContext<{ setFabAction: (action: (() => void) | null) => void }>() ?? { setFabAction: () => { } }
 
     useEffect(() => {
-        setFabAction(() => () => navigate('/service-orders/new'))
+        setFabAction(() => navigate('/service-orders/new'))
         return () => setFabAction(null)
     }, [setFabAction])
 

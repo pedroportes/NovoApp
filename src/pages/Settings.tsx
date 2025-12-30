@@ -77,7 +77,7 @@ export function Settings() {
 
     useEffect(() => {
         // FAB Action for Settings is just Save
-        setFabAction(() => handleSubmit)
+        setFabAction(handleSubmit)
         return () => setFabAction(null)
     }, [handleSubmit, setFabAction])
 

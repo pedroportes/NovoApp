@@ -75,7 +75,7 @@ export function Clients() {
     const { setFabAction } = useOutletContext<{ setFabAction: (action: (() => void) | null) => void }>() ?? { setFabAction: () => { } }
 
     useEffect(() => {
-        setFabAction(() => openNewClientDialog)
+        setFabAction(openNewClientDialog)
         return () => setFabAction(null)
     }, [openNewClientDialog, setFabAction])
 
