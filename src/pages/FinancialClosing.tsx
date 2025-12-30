@@ -36,12 +36,14 @@ export function FinancialClosing() {
     const fetchTechnicians = async () => {
         try {
             const { data, error } = await supabase
-                .from('tecnicos')
+                .from('usuarios')
                 .select('*')
                 .eq('empresa_id', userData!.empresa_id)
+                .eq('cargo', 'tecnico')
                 .order('nome')
 
             if (error) throw error
+            console.log('Technicians loaded:', data) // Debugging column names
             setTechnicians(data || [])
             if (data && data.length > 0) {
                 // Auto-select first tech if available, or stay null

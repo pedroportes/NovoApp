@@ -13,6 +13,7 @@ import { Settings } from './pages/Settings'
 import { FinancialClosing } from './pages/FinancialClosing'
 import { ThemeProvider } from "@/components/theme-provider"
 import { AuthProvider } from '@/contexts/AuthContext'
+import { TechnicianDashboard } from './pages/TechnicianDashboard'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 
 function App() {
@@ -40,6 +41,7 @@ function App() {
                             <Route path="/service-orders/:id" element={<NewServiceOrder />} />
                             <Route path="/settings" element={<Settings />} />
                             <Route path="/financial" element={<FinancialClosing />} />
+                            <Route path="/tech-dashboard" element={<TechnicianDashboard />} />
                         </Route>
 
                         {/* Print Route (Authenticated but no Layout) */}

@@ -34,6 +34,7 @@ export function MainLayout() {
             case '/clients': return 'Carteira de Clientes';
             case '/technicians': return 'Equipe Técnica';
             case '/settings': return 'Configurações';
+            case '/tech-dashboard': return 'Painel do Técnico';
             default: return 'FlowDrain';
         }
     }

@@ -25,14 +25,15 @@ export const financialService = {
         try {
             // 1. Get Technician Details
             const { data: tech, error: techError } = await (supabase
-                .from('tecnicos') as any)
-                .select('nome, percentual_comissao, salario_base')
+                .from('usuarios') as any)
+                .select('*')
                 .eq('id', technicianId)
                 .single()
 
             if (techError) throw techError
 
-            const commissionRate = (tech.percentual_comissao || 0) / 100
+            // Handle potential field name variations (user reported adding snake_case, but app might use others)
+            const commissionRate = (tech.percentual_comissao || tech.commission_rate || 0) / 100
 
             // 2. Get Unpaid Service Orders
             // Assuming 'paga_ao_tecnico' is a boolean field in ordens_servico.

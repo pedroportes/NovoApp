@@ -134,7 +134,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 }
 
                 return { success: true }
-                return { success: true }
             }
 
             return { success: false, error: 'Erro inesperado' }
