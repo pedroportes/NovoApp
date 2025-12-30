@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useOutletContext } from 'react-router-dom'
 import { Plus, Search, Edit2, Trash2, X, Check } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -29,6 +30,13 @@ export function Services() {
         valor_padrao: ''
     })
     const [saving, setSaving] = useState(false)
+
+    const { setFabAction } = useOutletContext<{ setFabAction: (action: (() => void) | null) => void }>() ?? { setFabAction: () => { } }
+
+    useEffect(() => {
+        setFabAction(() => () => openModal())
+        return () => setFabAction(null)
+    }, [])
 
     useEffect(() => {
         if (userData?.empresa_id) {
@@ -137,7 +145,7 @@ export function Services() {
                     <h1 className="text-2xl font-bold tracking-tight">Serviços</h1>
                     <p className="text-muted-foreground">Gerencie seu catálogo de serviços</p>
                 </div>
-                <Button onClick={() => openModal()} className="font-bold shadow-lg shadow-primary/20">
+                <Button onClick={() => openModal()} className="hidden md:flex font-bold shadow-lg shadow-primary/20">
                     <Plus className="mr-2 h-4 w-4" /> Novo Serviço
                 </Button>
             </div>

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useOutletContext } from 'react-router-dom'
 import { Plus, Search, Pencil, Trash2, Phone, Mail, User as UserIcon, MapPin, FileText } from 'lucide-react'
 import { compressImage } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
@@ -64,6 +65,13 @@ export function Clients() {
             fetchClients()
         }
     }, [userData?.empresa_id])
+
+    const { setFabAction } = useOutletContext<{ setFabAction: (action: (() => void) | null) => void }>()
+
+    useEffect(() => {
+        setFabAction(() => openNewClientDialog)
+        return () => setFabAction(null)
+    }, [])
 
     useEffect(() => {
         if (isDialogOpen && !editingClientId) {
@@ -243,7 +251,7 @@ export function Clients() {
 
                 <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                     <DialogTrigger asChild>
-                        <Button className="h-14 text-base md:w-auto w-full shadow-lg" onClick={openNewClientDialog}>
+                        <Button className="hidden md:flex h-14 text-base md:w-auto w-full shadow-lg" onClick={openNewClientDialog}>
                             <Plus className="mr-2 h-5 w-5" />
                             Novo Cliente
                         </Button>

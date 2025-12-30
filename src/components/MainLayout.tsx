@@ -37,6 +37,18 @@ export function MainLayout() {
         }
     }
 
+    const [fabAction, setFabAction] = useState<(() => void) | null>(null)
+
+    const handleFabClick = () => {
+        if (fabAction) {
+            fabAction()
+        } else {
+            navigate('/service-orders/new')
+        }
+    }
+
+    // ... (render logic)
+
     return (
         <div className="min-h-screen bg-background text-foreground flex flex-col md:flex-row font-sans">
             {/* Desktop Sidebar (Kept functional but styled) */}
@@ -127,7 +139,7 @@ export function MainLayout() {
                     </header>
 
                     <div className="md:max-w-7xl md:mx-auto">
-                        <Outlet />
+                        <Outlet context={{ setFabAction }} />
                     </div>
                 </main>
 
@@ -144,7 +156,7 @@ export function MainLayout() {
                     {/* FAB (Floating Action Button) */}
                     <div className="relative -top-8">
                         <button
-                            onClick={() => navigate('/new-service-order')}
+                            onClick={handleFabClick}
                             className="w-16 h-16 bg-gradient-to-tr from-emerald-500 to-sky-500 rounded-full flex items-center justify-center text-white shadow-lg shadow-emerald-500/40 hover:scale-110 active:scale-95 transition-all duration-300 border-4 border-[#f3f4f6]"
                         >
                             <Plus className="h-8 w-8" strokeWidth={3} />
