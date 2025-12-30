@@ -411,7 +411,7 @@ export function NewServiceOrder() {
             </div>
 
             {/* GERAL CARD */}
-            <div className="bg-white rounded-3xl p-8 shadow-xl shadow-slate-200/50 space-y-8 relative overflow-hidden">
+            <div className="bg-white rounded-3xl p-4 md:p-8 shadow-xl shadow-slate-200/50 space-y-8 relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-sky-400" />
 
                 <div className="flex items-center gap-3 mb-2">
@@ -497,7 +497,7 @@ export function NewServiceOrder() {
             </div>
 
             {/* ITENS CARD */}
-            <div className="bg-white rounded-3xl p-8 shadow-xl shadow-slate-200/50 space-y-6 relative overflow-hidden">
+            <div className="bg-white rounded-3xl p-4 md:p-8 shadow-xl shadow-slate-200/50 space-y-6 relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-sky-400 to-indigo-400" />
 
                 <div className="flex items-center justify-between">
@@ -672,7 +672,7 @@ export function NewServiceOrder() {
             </div>
 
             {/* Signature & Evidence Cards... */}
-            <div className="bg-white rounded-3xl p-8 shadow-xl shadow-slate-200/50 space-y-6">
+            <div className="bg-white rounded-3xl p-4 md:p-8 shadow-xl shadow-slate-200/50 space-y-6">
                 <div className="flex items-center gap-3">
                     <div className="p-2 bg-indigo-100 rounded-lg text-indigo-600">
                         <PenTool className="h-5 w-5" />
