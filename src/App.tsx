@@ -9,6 +9,7 @@ import { ServiceOrders } from '@/pages/ServiceOrders'
 import { NewServiceOrder } from '@/pages/NewServiceOrder'
 import { Services } from '@/pages/Services'
 import { PrintServiceOrder } from '@/pages/PrintServiceOrder'
+import { Settings } from '@/pages/Settings'
 import { ThemeProvider } from "@/components/theme-provider"
 import { AuthProvider } from '@/contexts/AuthContext'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
@@ -36,7 +37,7 @@ function App() {
                             <Route path="/service-orders" element={<ServiceOrders />} />
                             <Route path="/service-orders/new" element={<NewServiceOrder />} />
                             <Route path="/service-orders/:id" element={<NewServiceOrder />} />
-                            <Route path="/settings" element={<div className="p-4">Configurações (Em construção)</div>} />
+                            <Route path="/settings" element={<Settings />} />
                         </Route>
 
                         {/* Print Route (Authenticated but no Layout) */}
