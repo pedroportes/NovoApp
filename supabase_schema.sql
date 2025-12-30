@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS public.empresas (
 
 -- RLS: empresas
 ALTER TABLE public.empresas ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow all for authenticated" ON public.empresas;
 CREATE POLICY "Allow all for authenticated" ON public.empresas FOR ALL USING (auth.role() = 'authenticated');
 
 
@@ -28,6 +29,7 @@ CREATE TABLE IF NOT EXISTS public.usuarios (
 
 -- RLS: usuarios
 ALTER TABLE public.usuarios ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow all for authenticated" ON public.usuarios;
 CREATE POLICY "Allow all for authenticated" ON public.usuarios FOR ALL USING (auth.role() = 'authenticated');
 
 
