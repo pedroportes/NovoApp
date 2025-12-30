@@ -104,7 +104,7 @@ export function MainLayout() {
             <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
 
                 {/* Mobile Header Gradient */}
-                <header className="md:hidden h-[180px] banking-gradient rounded-b-[40px] px-6 pt-8 pb-12 flex flex-col justify-between shadow-2xl relative z-0 shrink-0">
+                <header className="md:hidden min-h-[130px] banking-gradient rounded-b-[30px] px-6 pt-6 pb-8 flex flex-col justify-between shadow-2xl relative z-0 shrink-0">
                     <div className="flex items-center justify-between text-white">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border border-white/30">

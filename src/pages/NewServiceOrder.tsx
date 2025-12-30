@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useOutletContext } from 'react-router-dom'
 import { ArrowLeft, Plus, Trash2, Camera, ChevronDown, ChevronRight, Printer, User, ClipboardList, PenTool } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -51,6 +51,13 @@ export function NewServiceOrder() {
     // preventing the circular calculation from messing up the input while typing.
     const [currencyInput, setCurrencyInput] = useState('')
     const [percentInput, setPercentInput] = useState('')
+
+    // FAB Action Context
+    const { setFabAction } = useOutletContext<{ setFabAction: (action: (() => void) | null) => void }>() ?? { setFabAction: () => { } }
+
+    useEffect(() => {
+        setFabAction(() => handleSubmit)
+    }, [formData, items, photos, signatureBlob]) // Re-bind on state change
 
     // Initialize inputs when data loads or subtotal changes (if inputs are empty/clean)
     useEffect(() => {
@@ -711,7 +718,7 @@ export function NewServiceOrder() {
                 </div>
             </div>
 
-            <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/80 backdrop-blur-md border-t border-border flex gap-4 md:static md:bg-transparent md:border-0 md:p-0">
+            <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/95 backdrop-blur-md border-t border-border flex gap-4 md:static md:bg-transparent md:border-0 md:p-0 z-50 pb-8 md:pb-0">
                 <Button variant="outline" className="flex-1 h-12" onClick={() => navigate(-1)} disabled={submitting}>Cancelar</Button>
                 <Button className="flex-1 h-12 font-bold shadow-lg" onClick={handleSubmit} disabled={submitting}>{submitting ? 'Salvando...' : 'Salvar OS'}</Button>
             </div>
