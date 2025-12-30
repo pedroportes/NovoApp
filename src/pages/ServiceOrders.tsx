@@ -110,11 +110,7 @@ export function ServiceOrders() {
 
     return (
         <div className="space-y-6 pb-20 md:pb-0">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div className="hidden md:block">
-                    <h1 className="text-3xl font-bold tracking-tight">Ordens de Serviço</h1>
-                    <p className="text-muted-foreground">Gerencie orçamentos e serviços</p>
-                </div>
+            <div className="flex justify-end mb-4">
 
                 <Button className="h-14 text-base md:w-auto w-full shadow-lg" onClick={() => navigate('/service-orders/new')}>
                     <Plus className="mr-2 h-5 w-5" />
