@@ -66,6 +66,8 @@ export interface Database {
                     usuario_id: string | null
                     empresa_id: string
                     ativo: boolean
+                    salario_base: number | null
+                    percentual_comissao: number | null
                 }
                 Insert: {
                     id?: string
@@ -202,6 +204,38 @@ export interface Database {
                     descricao?: string
                     comprovante_url?: string | null
                     aprovado?: boolean
+                }
+            }
+            financeiro_fluxo: {
+                Row: {
+                    id: string
+                    created_at: string
+                    tecnico_id: string
+                    empresa_id: string
+                    tipo: 'ADIANTAMENTO' | 'BONUS' | 'FECHAMENTO'
+                    valor: number
+                    descricao: string
+                    status: 'PENDENTE' | 'PROCESSADO'
+                }
+                Insert: {
+                    id?: string
+                    created_at?: string
+                    tecnico_id: string
+                    empresa_id: string
+                    tipo: 'ADIANTAMENTO' | 'BONUS' | 'FECHAMENTO'
+                    valor: number
+                    descricao: string
+                    status?: 'PENDENTE' | 'PROCESSADO'
+                }
+                Update: {
+                    id?: string
+                    created_at?: string
+                    tecnico_id?: string
+                    empresa_id?: string
+                    tipo?: 'ADIANTAMENTO' | 'BONUS' | 'FECHAMENTO'
+                    valor?: number
+                    descricao?: string
+                    status?: 'PENDENTE' | 'PROCESSADO'
                 }
             }
             usuarios: {

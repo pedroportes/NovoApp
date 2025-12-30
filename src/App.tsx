@@ -5,11 +5,12 @@ import { Login } from '@/pages/Login'
 import { SignUp } from '@/pages/SignUp'
 import { Technicians } from '@/pages/Technicians'
 import { Clients } from '@/pages/Clients'
-import { ServiceOrders } from '@/pages/ServiceOrders'
-import { NewServiceOrder } from '@/pages/NewServiceOrder'
+import { ServiceOrders } from './pages/ServiceOrders'
+import { NewServiceOrder } from './pages/NewServiceOrder'
 import { Services } from '@/pages/Services'
 import { PrintServiceOrder } from '@/pages/PrintServiceOrder'
-import { Settings } from '@/pages/Settings'
+import { Settings } from './pages/Settings'
+import { FinancialClosing } from './pages/FinancialClosing'
 import { ThemeProvider } from "@/components/theme-provider"
 import { AuthProvider } from '@/contexts/AuthContext'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
@@ -38,6 +39,7 @@ function App() {
                             <Route path="/service-orders/new" element={<NewServiceOrder />} />
                             <Route path="/service-orders/:id" element={<NewServiceOrder />} />
                             <Route path="/settings" element={<Settings />} />
+                            <Route path="/financial" element={<FinancialClosing />} />
                         </Route>
 
                         {/* Print Route (Authenticated but no Layout) */}

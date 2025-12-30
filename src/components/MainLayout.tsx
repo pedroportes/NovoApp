@@ -21,7 +21,8 @@ export function MainLayout() {
         { icon: ClipboardList, label: 'OS', path: '/service-orders' },
         // Middle item is skipped in map to place FAB
         { icon: Wrench, label: 'Serviços', path: '/services' },
-        { icon: Users, label: 'Equipe', path: '/technicians' }, // Renamed for better fit
+        { icon: Users, label: 'Equipe', path: '/technicians' },
+        { icon: Wallet, label: 'Financeiro', path: '/financial' },
     ]
 
     // Determine Page Title
