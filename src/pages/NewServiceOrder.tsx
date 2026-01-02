@@ -36,7 +36,8 @@ export function NewServiceOrder() {
         validade: '',
         descricao_servico: '',
         observacoes: '',
-        desconto: ''
+        desconto: '',
+        status: 'PENDENTE'
     })
 
     const [items, setItems] = useState<ServiceItem[]>([])
@@ -56,7 +57,7 @@ export function NewServiceOrder() {
     const { setFabAction } = useOutletContext<{ setFabAction: (action: (() => void) | null) => void }>() ?? { setFabAction: () => { } }
 
     useEffect(() => {
-        setFabAction(handleSubmit)
+        setFabAction(() => handleSubmit())
         return () => setFabAction(null)
     }, [formData, items, photos, signatureBlob, setFabAction]) // Re-bind on state change
 
@@ -165,6 +166,13 @@ export function NewServiceOrder() {
     }
 
 
+    // Check for user data
+    useEffect(() => {
+        if (userData && !userData.empresa_id) {
+            console.warn('Usuario sem empresa_id', userData)
+        }
+    }, [userData])
+
     useEffect(() => {
         if (userData?.empresa_id) {
             fetchDependencyData()
@@ -175,29 +183,65 @@ export function NewServiceOrder() {
     }, [userData?.empresa_id, id])
 
     const fetchDependencyData = async () => {
-        const { data: clientsData } = await supabase
+        const { data: clientsData, error: clientError } = await supabase
             .from('clientes')
             .select('id, nome_razao, whatsapp')
             .eq('empresa_id', userData!.empresa_id)
             .order('nome_razao')
 
-        const { data: techData } = await supabase
+        if (clientError) {
+            console.error('Erro buscando clientes:', clientError)
+        }
+
+        if (clientsData) {
+            setClients(clientsData)
+        }
+
+        const { data: techData, error: techError } = await supabase
             .from('usuarios')
-            .select('id, nome')
+            .select('id, nome_completo, cargo')
             .eq('empresa_id', userData!.empresa_id)
             .eq('cargo', 'tecnico')
 
-        const { data: servicesData } = await supabase
+        if (techError) console.error('Erro buscando tecnicos:', techError)
+
+        const { data: servicesData, error: serviceError } = await supabase
             .from('servicos')
             .select('*')
             .eq('empresa_id', userData!.empresa_id)
             .eq('ativo', true)
             .order('nome')
 
+        if (serviceError) console.error('Erro buscando servicos:', serviceError)
+
+        // Filter out current user if they are admin to prevent self-assignment in this view, 
+        // OR just filter generally if strict mode is desired. 
+        // User requested: "Técnico 01" (Admin) should not appear. 
+        // We assume active admins shouldn't be in this list unless they are strictly technicians.
+        // Simple fix: If we fetched logged in user and they are admin, exclude them.
+        // Simple fix: If we fetched logged in user and they are admin, exclude them.
+        let filteredTechs = (techData || []).map((t: any) => ({
+            ...t,
+            nome: t.nome_completo || t.nome || 'Técnico' // Ensure 'nome' exists for the dropdown
+        }))
+
+        if (userData?.cargo?.toLowerCase() === 'admin') {
+            filteredTechs = filteredTechs.filter((t: any) => t.id !== userData.id)
+        }
+
+        // If logged in as Technician, restrict list to ONLY themselves
+        if (userData?.cargo?.toLowerCase() === 'tecnico') {
+            filteredTechs = filteredTechs.filter((t: any) => t.id === userData.id)
+            if (!id && filteredTechs.length > 0) {
+                setFormData(prev => ({ ...prev, tecnico_id: userData.id }))
+            }
+        }
+
         if (clientsData) setClients(clientsData)
-        if (techData) setTechnicians(techData)
+        setTechnicians(filteredTechs)
         if (servicesData) setServices(servicesData)
     }
+
 
     const fetchOrderData = async (orderId: string) => {
         setLoading(true)
@@ -213,16 +257,24 @@ export function NewServiceOrder() {
                 // Explicitly cast data to any to avoid "property does not exist on type never" errors
                 const osData = data as any
                 const [date, time] = osData.data_agendamento ? osData.data_agendamento.split('T') : ['', '']
+
+                // If technician, force their ID
+                let selectedTechId = osData.tecnico_id
+                if (userData?.cargo?.toLowerCase() === 'tecnico') {
+                    selectedTechId = userData.id
+                }
+
                 setFormData({
                     cliente_id: osData.cliente_id,
-                    tecnico_id: osData.tecnico_id,
+                    tecnico_id: selectedTechId,
                     tipo: osData.tipo,
                     data_agendamento: date,
                     hora_agendamento: time ? time.slice(0, 5) : '09:00',
                     validade: osData.validade || '',
                     descricao_servico: osData.descricao_servico || '',
                     observacoes: osData.observacoes || '',
-                    desconto: osData.desconto ? osData.desconto.toString() : ''
+                    desconto: osData.desconto ? osData.desconto.toString() : '',
+                    status: osData.status || 'PENDENTE'
                 })
                 setItems((osData.itens as ServiceItem[]) || [])
                 // Handle JSONB photos structure (backward compatible if null)
@@ -332,7 +384,7 @@ export function NewServiceOrder() {
         }))
     }
 
-    const handleSubmit = async () => {
+    const handleSubmit = async (targetStatus?: string) => {
         if (!formData.cliente_id || !formData.tecnico_id) {
             alert('Selecione um cliente e um técnico.')
             return
@@ -352,6 +404,8 @@ export function NewServiceOrder() {
 
             const selectedClient = clients.find(c => c.id === formData.cliente_id)
 
+            const finalStatus = targetStatus || (id ? undefined : 'PENDENTE')
+
             const payload: any = {
                 empresa_id: userData!.empresa_id,
                 cliente_id: formData.cliente_id,
@@ -359,7 +413,6 @@ export function NewServiceOrder() {
                 cliente_whatsapp: selectedClient?.whatsapp || null,
                 descricao_servico: formData.descricao_servico,
                 tecnico_id: formData.tecnico_id,
-                status: 'PENDENTE',
                 tipo: formData.tipo,
                 data_agendamento: `${formData.data_agendamento}T${formData.hora_agendamento}:00`,
                 validade: formData.validade || null,
@@ -370,6 +423,10 @@ export function NewServiceOrder() {
                 valor_total: total
             }
 
+            if (finalStatus) {
+                payload.status = finalStatus
+            }
+
             if (signatureUrl) {
                 payload.assinatura_cliente_url = signatureUrl
             }
@@ -377,13 +434,15 @@ export function NewServiceOrder() {
             let error;
 
             if (id) {
-                delete payload.status
                 const result = await (supabase
                     .from('ordens_servico') as any)
                     .update(payload)
                     .eq('id', id)
                 error = result.error
             } else {
+                // For new OS, ensure status is set
+                if (!payload.status) payload.status = 'PENDENTE'
+
                 const result = await (supabase
                     .from('ordens_servico') as any)
                     .insert(payload)
@@ -403,6 +462,12 @@ export function NewServiceOrder() {
         }
     }
 
+    const handleConclude = async () => {
+        if (confirm('Deseja realmente concluir esta OS? Isso irá gerar a comissão e o lançamento financeiro.')) {
+            await handleSubmit('CONCLUIDO')
+        }
+    }
+
     if (loading) return <div className="p-8 text-center">Carregando dados da OS...</div>
 
     return (
@@ -419,11 +484,19 @@ export function NewServiceOrder() {
                 {id && (
                     <Button
                         variant="outline"
-                        className="ml-auto gap-2"
+                        className="gap-2"
                         onClick={() => window.open(`/print/service-orders/${id}?type=${formData.tipo}`, '_blank')}
                     >
                         <Printer className="h-4 w-4" />
                         Imprimir / PDF
+                    </Button>
+                )}
+                {id && formData.status !== 'CONCLUIDO' && (
+                    <Button
+                        className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/20"
+                        onClick={handleConclude}
+                    >
+                        ✅ Concluir OS
                     </Button>
                 )}
             </div>
@@ -491,6 +564,11 @@ export function NewServiceOrder() {
                                 </select>
                                 <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 h-5 w-5 pointer-events-none" />
                             </div>
+                            {clients.length === 0 && !loading && (
+                                <p className="text-red-500 text-xs mt-1 ml-1">
+                                    Nenhum cliente encontrado. <span className="font-bold cursor-pointer underline" onClick={() => navigate('/clients')}>Cadastre um novo cliente.</span>
+                                </p>
+                            )}
                         </div>
 
                         <div className="space-y-2">
@@ -753,7 +831,7 @@ export function NewServiceOrder() {
 
             <div className="fixed bottom-24 left-4 right-4 md:left-0 md:right-0 md:bottom-0 p-0 md:p-0 flex gap-4 md:static z-[100] md:z-0">
                 <Button variant="outline" className="flex-1 h-12" onClick={() => navigate(-1)} disabled={submitting}>Cancelar</Button>
-                <Button className="flex-1 h-12 font-bold shadow-lg" onClick={handleSubmit} disabled={submitting}>{submitting ? 'Salvando...' : 'Salvar OS'}</Button>
+                <Button className="flex-1 h-12 font-bold shadow-lg" onClick={() => handleSubmit()} disabled={submitting}>{submitting ? 'Salvando...' : 'Salvar OS'}</Button>
             </div>
         </div>
     )

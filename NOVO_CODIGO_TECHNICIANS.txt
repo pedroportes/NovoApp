@@ -1,0 +1,26 @@
+            } else {
+                // CRIAR NOVO - Usar RPC function
+                const { data: rpcData, error: rpcError } = await supabase.rpc('create_technician_user', {
+                    new_email: formData.email,
+                    new_password: formData.password,
+                    new_name: formData.name,
+                    new_phone: formData.phone || null,
+                    new_commission_rate: commRate,
+                    new_base_salary: salary,
+                    new_pix_key: formData.pix_key || null,
+                    new_avatar_url: newAvatarUrl || null,
+                    new_signature_url: newSignatureUrl || null
+                })
+
+                if (rpcError) {
+                    console.error('RPC Error:', rpcError)
+                    throw new Error(`Erro ao criar técnico: ${rpcError.message}`)
+                }
+
+                const result = rpcData as { success: boolean; error?: string; user_id?: string }
+                if (!result.success) {
+                    throw new Error(result.error || 'Erro desconhecido ao criar técnico')
+                }
+
+                alert('Técnico criado com sucesso!')
+            }

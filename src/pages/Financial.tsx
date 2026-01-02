@@ -33,14 +33,40 @@ export function Financial() {
 
     const fetchFluxo = async () => {
         try {
-            const { data, error } = await supabase
-                .from('financeiro_fluxo')
-                .select('*')
-                .eq('empresa_id', userData!.empresa_id)
-                .order('data_lancamento', { ascending: false })
+            const [fluxoResponse, expensesResponse] = await Promise.all([
+                supabase
+                    .from('financeiro_fluxo')
+                    .select('*')
+                    .eq('empresa_id', userData!.empresa_id)
+                    .order('data_lancamento', { ascending: false }),
+                supabase
+                    .from('despesas_tecnicos')
+                    .select('*')
+                    .eq('empresa_id', userData!.empresa_id)
+                    .eq('status_aprovacao', 'aprovado')
+                    .neq('status', 'pago') // Don't double count paid expenses (already in FECHAMENTO)
+            ])
 
-            if (error) throw error
-            setFluxo(data || [])
+            if (fluxoResponse.error) throw fluxoResponse.error
+            if (expensesResponse.error) throw expensesResponse.error
+
+            // Format expenses to match FluxoItem
+            const expensesAsFluxo: FluxoItem[] = (expensesResponse.data || []).map((exp: any) => ({
+                id: exp.id,
+                tipo: 'SAIDA',
+                valor: Number(exp.valor),
+                descricao: `(A Pagar) ${exp.descricao}`,
+                status: 'APROVADO',
+                data_lancamento: exp.created_at,
+                categoria: exp.categoria
+            }))
+
+            // Merge and sort
+            const combined = [...(fluxoResponse.data || []), ...expensesAsFluxo].sort((a, b) =>
+                new Date(b.data_lancamento).getTime() - new Date(a.data_lancamento).getTime()
+            )
+
+            setFluxo(combined)
         } catch (error) {
             console.error('Erro ao buscar fluxo:', error)
         } finally {
@@ -55,6 +81,8 @@ export function Financial() {
                 acc.receitas += valor
                 acc.saldo += valor
             } else {
+                // SAIDA, COMISSAO, ADIANTAMENTO, BONUS, FECHAMENTO
+                // Note: SAIDA includes the projected expenses we just added
                 acc.despesas += valor
                 acc.saldo -= valor
             }

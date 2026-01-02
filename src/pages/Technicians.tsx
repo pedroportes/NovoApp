@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useOutletContext } from 'react-router-dom'
+import { useOutletContext, useNavigate } from 'react-router-dom'
 import { Plus, Search, Pencil, Trash2, Phone, Mail, User as UserIcon } from 'lucide-react'
 import { compressImage } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
@@ -34,6 +34,14 @@ export function Technicians() {
     const { userData } = useAuth()
     const [techs, setTechs] = useState<Technician[]>([])
     const [loading, setLoading] = useState(true)
+    const navigate = useNavigate()
+
+    // Redirect if not admin
+    useEffect(() => {
+        if (!loading && userData && userData.cargo?.toLowerCase() !== 'admin') {
+            navigate('/dashboard')
+        }
+    }, [userData, loading, navigate])
     const [searchTerm, setSearchTerm] = useState('')
 
     // Form States
@@ -103,10 +111,12 @@ export function Technicians() {
                 .from('usuarios')
                 .select('*')
                 .eq('empresa_id', userData.empresa_id)
-                .in('cargo', ['tecnico', 'admin'])
+            // Removed strict cargo filter to allow Admin to see themselves and other admins in the list
+            // .eq('cargo', 'tecnico')
 
             if (error) throw error
-            setTechs(data as Technician[])
+            // Allow all users to be seen by Admin
+            setTechs((data || []) as Technician[])
         } catch (error) {
             console.error('Erro ao buscar técnicos:', error)
         } finally {
@@ -242,16 +252,16 @@ export function Technicians() {
                 if (signupError) throw signupError
                 if (!signupData.user) throw new Error('Erro ao criar usuário')
 
-                // Aguardar trigger criar perfil base
-                await new Promise(resolve => setTimeout(resolve, 1000))
-
-                // Atualizar perfil com dados completos
+                // 2. Inserir manualmente o perfil (UPSERT) para garantir que existe
+                // (Ignora trigger falho)
                 const { error: profileError } = await supabase
                     .from('usuarios')
-                    .update({
+                    .upsert({
+                        id: signupData.user.id,
                         empresa_id: userData!.empresa_id,
-                        cargo: 'tecnico',
+                        cargo: 'tecnico', // Força cargo técnico
                         nome_completo: formData.name,
+                        email: formData.email,
                         telefone: formData.phone,
                         percentual_comissao: commRate,
                         salario_base: salary,
@@ -260,8 +270,7 @@ export function Technicians() {
                         signature_url: newSignatureUrl,
                         placa_carro: formData.placa_carro,
                         status: true
-                    })
-                    .eq('id', signupData.user.id)
+                    }, { onConflict: 'id' })
 
                 if (profileError) throw profileError
 
@@ -510,7 +519,7 @@ export function Technicians() {
                                 </div>
                             )}
 
-                            {userData?.cargo === 'admin' && (
+                            {userData?.cargo?.toLowerCase() === 'admin' && (
                                 <div className="mt-6 flex items-center gap-3 pt-4 border-t border-gray-100">
                                     <Button variant="outline" className="flex-1 h-10 text-sm font-medium rounded-xl border-gray-200 hover:bg-gray-50 hover:text-primary transition-colors" onClick={() => handleEdit(tech)}>
                                         <Pencil className="mr-2 h-3 w-3" />

@@ -115,11 +115,12 @@ export function Login() {
                     navigate('/')
                 }
             } else {
-                setError(result.error || 'Erro ao fazer login')
+                console.error('Login Error:', result.error)
+                setError(result.error || 'Erro ao fazer login (Detalhes no Console)')
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error('Erro geral no login:', err)
-            setError('Erro de conexão. Tente novamente')
+            setError(`Erro de conexão: ${err.message || 'Desconhecido'}`)
         } finally {
             setLoading(false)
         }

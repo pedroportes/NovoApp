@@ -36,11 +36,17 @@ export function ServiceOrders() {
     const fetchOrders = async () => {
         try {
             // 1. Fetch OS plain (no joins to avoid ambiguity)
-            const { data: osData, error: osError } = await supabase
+            let query = supabase
                 .from('ordens_servico')
                 .select('*')
                 .eq('empresa_id', userData!.empresa_id)
-                .order('created_at', { ascending: false })
+
+            // If technician, ONLY see own orders
+            if (userData?.cargo?.toLowerCase() === 'tecnico') {
+                query = query.eq('tecnico_id', userData.id)
+            }
+
+            const { data: osData, error: osError } = await query.order('created_at', { ascending: false })
 
             if (osError) throw osError
 

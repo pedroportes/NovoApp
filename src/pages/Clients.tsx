@@ -200,8 +200,7 @@ export function Clients() {
                 referencia: formData.referencia,
                 avatar_url: newAvatarUrl,
                 signature_url: newSignatureUrl,
-                empresa_id: userData.empresa_id,
-                user_id: (await supabase.auth.getUser()).data.user?.id
+                empresa_id: userData.empresa_id
             }
 
             let error;
@@ -238,7 +237,9 @@ export function Clients() {
 
     const filteredClients = clients.filter(client =>
         client.nome_razao?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        client.whatsapp?.toLowerCase().includes(searchTerm.toLowerCase())
+        client.whatsapp?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        client.endereco?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (client as any).telefone?.toLowerCase().includes(searchTerm.toLowerCase())
     )
 
     return (
