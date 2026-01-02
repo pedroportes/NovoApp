@@ -16,14 +16,24 @@ export function MainLayout() {
         navigate('/login')
     }
 
-    const navItems = [
-        { icon: LayoutDashboard, label: 'Início', path: '/' },
-        { icon: ClipboardList, label: 'OS', path: '/service-orders' },
-        // Middle item is skipped in map to place FAB
-        { icon: Wrench, label: 'Serviços', path: '/services' },
-        { icon: Users, label: 'Equipe', path: '/technicians' },
-        { icon: Wallet, label: 'Financeiro', path: '/financial' },
-    ]
+    // Detecta se é técnico
+    const isTecnico = userData?.cargo?.toLowerCase() === 'tecnico' || userData?.cargo?.toLowerCase() === 'técnico'
+
+    // Menu diferente para técnico vs admin
+    const navItems = isTecnico
+        ? [
+            { icon: LayoutDashboard, label: 'Início', path: '/tecnico/dashboard' },
+            { icon: ClipboardList, label: 'OS', path: '/service-orders' },
+            { icon: Wallet, label: 'Financeiro', path: '/tecnico/financeiro' },
+            { icon: Users, label: 'Clientes', path: '/clients' },
+        ]
+        : [
+            { icon: LayoutDashboard, label: 'Início', path: '/' },
+            { icon: ClipboardList, label: 'OS', path: '/service-orders' },
+            { icon: Wrench, label: 'Serviços', path: '/services' },
+            { icon: Users, label: 'Equipe', path: '/technicians' },
+            { icon: Wallet, label: 'Financeiro', path: '/financial' },
+        ]
 
     // Determine Page Title
     const getPageTitle = () => {
@@ -70,8 +80,8 @@ export function MainLayout() {
                 <nav className="flex-1 p-6 space-y-3">
                     {[
                         ...navItems,
-                        { icon: Users, label: 'Clientes', path: '/clients' },
-                        { icon: Settings, label: 'Configurações', path: '/settings' }
+                        // Só mostra Configurações para admin
+                        ...(isTecnico ? [] : [{ icon: Settings, label: 'Configurações', path: '/settings' }])
                     ].map((item) => (
                         <Link
                             key={item.path}
@@ -116,8 +126,8 @@ export function MainLayout() {
                                 <h1 className="text-xl font-bold leading-tight">{getPageTitle()}</h1>
                             </div>
                         </div>
-                        <button onClick={() => navigate('/settings')} className="p-2 bg-white/10 rounded-full hover:bg-white/20 backdrop-blur-sm transition-colors">
-                            <Settings className="h-5 w-5 text-white" />
+                        <button onClick={() => setSidebarOpen(true)} className="p-2 bg-white/10 rounded-full hover:bg-white/20 backdrop-blur-sm transition-colors">
+                            <Menu className="h-5 w-5 text-white" />
                         </button>
                     </div>
 
@@ -125,6 +135,98 @@ export function MainLayout() {
                     <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none" />
                     <div className="absolute bottom-0 left-0 w-24 h-24 bg-emerald-400/20 rounded-full blur-2xl -ml-10 -mb-5 pointer-events-none" />
                 </header>
+
+                {/* Mobile Sidebar Overlay */}
+                {sidebarOpen && (
+                    <div className="md:hidden fixed inset-0 z-[100]">
+                        {/* Backdrop */}
+                        <div
+                            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+                            onClick={() => setSidebarOpen(false)}
+                        />
+
+                        {/* Sidebar */}
+                        <aside className="absolute right-0 top-0 h-full w-72 bg-white shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+                            <div className="h-20 flex items-center justify-between px-6 border-b border-gray-100">
+                                <span className="text-2xl font-bold bg-gradient-to-r from-emerald-500 to-sky-500 bg-clip-text text-transparent">
+                                    FlowDrain
+                                </span>
+                                <button
+                                    onClick={() => setSidebarOpen(false)}
+                                    className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                                >
+                                    <svg className="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+
+                            <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+                                {navItems.map((item) => (
+                                    <Link
+                                        key={item.path}
+                                        to={item.path}
+                                        onClick={() => setSidebarOpen(false)}
+                                        className={cn(
+                                            "flex items-center gap-4 px-5 py-4 rounded-2xl text-base font-medium transition-all",
+                                            location.pathname === item.path
+                                                ? "bg-slate-900 text-white shadow-lg"
+                                                : "text-slate-500 hover:bg-slate-100"
+                                        )}
+                                    >
+                                        <item.icon className="h-5 w-5" />
+                                        {item.label}
+                                    </Link>
+                                ))}
+
+                                {/* Items extras para admin */}
+                                {!isTecnico && (
+                                    <>
+                                        <Link
+                                            to="/clients"
+                                            onClick={() => setSidebarOpen(false)}
+                                            className={cn(
+                                                "flex items-center gap-4 px-5 py-4 rounded-2xl text-base font-medium transition-all",
+                                                location.pathname === '/clients'
+                                                    ? "bg-slate-900 text-white shadow-lg"
+                                                    : "text-slate-500 hover:bg-slate-100"
+                                            )}
+                                        >
+                                            <Users className="h-5 w-5" />
+                                            Clientes
+                                        </Link>
+                                        <Link
+                                            to="/settings"
+                                            onClick={() => setSidebarOpen(false)}
+                                            className={cn(
+                                                "flex items-center gap-4 px-5 py-4 rounded-2xl text-base font-medium transition-all",
+                                                location.pathname === '/settings'
+                                                    ? "bg-slate-900 text-white shadow-lg"
+                                                    : "text-slate-500 hover:bg-slate-100"
+                                            )}
+                                        >
+                                            <Settings className="h-5 w-5" />
+                                            Configurações
+                                        </Link>
+                                    </>
+                                )}
+                            </nav>
+
+                            <div className="p-4 border-t border-gray-100">
+                                <button
+                                    onClick={() => {
+                                        setSidebarOpen(false)
+                                        handleSignOut()
+                                    }}
+                                    className="flex w-full items-center gap-4 px-5 py-4 text-base font-medium text-red-500 hover:bg-red-50 rounded-2xl transition-colors"
+                                >
+                                    <LogOut className="h-5 w-5" />
+                                    Sair do Sistema
+                                </button>
+                            </div>
+                        </aside>
+                    </div>
+                )}
 
                 {/* Main Content Scrollable */}
                 <main className="flex-1 overflow-y-auto overflow-x-hidden bg-transparent z-10 -mt-8 md:mt-0 md:p-8 px-4 pb-28 pt-4 md:bg-[#f3f4f6]">
@@ -153,14 +255,19 @@ export function MainLayout() {
                 </main>
 
                 {/* Mobile Bottom Navigation with FAB */}
-                <nav className="md:hidden fixed bottom-0 left-0 right-0 h-20 bg-white border-t border-gray-100 rounded-t-[30px] shadow-[0_-5px_20px_-5px_rgba(0,0,0,0.1)] flex items-center justify-between px-6 z-50">
-                    <Link to="/" className={cn("flex flex-col items-center gap-1 transition-colors", location.pathname === '/' ? "text-emerald-600" : "text-gray-400")}>
-                        <LayoutDashboard className="h-6 w-6" strokeWidth={location.pathname === '/' ? 2.5 : 2} />
-                    </Link>
-
-                    <Link to="/service-orders" className={cn("flex flex-col items-center gap-1 transition-colors", location.pathname === '/service-orders' ? "text-emerald-600" : "text-gray-400")}>
-                        <ClipboardList className="h-6 w-6" strokeWidth={location.pathname === '/service-orders' ? 2.5 : 2} />
-                    </Link>
+                <nav className="md:hidden fixed bottom-0 left-0 right-0 h-20 bg-white border-t border-gray-100 rounded-t-[30px] shadow-[0_-5px_20px_-5px_rgba(0,0,0,0.1)] flex items-center justify-around px-4 z-50">
+                    {navItems.slice(0, 2).map((item) => (
+                        <Link
+                            key={item.path}
+                            to={item.path}
+                            className={cn(
+                                "flex flex-col items-center gap-1 transition-colors p-2",
+                                location.pathname === item.path ? "text-emerald-600" : "text-gray-400"
+                            )}
+                        >
+                            <item.icon className="h-6 w-6" strokeWidth={location.pathname === item.path ? 2.5 : 2} />
+                        </Link>
+                    ))}
 
                     {/* FAB (Floating Action Button) */}
                     <div className="relative -top-8">
@@ -175,15 +282,20 @@ export function MainLayout() {
                         </button>
                     </div>
 
-                    <Link to="/clients" className={cn("flex flex-col items-center gap-1 transition-colors", location.pathname === '/clients' ? "text-emerald-600" : "text-gray-400")}>
-                        <Users className="h-6 w-6" strokeWidth={location.pathname === '/clients' ? 2.5 : 2} />
-                    </Link>
-
-                    <Link to="/technicians" className={cn("flex flex-col items-center gap-1 transition-colors", location.pathname === '/technicians' ? "text-emerald-600" : "text-gray-400")}>
-                        <Wallet className="h-6 w-6" strokeWidth={location.pathname === '/technicians' ? 2.5 : 2} />
-                    </Link>
+                    {navItems.slice(2, 4).map((item) => (
+                        <Link
+                            key={item.path}
+                            to={item.path}
+                            className={cn(
+                                "flex flex-col items-center gap-1 transition-colors p-2",
+                                location.pathname === item.path ? "text-emerald-600" : "text-gray-400"
+                            )}
+                        >
+                            <item.icon className="h-6 w-6" strokeWidth={location.pathname === item.path ? 2.5 : 2} />
+                        </Link>
+                    ))}
                 </nav>
             </div>
-        </div>
+        </div >
     )
 }

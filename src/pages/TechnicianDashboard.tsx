@@ -1,7 +1,7 @@
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { Card } from '@/components/ui/card'
-import { ClipboardList, Plus, MapPin, DollarSign, LogOut } from 'lucide-react'
+import { ClipboardList, Plus, MapPin, DollarSign, LogOut, Receipt } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useEffect } from 'react'
 import { format } from 'date-fns'
@@ -70,68 +70,24 @@ export function TechnicianDashboard() {
                 </Card>
 
                 <Card
+                    className="group p-5 flex flex-col items-center justify-center gap-3 cursor-pointer bg-white/70 backdrop-blur-xl border border-white/40 shadow-sm hover:shadow-teal-200/50 hover:bg-white/90 transition-all duration-300 rounded-[24px] h-36 active:scale-95"
+                    onClick={() => navigate('/tecnico/financeiro')}
+                >
+                    <div className="h-14 w-14 bg-gradient-to-br from-teal-400 to-emerald-500 rounded-2xl flex items-center justify-center text-white shadow-teal-200 shadow-md group-hover:scale-110 transition-transform duration-300">
+                        <DollarSign className="h-7 w-7" />
+                    </div>
+                    <span className="font-semibold text-slate-700 text-sm tracking-wide">Meu Financeiro</span>
+                </Card>
+
+                <Card
                     className="group p-5 flex flex-col items-center justify-center gap-3 cursor-pointer bg-white/70 backdrop-blur-xl border border-white/40 shadow-sm hover:shadow-amber-200/50 hover:bg-white/90 transition-all duration-300 rounded-[24px] h-36 active:scale-95"
                     onClick={() => navigate('/expenses')}
                 >
                     <div className="h-14 w-14 bg-gradient-to-br from-amber-400 to-orange-500 rounded-2xl flex items-center justify-center text-white shadow-amber-200 shadow-md group-hover:scale-110 transition-transform duration-300">
-                        <DollarSign className="h-7 w-7" />
+                        <Receipt className="h-7 w-7" />
                     </div>
-                    <span className="font-semibold text-slate-700 text-sm tracking-wide">Gastos</span>
+                    <span className="font-semibold text-slate-700 text-sm tracking-wide">Meus Gastos</span>
                 </Card>
-
-                <Card
-                    className="group p-5 flex flex-col items-center justify-center gap-3 cursor-pointer bg-white/70 backdrop-blur-xl border border-white/40 shadow-sm hover:shadow-purple-200/50 hover:bg-white/90 transition-all duration-300 rounded-[24px] h-36 active:scale-95"
-                    onClick={() => navigate('/clients')}
-                >
-                    <div className="h-14 w-14 bg-gradient-to-br from-purple-400 to-violet-500 rounded-2xl flex items-center justify-center text-white shadow-purple-200 shadow-md group-hover:scale-110 transition-transform duration-300">
-                        <MapPin className="h-7 w-7" />
-                    </div>
-                    <span className="font-semibold text-slate-700 text-sm tracking-wide">Clientes</span>
-                </Card>
-            </div>
-
-            {/* Recent Activity / Next Task */}
-            <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3 px-1">
-                    <h2 className="font-bold text-emerald-950 text-lg">Próxima Tarefa</h2>
-                    <span className="text-xs font-medium text-emerald-600 bg-emerald-100 px-2 py-1 rounded-full">Hoje</span>
-                </div>
-
-                <Card className="p-0 border-none shadow-lg shadow-emerald-100/50 bg-white/80 backdrop-blur-md rounded-[24px] overflow-hidden">
-                    <div className="p-5">
-                        <div className="flex justify-between items-start mb-3">
-                            <div>
-                                <h3 className="font-bold text-slate-800 text-lg">Residencial Flores</h3>
-                                <p className="text-sm text-slate-500 font-medium">Limpeza de Caixa d'Água</p>
-                            </div>
-                            <div className="bg-emerald-100 text-emerald-700 text-xs font-bold px-3 py-1.5 rounded-xl border border-emerald-200">
-                                09:00
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 text-sm text-slate-500 mb-4 bg-slate-50 p-2 rounded-lg border border-slate-100">
-                            <MapPin className="h-4 w-4 text-emerald-500 shrink-0" />
-                            <span className="truncate">Rua das Camélias, 123 - Curitiba/PR</span>
-                        </div>
-
-                        <Button
-                            className="w-full h-12 rounded-xl text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-200 disabled:opacity-50"
-                            onClick={() => {
-                                window.open(`https://waze.com/ul?q=Rua das Camelias, 123`, '_blank')
-                            }}
-                        >
-                            <MapPin className="mr-2 h-4 w-4" />
-                            Iniciar Navegação
-                        </Button>
-                    </div>
-                </Card>
-            </div>
-
-            <div className="w-full flex justify-center pb-6">
-                <Button variant="ghost" className="text-red-400 hover:text-red-600 hover:bg-red-50 rounded-full px-6" onClick={handleSignOut}>
-                    <LogOut className="mr-2 h-4 w-4" />
-                    Sair da conta
-                </Button>
             </div>
         </div>
     )

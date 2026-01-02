@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Navigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -24,6 +25,12 @@ export function Financial() {
     const [loading, setLoading] = useState(true)
     const [filterType, setFilterType] = useState<'ALL' | 'ENTRADA' | 'SAIDA'>('ALL')
     const [activeTab, setActiveTab] = useState<'fluxo' | 'comissoes'>('fluxo')
+
+    // Redireciona técnico para sua própria tela financeira
+    const isTecnico = userData?.cargo?.toLowerCase() === 'tecnico' || userData?.cargo?.toLowerCase() === 'técnico'
+    if (isTecnico) {
+        return <Navigate to="/tecnico/financeiro" replace />
+    }
 
     useEffect(() => {
         if (userData?.empresa_id) {

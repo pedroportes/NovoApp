@@ -289,11 +289,20 @@ export function FinancialClosing() {
                     {/* Approved Expenses (Awaiting Reimbursement) */}
                     {approvedExpenses.length > 0 && (
                         <div className="space-y-4 mb-6">
-                            <h3 className="text-xl font-bold text-blue-600 flex items-center gap-2">
-                                <Receipt className="h-5 w-5" />
-                                Despesas Aprovadas (Aguardando Reembolso)
-                            </h3>
-                            <div className="grid gap-4 md:grid-cols-2">
+                            <div>
+                                <h3 className="text-xl font-bold text-blue-600 flex items-center gap-2">
+                                    <Receipt className="h-5 w-5" />
+                                    💰 Despesas Aprovadas - Escolha Como Reembolsar
+                                </h3>
+                                <p className="text-sm text-slate-500 mt-1 bg-blue-50 p-2 rounded-lg">
+                                    Estas despesas foram pagas do bolso do técnico. Escolha como devolver:
+                                    <br />
+                                    • <strong>PIX/Dinheiro:</strong> Você devolve diretamente ao técnico (não entra no saldo)
+                                    <br />
+                                    • <strong>Adicionar ao Saldo:</strong> O valor entra no próximo pagamento junto com as comissões
+                                </p>
+                            </div>
+                            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                                 {approvedExpenses.map(exp => (
                                     <div key={exp.id} className="bg-white rounded-xl p-4 border border-blue-200 shadow-lg shadow-blue-100/50 flex flex-col justify-between">
                                         <div>
@@ -303,67 +312,169 @@ export function FinancialClosing() {
                                                     {formatCurrency(exp.valor)}
                                                 </span>
                                             </div>
-                                            <div className="text-xs text-slate-500 mb-4 flex gap-2">
+                                            <div className="text-xs text-slate-500 mb-2 flex gap-2">
                                                 <span>{new Date(exp.created_at).toLocaleDateString()}</span>
                                                 <span>•</span>
                                                 <span className="uppercase">{exp.categoria}</span>
                                             </div>
+                                            {exp.comprovante_url && (
+                                                <a
+                                                    href={exp.comprovante_url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-xs text-blue-600 hover:underline flex items-center gap-1 mb-3"
+                                                >
+                                                    📎 Ver Comprovante
+                                                </a>
+                                            )}
                                         </div>
-                                        <Button
-                                            size="sm"
-                                            className="w-full bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-200"
-                                            onClick={() => handleAuthorize(exp.id)}
-                                        >
-                                            Adicionar ao Saldo
-                                        </Button>
+                                        <div className="space-y-2">
+                                            <p className="text-xs text-slate-400 text-center font-medium">Como você vai reembolsar?</p>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <Button
+                                                    size="sm"
+                                                    className="bg-green-600 hover:bg-green-700 text-white text-xs"
+                                                    onClick={() => handleAuthorize(exp.id)}
+                                                >
+                                                    💳 PIX
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    className="bg-amber-600 hover:bg-amber-700 text-white text-xs"
+                                                    onClick={() => handleAuthorize(exp.id)}
+                                                >
+                                                    💵 Dinheiro
+                                                </Button>
+                                            </div>
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="w-full border-purple-300 text-purple-700 hover:bg-purple-50 text-xs"
+                                                onClick={() => handleAuthorize(exp.id)}
+                                            >
+                                                📊 Adicionar ao Saldo
+                                            </Button>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
                         </div>
                     )}
 
-                    {/* Pending Expenses Section */}
+                    {/* Pending Expenses Section - Separated by Payment Type */}
                     {pendingExpenses.length > 0 && (
                         <div className="space-y-4 mb-6">
                             <h3 className="text-xl font-bold text-amber-600 flex items-center gap-2">
                                 <Receipt className="h-5 w-5" />
                                 Despesas Pendentes de Aprovação
                             </h3>
-                            <div className="grid gap-4 md:grid-cols-2">
-                                {pendingExpenses.map(exp => (
-                                    <div key={exp.id} className="bg-white rounded-xl p-4 border border-amber-200 shadow-lg shadow-amber-100/50 flex flex-col justify-between">
-                                        <div>
-                                            <div className="flex justify-between items-start mb-2">
-                                                <h4 className="font-bold text-slate-800">{exp.descricao}</h4>
-                                                <span className="text-sm font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-md border border-amber-100">
-                                                    {formatCurrency(exp.valor)}
-                                                </span>
-                                            </div>
-                                            <div className="text-xs text-slate-500 mb-4 flex gap-2">
-                                                <span>{new Date(exp.created_at).toLocaleDateString()}</span>
-                                                <span>•</span>
-                                                <span className="uppercase">{exp.categoria}</span>
-                                            </div>
-                                        </div>
-                                        <div className="flex gap-2 mt-auto">
-                                            <Button
-                                                size="sm"
-                                                variant="outline"
-                                                className="w-full text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300"
-                                                onClick={() => handleApproveDecline(exp.id, 'rejeitado')}
-                                            >
-                                                Rejeitar
-                                            </Button>
-                                            <Button
-                                                size="sm"
-                                                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-200"
-                                                onClick={() => handleApproveDecline(exp.id, 'aprovado')}
-                                            >
-                                                Aprovar
-                                            </Button>
-                                        </div>
+
+                            <div className="grid gap-6 md:grid-cols-2">
+                                {/* COLUNA ESQUERDA - Gastos com Cartão/Dinheiro da Empresa */}
+                                <div className="space-y-3">
+                                    <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-200">
+                                        <h4 className="font-bold text-emerald-700 flex items-center gap-2">
+                                            💳 Pago com Cartão/Dinheiro da Empresa
+                                        </h4>
+                                        <p className="text-xs text-emerald-600 mt-1">
+                                            O técnico usou o cartão corporativo ou dinheiro adiantado.
+                                            Apenas aprove para registrar o gasto.
+                                        </p>
                                     </div>
-                                ))}
+                                    {pendingExpenses.filter(exp => exp.origem_pagamento !== 'proprio').map(exp => (
+                                        <div key={exp.id} className="bg-white rounded-xl p-4 border border-emerald-200 shadow-md flex flex-col justify-between">
+                                            <div>
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <h4 className="font-bold text-slate-800">{exp.descricao}</h4>
+                                                    <span className="text-sm font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100">
+                                                        {formatCurrency(exp.valor)}
+                                                    </span>
+                                                </div>
+                                                <div className="text-xs text-slate-500 mb-2 flex flex-wrap gap-2">
+                                                    <span>{new Date(exp.created_at).toLocaleDateString()}</span>
+                                                    <span>•</span>
+                                                    <span className="uppercase">{exp.categoria}</span>
+                                                </div>
+                                                {exp.comprovante_url && (
+                                                    <a href={exp.comprovante_url} target="_blank" rel="noopener noreferrer"
+                                                        className="text-xs text-emerald-600 hover:underline flex items-center gap-1 mb-3">
+                                                        📎 Ver Comprovante
+                                                    </a>
+                                                )}
+                                            </div>
+                                            <div className="flex gap-2 mt-auto">
+                                                <Button size="sm" variant="outline"
+                                                    className="flex-1 text-red-600 border-red-200 hover:bg-red-50"
+                                                    onClick={() => handleApproveDecline(exp.id, 'rejeitado')}>
+                                                    ❌ Rejeitar
+                                                </Button>
+                                                <Button size="sm"
+                                                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                                                    onClick={() => handleApproveDecline(exp.id, 'aprovado')}>
+                                                    ✅ Aprovar
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {pendingExpenses.filter(exp => exp.origem_pagamento !== 'proprio').length === 0 && (
+                                        <div className="text-center text-slate-400 py-4 text-sm">
+                                            Nenhuma despesa com cartão da empresa
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* COLUNA DIREITA - Gastos do Bolso do Técnico (Reembolso) */}
+                                <div className="space-y-3">
+                                    <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                                        <h4 className="font-bold text-blue-700 flex items-center gap-2">
+                                            💰 Pago do Bolso do Técnico
+                                        </h4>
+                                        <p className="text-xs text-blue-600 mt-1">
+                                            O técnico pagou com seu próprio dinheiro/cartão.
+                                            Após aprovar, escolha como devolver: PIX, Dinheiro ou Saldo.
+                                        </p>
+                                    </div>
+                                    {pendingExpenses.filter(exp => exp.origem_pagamento === 'proprio').map(exp => (
+                                        <div key={exp.id} className="bg-white rounded-xl p-4 border border-blue-200 shadow-md flex flex-col justify-between">
+                                            <div>
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <h4 className="font-bold text-slate-800">{exp.descricao}</h4>
+                                                    <span className="text-sm font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-md border border-blue-100">
+                                                        {formatCurrency(exp.valor)}
+                                                    </span>
+                                                </div>
+                                                <div className="text-xs text-slate-500 mb-2 flex flex-wrap gap-2">
+                                                    <span>{new Date(exp.created_at).toLocaleDateString()}</span>
+                                                    <span>•</span>
+                                                    <span className="uppercase">{exp.categoria}</span>
+                                                </div>
+                                                {exp.comprovante_url && (
+                                                    <a href={exp.comprovante_url} target="_blank" rel="noopener noreferrer"
+                                                        className="text-xs text-blue-600 hover:underline flex items-center gap-1 mb-3">
+                                                        📎 Ver Comprovante
+                                                    </a>
+                                                )}
+                                            </div>
+                                            <div className="flex gap-2 mt-auto">
+                                                <Button size="sm" variant="outline"
+                                                    className="flex-1 text-red-600 border-red-200 hover:bg-red-50"
+                                                    onClick={() => handleApproveDecline(exp.id, 'rejeitado')}>
+                                                    ❌ Rejeitar
+                                                </Button>
+                                                <Button size="sm"
+                                                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                                                    onClick={() => handleApproveDecline(exp.id, 'aprovado')}>
+                                                    ✅ Aprovar
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {pendingExpenses.filter(exp => exp.origem_pagamento === 'proprio').length === 0 && (
+                                        <div className="text-center text-slate-400 py-4 text-sm">
+                                            Nenhuma despesa para reembolso
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     )}

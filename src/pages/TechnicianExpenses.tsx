@@ -19,6 +19,7 @@ interface Expense {
     created_at?: string
     categoria?: string
     comprovante_url?: string
+    origem_pagamento?: 'empresa' | 'proprio'
 }
 
 type ExpenseCategory = 'combustivel' | 'alimentacao' | 'material' | 'outros'
@@ -36,6 +37,9 @@ export function TechnicianExpenses() {
     const [valor, setValor] = useState('')
     const [categoria, setCategoria] = useState<ExpenseCategory>('combustivel')
 
+    const [comprovanteFile, setComprovanteFile] = useState<File | null>(null)
+    const [origemPagamento, setOrigemPagamento] = useState<'empresa' | 'proprio'>('empresa')
+
     useEffect(() => {
         if (userData?.id) {
             fetchExpenses()
@@ -44,7 +48,6 @@ export function TechnicianExpenses() {
 
     const fetchExpenses = async () => {
         try {
-            // Use o ID do usuário diretamente como tecnico_id
             const { data, error } = await supabase
                 .from('despesas_tecnicos')
                 .select('*')
@@ -53,7 +56,6 @@ export function TechnicianExpenses() {
 
             if (error) {
                 console.error('Erro ao buscar despesas:', error)
-                // Se a tabela não existe, mostra estado vazio
                 setExpenses([])
             } else {
                 setExpenses(data || [])
@@ -66,6 +68,12 @@ export function TechnicianExpenses() {
         }
     }
 
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            setComprovanteFile(e.target.files[0])
+        }
+    }
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         if (!descricao || !valor) return
@@ -73,6 +81,26 @@ export function TechnicianExpenses() {
         setSubmitting(true)
 
         try {
+            let comprovanteUrl = null
+
+            if (comprovanteFile) {
+                const fileExt = comprovanteFile.name.split('.').pop()
+                const fileName = `${Math.random()}.${fileExt}`
+                const filePath = `despesas/${userData!.id}/${fileName}`
+
+                const { error: uploadError } = await supabase.storage
+                    .from('comprovantes')
+                    .upload(filePath, comprovanteFile)
+
+                if (uploadError) throw uploadError
+
+                const { data: { publicUrl } } = supabase.storage
+                    .from('comprovantes')
+                    .getPublicUrl(filePath)
+
+                comprovanteUrl = publicUrl
+            }
+
             const { error } = await supabase
                 .from('despesas_tecnicos')
                 .insert({
@@ -81,6 +109,8 @@ export function TechnicianExpenses() {
                     descricao,
                     valor: parseFloat(valor.replace(',', '.')),
                     categoria,
+                    origem_pagamento: origemPagamento,
+                    comprovante_url: comprovanteUrl,
                     status: 'pendente'
                 })
 
@@ -90,6 +120,8 @@ export function TechnicianExpenses() {
             setDescricao('')
             setValor('')
             setCategoria('combustivel')
+            setOrigemPagamento('empresa')
+            setComprovanteFile(null)
             setShowForm(false)
             fetchExpenses()
         } catch (error) {
@@ -210,6 +242,60 @@ export function TechnicianExpenses() {
                                     required
                                 />
                             </div>
+
+                            {/* Origem do Pagamento */}
+                            <div>
+                                <label className="text-sm font-medium text-slate-700 mb-1.5 block">Quem pagou essa despesa?</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setOrigemPagamento('empresa')}
+                                        className={cn(
+                                            "p-3 rounded-lg border-2 text-sm font-medium transition-all text-center",
+                                            origemPagamento === 'empresa'
+                                                ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                                                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                                        )}
+                                    >
+                                        💳 Cartão/Dinheiro da Empresa
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setOrigemPagamento('proprio')}
+                                        className={cn(
+                                            "p-3 rounded-lg border-2 text-sm font-medium transition-all text-center",
+                                            origemPagamento === 'proprio'
+                                                ? "border-blue-500 bg-blue-50 text-blue-700"
+                                                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                                        )}
+                                    >
+                                        💰 Paguei do Meu Bolso
+                                    </button>
+                                </div>
+                                {/* Texto explicativo */}
+                                <p className="text-xs text-slate-500 mt-2 bg-slate-50 p-2 rounded-lg">
+                                    {origemPagamento === 'empresa' ? (
+                                        <>📋 <strong>Empresa:</strong> Você usou o cartão corporativo ou dinheiro que o admin te deu de manhã para os gastos do dia.</>
+                                    ) : (
+                                        <>💵 <strong>Meu Bolso:</strong> Você pagou com seu próprio dinheiro/cartão. O admin vai te reembolsar via PIX ou em espécie após aprovar.</>
+                                    )}
+                                </p>
+                            </div>
+
+                            {/* Upload de Comprovante */}
+                            <div>
+                                <label className="text-sm font-medium text-slate-700 mb-1.5 block">📸 Comprovante / Nota Fiscal</label>
+                                <Input
+                                    type="file"
+                                    accept="image/*,application/pdf"
+                                    onChange={handleFileChange}
+                                    className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"
+                                />
+                                <p className="text-xs text-slate-400 mt-1">
+                                    📎 Tire uma foto do cupom fiscal como prova do gasto. O admin poderá visualizar.
+                                </p>
+                            </div>
+
                             <div>
                                 <label className="text-sm font-medium text-slate-700 mb-1.5 block">Categoria</label>
                                 <div className="grid grid-cols-2 gap-2">
@@ -287,7 +373,7 @@ export function TechnicianExpenses() {
                                 <div className="flex items-start justify-between">
                                     <div className="flex-1">
                                         <p className="font-medium text-slate-800">{expense.descricao}</p>
-                                        <div className="flex items-center gap-2 mt-1">
+                                        <div className="flex flex-wrap items-center gap-2 mt-1">
                                             <span className="text-xs text-slate-400">
                                                 {(expense.data_despesa || expense.created_at) && format(new Date(expense.data_despesa || expense.created_at!), "dd/MM/yyyy", { locale: ptBR })}
                                             </span>
@@ -296,7 +382,30 @@ export function TechnicianExpenses() {
                                                     {getCategoryLabel(expense.categoria)}
                                                 </span>
                                             )}
+                                            {/* Pagamento Badge */}
+                                            {expense.origem_pagamento === 'proprio' ? (
+                                                <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-medium">
+                                                    Reembolso
+                                                </span>
+                                            ) : (
+                                                <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">
+                                                    Empresa
+                                                </span>
+                                            )}
                                         </div>
+                                        {/* Link do comprovante se existir */}
+                                        {expense.comprovante_url && (
+                                            <div className="mt-2">
+                                                <a
+                                                    href={expense.comprovante_url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-xs text-emerald-600 hover:underline flex items-center gap-1"
+                                                >
+                                                    <Receipt className="w-3 h-3" /> Ver Comprovante
+                                                </a>
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="text-right">
                                         <p className="font-bold text-slate-800">{formatCurrency(expense.valor)}</p>

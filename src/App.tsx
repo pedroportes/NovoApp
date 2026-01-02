@@ -15,6 +15,8 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { AuthProvider } from '@/contexts/AuthContext'
 import { TechnicianDashboard } from './pages/TechnicianDashboard'
 import { TechnicianExpenses } from './pages/TechnicianExpenses'
+import { TechnicianFinancial } from './pages/TechnicianFinancial'
+import { TechnicianFinancialPrint } from './pages/TechnicianFinancialPrint'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 
 function App() {
@@ -44,6 +46,7 @@ function App() {
                             <Route path="/financial" element={<Financial />} />
                             <Route path="/tecnico/dashboard" element={<TechnicianDashboard />} />
                             <Route path="/tech-dashboard" element={<TechnicianDashboard />} />
+                            <Route path="/tecnico/financeiro" element={<TechnicianFinancial />} />
                             <Route path="/expenses" element={<TechnicianExpenses />} />
                         </Route>
 
@@ -51,6 +54,11 @@ function App() {
                         <Route path="/print/service-orders/:id" element={
                             <ProtectedRoute>
                                 <PrintServiceOrder />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/tecnico/extrato" element={
+                            <ProtectedRoute>
+                                <TechnicianFinancialPrint />
                             </ProtectedRoute>
                         } />
 

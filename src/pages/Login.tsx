@@ -11,6 +11,8 @@ import { cn } from '@/lib/utils'
 
 type LoginType = 'admin' | 'tecnico'
 
+import logoImg from '@/assets/logo-flowdrain.jpg'
+
 export function Login() {
     const [loginType, setLoginType] = useState<LoginType>('admin')
     const [email, setEmail] = useState('')
@@ -133,12 +135,16 @@ export function Login() {
 
                     {/* Header com Logo */}
                     <div className="pt-8 pb-6 flex flex-col items-center justify-center bg-gradient-to-b from-primary/10 to-transparent">
-                        <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center shadow-lg mb-4 ring-4 ring-background">
-                            <span className="text-white text-3xl font-bold">FD</span>
+                        <div className="mb-4">
+                            <img
+                                src={logoImg}
+                                alt="FlowDrain Logo"
+                                className="h-40 w-auto object-contain drop-shadow-xl rounded-lg"
+                            />
                         </div>
-                        <h1 className="text-2xl font-bold text-foreground">
+                        {/* <h1 className="text-2xl font-bold text-foreground">
                             FlowDrain
-                        </h1>
+                        </h1> */}
                         <p className="text-sm text-muted-foreground mt-1">
                             Gerencie sua desentupidora com facilidade
                         </p>

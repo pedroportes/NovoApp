@@ -251,6 +251,7 @@ export const financialService = {
 
     /**
      * Fetches approved but unprocessed expenses (Awaiting Reimbursement).
+     * Only returns expenses paid from technician's own pocket (origem_pagamento = 'proprio')
      */
     getApprovedExpenses: async (technicianId: string) => {
         const { data, error } = await (supabase
@@ -259,6 +260,7 @@ export const financialService = {
             .eq('tecnico_id', technicianId)
             .eq('status_aprovacao', 'aprovado')
             .eq('status', 'pendente')
+            .eq('origem_pagamento', 'proprio') // Só despesas pagas do bolso do técnico
             .order('created_at', { ascending: true })
 
         if (error) throw error

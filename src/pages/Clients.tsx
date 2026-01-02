@@ -1,9 +1,12 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { Plus, Search, Pencil, Trash2, Phone, Mail, User as UserIcon, MapPin, FileText } from 'lucide-react'
 import { compressImage } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
+import { searchCep } from '@/services/cepService'
+import { searchAddress, AddressSuggestion } from '@/services/addressService'
+import { searchCnpj, formatPhone, formatLogradouro } from '@/services/cnpjService'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import {
@@ -47,10 +50,26 @@ export function Clients() {
         cpf_cnpj: '',
         whatsapp: '',
         email: '',
-        endereco: '',
+        cep: '',
+        logradouro: '',
+        numero: '',
+        complemento: '',
+        bairro: '',
+        cidade: '',
+        uf: '',
         referencia: ''
     }
     const [formData, setFormData] = useState(initialFormState)
+    const [searchingCep, setSearchingCep] = useState(false)
+
+    // Autocomplete de endereço
+    const [addressQuery, setAddressQuery] = useState('')
+    const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([])
+    const [showSuggestions, setShowSuggestions] = useState(false)
+    const [searchingAddress, setSearchingAddress] = useState(false)
+    const addressInputRef = useRef<HTMLInputElement>(null)
+    const debounceRef = useRef<NodeJS.Timeout | null>(null)
+    const [searchingCnpj, setSearchingCnpj] = useState(false)
 
     // Upload States
     const [avatarFile, setAvatarFile] = useState<File | null>(null)
@@ -91,6 +110,71 @@ export function Clients() {
         setAvatarPreview(null)
         setSignatureBlob(null)
         setCurrentSignatureUrl(null)
+        setAddressQuery('')
+        setAddressSuggestions([])
+    }
+
+    // Função de busca de endereço com debounce
+    const handleAddressSearch = (query: string) => {
+        setAddressQuery(query)
+        setShowSuggestions(true)
+
+        if (debounceRef.current) {
+            clearTimeout(debounceRef.current)
+        }
+
+        if (query.length < 3) {
+            setAddressSuggestions([])
+            return
+        }
+
+        debounceRef.current = setTimeout(async () => {
+            setSearchingAddress(true)
+            const results = await searchAddress(query)
+            setAddressSuggestions(results)
+            setSearchingAddress(false)
+        }, 300)
+    }
+
+    // Função para selecionar uma sugestão
+    const handleSelectSuggestion = async (suggestion: AddressSuggestion) => {
+        // Se tem postcode mas não tem street, tenta buscar via CEP para pegar mais dados
+        let logradouro = suggestion.street || ''
+        let bairro = suggestion.neighbourhood || ''
+        let cidade = suggestion.city || ''
+        let uf = suggestion.state_code || ''
+
+        // Se não veio street mas veio postcode, busca via CEP
+        if (!suggestion.street && suggestion.postcode) {
+            const cepResult = await searchCep(suggestion.postcode)
+            if (cepResult) {
+                logradouro = cepResult.street || ''
+                bairro = cepResult.neighborhood || bairro
+                cidade = cepResult.city || cidade
+                uf = cepResult.state || uf
+            }
+        }
+
+        // Se ainda não tem logradouro, tenta extrair do formatted
+        if (!logradouro && suggestion.formatted) {
+            const parts = suggestion.formatted.split(',')
+            if (parts.length > 0) {
+                logradouro = parts[0].trim()
+            }
+        }
+
+        setFormData(prev => ({
+            ...prev,
+            logradouro,
+            numero: suggestion.housenumber || '',
+            bairro,
+            cidade,
+            uf,
+            cep: suggestion.postcode?.replace(/\D/g, '').replace(/(\d{5})(\d)/, '$1-$2') || ''
+        }))
+        setAddressQuery('')
+        setShowSuggestions(false)
+        setAddressSuggestions([])
     }
 
     const fetchClients = async () => {
@@ -113,12 +197,23 @@ export function Clients() {
 
     const handleEdit = (client: Client) => {
         setEditingClientId(client.id)
+        // Parse endereco if it exists (format: Logradouro, Numero - Bairro, Cidade/UF)
+        const enderecoParts = (client.endereco || '').split(' - ')
+        const logradouroNumero = enderecoParts[0]?.split(', ') || []
+        const bairroCidade = enderecoParts[1]?.split(', ') || []
+
         setFormData({
             nome_razao: client.nome_razao || '',
             cpf_cnpj: client.cpf_cnpj || '',
             whatsapp: client.whatsapp || '',
             email: client.email || '',
-            endereco: client.endereco || '',
+            cep: '',
+            logradouro: logradouroNumero[0] || '',
+            numero: logradouroNumero[1] || '',
+            complemento: '',
+            bairro: bairroCidade[0] || '',
+            cidade: bairroCidade[1]?.split('/')[0] || '',
+            uf: bairroCidade[1]?.split('/')[1] || '',
             referencia: client.referencia || ''
         })
         setAvatarPreview(client.avatar_url || null)
@@ -191,12 +286,22 @@ export function Clients() {
                 newSignatureUrl = await uploadFile(signatureBlob, `client-sig`)
             }
 
+            // Monta endereço completo a partir dos campos separados
+            const enderecoCompleto = [
+                formData.logradouro,
+                formData.numero,
+                formData.complemento ? `(${formData.complemento})` : '',
+                '-',
+                formData.bairro,
+                formData.cidade ? `${formData.cidade}/${formData.uf}` : ''
+            ].filter(Boolean).join(', ').replace(', -,', ' -')
+
             const payload = {
-                nome_razao: formData.nome_razao, // Confirmed
-                cpf_cnpj: formData.cpf_cnpj, // Confirmed
-                whatsapp: formData.whatsapp, // Confirmed
+                nome_razao: formData.nome_razao,
+                cpf_cnpj: formData.cpf_cnpj,
+                whatsapp: formData.whatsapp,
                 email: formData.email,
-                endereco: formData.endereco,
+                endereco: enderecoCompleto,
                 referencia: formData.referencia,
                 avatar_url: newAvatarUrl,
                 signature_url: newSignatureUrl,
@@ -311,13 +416,50 @@ export function Clients() {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="space-y-2">
                                         <Label htmlFor="document">CPF / CNPJ</Label>
-                                        <Input
-                                            id="document"
-                                            className="h-12 text-lg"
-                                            placeholder="000.000.000-00"
-                                            value={formData.cpf_cnpj}
-                                            onChange={e => setFormData({ ...formData, cpf_cnpj: e.target.value })}
-                                        />
+                                        <div className="flex gap-2">
+                                            <Input
+                                                id="document"
+                                                className="h-12 text-lg flex-1"
+                                                placeholder="000.000.000-00"
+                                                value={formData.cpf_cnpj}
+                                                onChange={e => setFormData({ ...formData, cpf_cnpj: e.target.value })}
+                                            />
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                className="h-12 px-4 text-emerald-600 border-emerald-200 hover:bg-emerald-50 whitespace-nowrap"
+                                                disabled={searchingCnpj || formData.cpf_cnpj.replace(/\D/g, '').length !== 14}
+                                                onClick={async () => {
+                                                    setSearchingCnpj(true)
+                                                    const result = await searchCnpj(formData.cpf_cnpj)
+                                                    setSearchingCnpj(false)
+                                                    if (result) {
+                                                        setFormData(prev => ({
+                                                            ...prev,
+                                                            nome_razao: result.razao_social || prev.nome_razao,
+                                                            logradouro: formatLogradouro(result.descricao_tipo_de_logradouro, result.logradouro) || prev.logradouro,
+                                                            numero: result.numero || prev.numero,
+                                                            bairro: result.bairro || prev.bairro,
+                                                            cidade: result.municipio || prev.cidade,
+                                                            uf: result.uf || prev.uf,
+                                                            cep: result.cep?.replace(/(\d{5})(\d)/, '$1-$2') || prev.cep,
+                                                            whatsapp: formatPhone(result.ddd_telefone_1) || prev.whatsapp
+                                                        }))
+                                                        alert(`CNPJ encontrado! Dados de "${result.razao_social}" preenchidos.`)
+                                                    } else {
+                                                        alert('CNPJ não encontrado ou inválido.')
+                                                    }
+                                                }}
+                                            >
+                                                {searchingCnpj ? (
+                                                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+                                                ) : (
+                                                    <Search className="h-4 w-4" />
+                                                )}
+                                                <span className="ml-1 hidden sm:inline">Buscar</span>
+                                            </Button>
+                                        </div>
+                                        <p className="text-xs text-slate-400">Para CNPJ, clique em "Buscar" para preencher automaticamente</p>
                                     </div>
                                     <div className="space-y-2">
                                         <Label htmlFor="phone">WhatsApp</Label>
@@ -330,31 +472,151 @@ export function Clients() {
                                         />
                                     </div>
                                 </div>
-
-                                <div className="space-y-2">
-                                    <Label htmlFor="email">E-mail (Opcional)</Label>
-                                    <Input
-                                        id="email"
-                                        type="email"
-                                        className="h-12 text-lg"
-                                        placeholder="cliente@email.com"
-                                        value={formData.email}
-                                        onChange={e => setFormData({ ...formData, email: e.target.value })}
-                                    />
-                                </div>
                             </div>
 
                             <div className="space-y-4 pt-2">
                                 <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Endereço de Atendimento</h3>
 
-                                <div className="space-y-2">
-                                    <Label htmlFor="address">Endereço Completo</Label>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="cep">CEP</Label>
+                                        <div className="relative">
+                                            <Input
+                                                id="cep"
+                                                className="h-12 text-lg"
+                                                placeholder="00000-000"
+                                                maxLength={9}
+                                                value={formData.cep}
+                                                onChange={async (e) => {
+                                                    const formatted = e.target.value.replace(/\D/g, '').replace(/(\d{5})(\d)/, '$1-$2').slice(0, 9)
+                                                    setFormData({ ...formData, cep: formatted })
+
+                                                    // Busca automática quando CEP completo
+                                                    if (formatted.replace(/\D/g, '').length === 8) {
+                                                        setSearchingCep(true)
+                                                        const result = await searchCep(formatted)
+                                                        setSearchingCep(false)
+                                                        if (result) {
+                                                            setFormData(prev => ({
+                                                                ...prev,
+                                                                logradouro: result.street || prev.logradouro,
+                                                                bairro: result.neighborhood || prev.bairro,
+                                                                cidade: result.city || prev.cidade,
+                                                                uf: result.state || prev.uf
+                                                            }))
+                                                        }
+                                                    }
+                                                }}
+                                            />
+                                            {searchingCep && (
+                                                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+                                                </div>
+                                            )}
+                                        </div>
+                                        <p className="text-xs text-slate-400">Digite o CEP ou preencha o endereço manualmente</p>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="numero">Número</Label>
+                                        <Input
+                                            id="numero"
+                                            className="h-12 text-lg"
+                                            placeholder="123"
+                                            value={formData.numero}
+                                            onChange={e => setFormData({ ...formData, numero: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Logradouro com autocomplete */}
+                                <div className="space-y-2 relative">
+                                    <Label htmlFor="logradouro">Logradouro (Rua/Av.)</Label>
                                     <Input
-                                        id="address"
+                                        id="logradouro"
                                         className="h-12 text-lg"
-                                        placeholder="Rua, Número, Bairro, Cidade"
-                                        value={formData.endereco}
-                                        onChange={e => setFormData({ ...formData, endereco: e.target.value })}
+                                        placeholder="Digite a rua ou avenida..."
+                                        value={formData.logradouro || addressQuery}
+                                        onChange={(e) => {
+                                            const value = e.target.value
+                                            if (formData.logradouro) {
+                                                // Se já tem logradouro preenchido, permite edição direta
+                                                setFormData({ ...formData, logradouro: value })
+                                            } else {
+                                                // Se não tem, ativa autocomplete
+                                                handleAddressSearch(value)
+                                            }
+                                        }}
+                                        onFocus={() => {
+                                            if (!formData.logradouro) setShowSuggestions(true)
+                                        }}
+                                        onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                                    />
+                                    {searchingAddress && (
+                                        <div className="absolute right-3 top-[calc(50%+4px)] -translate-y-1/2">
+                                            <div className="h-5 w-5 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+                                        </div>
+                                    )}
+
+                                    {/* Dropdown de sugestões */}
+                                    {showSuggestions && addressSuggestions.length > 0 && (
+                                        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-60 overflow-y-auto">
+                                            {addressSuggestions.map((suggestion, index) => (
+                                                <button
+                                                    key={index}
+                                                    type="button"
+                                                    className="w-full text-left px-4 py-3 hover:bg-emerald-50 transition-colors flex items-start gap-3 border-b border-slate-50 last:border-b-0"
+                                                    onClick={() => handleSelectSuggestion(suggestion)}
+                                                >
+                                                    <MapPin className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="text-sm font-medium text-slate-700 truncate">
+                                                            {suggestion.street
+                                                                ? `${suggestion.street}${suggestion.housenumber ? `, ${suggestion.housenumber}` : ''}`
+                                                                : suggestion.formatted?.split(',')[0] || 'Endereço'
+                                                            }
+                                                        </p>
+                                                        <p className="text-xs text-slate-400 truncate">
+                                                            {suggestion.neighbourhood ? `${suggestion.neighbourhood}, ` : ''}{suggestion.city}/{suggestion.state_code}
+                                                        </p>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="bairro">Bairro</Label>
+                                        <Input
+                                            id="bairro"
+                                            className="h-12 text-lg bg-muted/50"
+                                            placeholder="Preenchido automaticamente"
+                                            value={formData.bairro}
+                                            onChange={e => setFormData({ ...formData, bairro: e.target.value })}
+                                            readOnly
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="cidade">Cidade/UF</Label>
+                                        <Input
+                                            id="cidade"
+                                            className="h-12 text-lg bg-muted/50"
+                                            placeholder="Preenchido automaticamente"
+                                            value={formData.cidade ? `${formData.cidade}/${formData.uf}` : ''}
+                                            readOnly
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="complemento">Complemento</Label>
+                                    <Input
+                                        id="complemento"
+                                        className="h-12 text-lg"
+                                        placeholder="Apto, Bloco, Casa, etc."
+                                        value={formData.complemento}
+                                        onChange={e => setFormData({ ...formData, complemento: e.target.value })}
                                     />
                                 </div>
 
@@ -368,17 +630,18 @@ export function Clients() {
                                         onChange={e => setFormData({ ...formData, referencia: e.target.value })}
                                     />
                                 </div>
-                            </div>
 
-                            {/* ASSINATURA */}
-                            <div className="space-y-2 pt-4">
-                                <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Assinatura / Concordância</h3>
-                                <p className="text-xs text-muted-foreground mb-2">Colete a assinatura do cliente para confirmar o cadastro.</p>
-
-                                <SignaturePad
-                                    onSignatureChange={setSignatureBlob}
-                                    initialImage={currentSignatureUrl}
-                                />
+                                <div className="space-y-2">
+                                    <Label htmlFor="email">E-mail (Opcional)</Label>
+                                    <Input
+                                        id="email"
+                                        type="email"
+                                        className="h-12 text-lg"
+                                        placeholder="cliente@email.com"
+                                        value={formData.email}
+                                        onChange={e => setFormData({ ...formData, email: e.target.value })}
+                                    />
+                                </div>
                             </div>
 
                             <Button type="submit" className="w-full h-14 text-lg font-semibold mt-4 shadow-md" disabled={isSubmitting}>
