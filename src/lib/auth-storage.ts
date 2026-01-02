@@ -8,8 +8,8 @@ const AUTH_KEYS = {
 
 export interface UserData {
     id: string
-    empresa_id: string
-    cargo: 'admin' | 'tecnico'
+    empresa_id: string | null
+    cargo: string | null // Relaxed to string to avoid mismatch with DB string type
     nome: string
     email: string
 }
@@ -28,8 +28,11 @@ export const authStorage = {
     // Save user data to localStorage
     setUserData: (userData: UserData): void => {
         localStorage.setItem(AUTH_KEYS.USER_DATA, JSON.stringify(userData))
-        localStorage.setItem(AUTH_KEYS.EMPRESA_ID, userData.empresa_id)
-        localStorage.setItem(AUTH_KEYS.USER_ROLE, userData.cargo)
+        if (userData.empresa_id) localStorage.setItem(AUTH_KEYS.EMPRESA_ID, userData.empresa_id)
+        else localStorage.removeItem(AUTH_KEYS.EMPRESA_ID)
+
+        if (userData.cargo) localStorage.setItem(AUTH_KEYS.USER_ROLE, userData.cargo)
+        else localStorage.removeItem(AUTH_KEYS.USER_ROLE)
     },
 
     // Get user data from localStorage

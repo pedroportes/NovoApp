@@ -68,8 +68,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 const row = data as Database['public']['Tables']['usuarios']['Row']
                 const userData: UserData = {
                     id: row.id,
-                    empresa_id: row.empresa_id,
-                    cargo: row.cargo,
+                    empresa_id: row.empresa_id || null,
+                    cargo: row.cargo || 'tecnico',
                     nome: (row as any).nome_completo || row.nome || '',
                     email: row.email || '',
                 }
@@ -87,7 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     }
 
-    const signIn = async (email: string, password: string) => {
+    const signIn = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
         try {
             // Sign in with Supabase Auth
             const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
@@ -124,8 +124,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     const userRow = userData as Database['public']['Tables']['usuarios']['Row']
                     const userDataObj: UserData = {
                         id: userRow.id,
-                        empresa_id: userRow.empresa_id,
-                        cargo: userRow.cargo,
+                        empresa_id: userRow.empresa_id || null,
+                        cargo: userRow.cargo || 'tecnico',
                         nome: (userRow as any).nome_completo || userRow.nome || '',
                         email: userRow.email || '',
                     }
