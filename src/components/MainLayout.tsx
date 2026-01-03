@@ -30,6 +30,7 @@ export function MainLayout() {
         : [
             { icon: LayoutDashboard, label: 'Início', path: '/' },
             { icon: ClipboardList, label: 'OS', path: '/service-orders' },
+            { icon: Users, label: 'Clientes', path: '/clients' },
             { icon: Wrench, label: 'Serviços', path: '/services' },
             { icon: Users, label: 'Equipe', path: '/technicians' },
             { icon: Wallet, label: 'Financeiro', path: '/financial' },
@@ -182,19 +183,6 @@ export function MainLayout() {
                                 {/* Items extras para admin */}
                                 {!isTecnico && (
                                     <>
-                                        <Link
-                                            to="/clients"
-                                            onClick={() => setSidebarOpen(false)}
-                                            className={cn(
-                                                "flex items-center gap-4 px-5 py-4 rounded-2xl text-base font-medium transition-all",
-                                                location.pathname === '/clients'
-                                                    ? "bg-slate-900 text-white shadow-lg"
-                                                    : "text-slate-500 hover:bg-slate-100"
-                                            )}
-                                        >
-                                            <Users className="h-5 w-5" />
-                                            Clientes
-                                        </Link>
                                         <Link
                                             to="/settings"
                                             onClick={() => setSidebarOpen(false)}
