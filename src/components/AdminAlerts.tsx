@@ -1,13 +1,27 @@
-import { useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
-import { Car } from 'lucide-react'
+import { Car, CheckCircle } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 
 export function AdminAlerts() {
     const { userData } = useAuth()
     const navigate = useNavigate()
+
+    const [isOpen, setIsOpen] = useState(false)
+    const [alertData, setAlertData] = useState<{
+        type: 'started' | 'completed',
+        title: string,
+        description: string,
+        osId: string,
+        eta?: string
+    } | null>(null)
+
+    const audioRef = useRef<HTMLAudioElement | null>(null)
+    const successAudioRef = useRef<HTMLAudioElement | null>(null)
 
     useEffect(() => {
         // Only admins should hear this

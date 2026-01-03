@@ -38,6 +38,7 @@ export function Dashboard() {
 
     const [stats, setStats] = useState({
         revenue: 0,
+        monthlyRevenue: 0,
         activeServices: 0,
         newClients: 0
     })
@@ -57,33 +58,20 @@ export function Dashboard() {
 
         setLoading(true)
         try {
-            // 1. Revenue (Sum of completed OS)
-            const { data: revenueData } = await supabase
-                .from('ordens_servico')
-                .select('valor_total')
-                .eq('empresa_id', userData.empresa_id)
-                .in('status', ['CONCLUIDO', 'concluido', 'concluída', 'concluida']) // Match all variations
+            // 1. Stats from RPC
+            const { data: statsData, error: statsError } = await supabase
+                .rpc('get_dashboard_stats', { p_empresa_id: userData.empresa_id })
 
-            const totalRevenue = revenueData?.reduce((acc, curr) => acc + (curr.valor_total || 0), 0) || 0
+            if (statsError) console.error('Error fetching stats:', statsError)
 
-            // 2. Active Services (Status != concluida, cancelada)
-            const { count: activeCount } = await supabase
-                .from('ordens_servico')
-                .select('*', { count: 'exact', head: true })
-                .eq('empresa_id', userData.empresa_id)
-                .not('status', 'in', '("CONCLUIDO","concluido","concluída","CANCELADO","cancelado")')
-
-            // 3. New Clients (Total count)
-            const { count: clientsCount } = await supabase
-                .from('clientes')
-                .select('*', { count: 'exact', head: true })
-                .eq('empresa_id', userData.empresa_id)
-
-            setStats({
-                revenue: totalRevenue,
-                activeServices: activeCount || 0,
-                newClients: clientsCount || 0
-            })
+            if (statsData) {
+                setStats({
+                    revenue: statsData.total_revenue || 0,
+                    monthlyRevenue: statsData.monthly_revenue || 0,
+                    activeServices: statsData.active_services || 0,
+                    newClients: statsData.total_clients || 0
+                })
+            }
 
             // 4. Recent Activities (Latest 5 OS updates)
             const { data: recentOS } = await supabase
@@ -231,6 +219,25 @@ export function Dashboard() {
                     </div>
                 </div>
 
+                {/* Card - Receita Mensal */}
+                <div className="bg-white rounded-3xl shadow-lg shadow-slate-200/50 p-6 flex flex-col justify-between h-40 relative overflow-hidden group hover:-translate-y-1 transition-all duration-300">
+                    <div className="absolute top-0 right-0 w-24 h-24 bg-purple-50 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-150 duration-500" />
+                    <div className="relative z-10 flex justify-between items-start">
+                        <div className="p-3 bg-purple-100/50 rounded-2xl text-purple-600">
+                            <TrendingUp className="h-6 w-6" />
+                        </div>
+                        <span className="flex items-center text-xs font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded-full">
+                            Mês Atual
+                        </span>
+                    </div>
+                    <div className="relative z-10">
+                        <p className="text-sm font-medium text-slate-500 mb-1">Faturamento (Mês)</p>
+                        <h3 className="text-2xl font-bold text-slate-800">
+                            {loading ? <span className="animate-pulse bg-slate-200 rounded h-8 w-32 block"></span> : formatCurrency(stats.monthlyRevenue)}
+                        </h3>
+                    </div>
+                </div>
+
                 {/* Card - Serviços Ativos */}
                 <div className="bg-white rounded-3xl shadow-lg shadow-slate-200/50 p-6 flex flex-col justify-between h-40 relative overflow-hidden group hover:-translate-y-1 transition-all duration-300">
                     <div className="absolute top-0 right-0 w-24 h-24 bg-sky-50 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-150 duration-500" />
@@ -361,7 +368,7 @@ export function Dashboard() {
                                             <div>
                                                 <p className="text-sm font-bold text-slate-800">{expense.descricao}</p>
                                                 <p className="text-xs text-slate-500 flex items-center gap-1">
-                                                    {expense.tecnico?.nome_completo?.split(' ')[0]} • {new Date(expense.created_at).toLocaleDateString()}
+                                                    {expense.tecnico?.nome_completo?.split(' ')[0] || 'Técnico'} • {new Date(expense.created_at).toLocaleDateString()}
                                                 </p>
                                             </div>
                                         </div>
