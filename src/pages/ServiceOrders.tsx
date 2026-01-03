@@ -35,10 +35,10 @@ export function ServiceOrders() {
 
     const fetchOrders = async () => {
         try {
-            // 1. Fetch OS with Clients Join
+            // 1. Fetch OS plain
             let query = supabase
                 .from('ordens_servico')
-                .select('*, clientes ( whatsapp, telefone, logradouro, numero, cidade, uf )')
+                .select('*')
                 .eq('empresa_id', userData!.empresa_id)
 
             // If technician, ONLY see own orders
@@ -50,21 +50,36 @@ export function ServiceOrders() {
 
             if (osError) throw osError
 
-            // 2. Fetch Technicians separately
-            // Extract unique tecnico_ids to avoid fetching same user multiple times
+            // 2. Fetch Technicians AND Clients separately
+            // Extract IDs
             const tecnicoIds = Array.from(new Set(osData.map((os: any) => os.tecnico_id).filter(Boolean)))
+            const clienteIds = Array.from(new Set(osData.map((os: any) => os.cliente_id).filter(Boolean)))
 
             let techMap: Record<string, string> = {}
+            let clientMap: Record<string, any> = {}
 
             if (tecnicoIds.length > 0) {
-                const { data: techData, error: techError } = await supabase
+                const { data: techData } = await supabase
                     .from('usuarios')
                     .select('id, nome_completo')
                     .in('id', tecnicoIds)
 
-                if (!techError && techData) {
+                if (techData) {
                     techData.forEach((t: any) => {
                         techMap[t.id] = t.nome_completo
+                    })
+                }
+            }
+
+            if (clienteIds.length > 0) {
+                const { data: clientData } = await supabase
+                    .from('clientes')
+                    .select('id, whatsapp, telefone, logradouro, numero, cidade, uf')
+                    .in('id', clienteIds)
+
+                if (clientData) {
+                    clientData.forEach((c: any) => {
+                        clientMap[c.id] = c
                     })
                 }
             }
@@ -72,7 +87,8 @@ export function ServiceOrders() {
             // 3. Merge data
             const formattedData = (osData as any).map((item: any) => ({
                 ...item,
-                tecnicos: { nome_completo: techMap[item.tecnico_id] || 'Técnico ex-funcionário' }
+                tecnicos: { nome_completo: techMap[item.tecnico_id] || 'Técnico ex-funcionário' },
+                clientes: clientMap[item.cliente_id] || null // Attach full client object if found
             }))
 
             setOrders(formattedData)
