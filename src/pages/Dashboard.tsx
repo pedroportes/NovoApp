@@ -93,7 +93,9 @@ export function Dashboard() {
                     cliente_nome, 
                     status, 
                     valor_total, 
-                    created_at
+                    created_at,
+                    deslocamento_iniciado_em,
+                    tecnico:tecnico_id (nome_completo)
                 `)
                 .eq('empresa_id', userData.empresa_id)
                 .order('updated_at', { ascending: false })
@@ -293,18 +295,31 @@ export function Dashboard() {
                                             <ClipboardList className="h-5 w-5" />
                                         </div>
                                         <div>
-                                            <p className="text-sm font-bold text-slate-800">{os.cliente_nome || 'Cliente sem nome'}</p>
-                                            <p className="text-xs text-slate-400">OS #{os.id.slice(0, 8)}</p>
+                                            <div>
+                                                <p className="text-sm font-bold text-slate-800">{os.cliente_nome || 'Cliente sem nome'}</p>
+                                                <div className="flex items-center gap-1 text-xs text-slate-500">
+                                                    <span>OS #{os.id.slice(0, 8)}</span>
+                                                    {os.tecnico?.nome_completo && (
+                                                        <>
+                                                            <span>•</span>
+                                                            <span>{os.tecnico.nome_completo.split(' ')[0]}</span>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                     <div className="text-right">
                                         <p className="text-sm font-bold text-slate-800">{formatCurrency(os.valor_total || 0)}</p>
-                                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium uppercase ${os.status === 'concluida' ? 'bg-emerald-100 text-emerald-600' :
-                                            os.status === 'em_deslocamento' ? 'bg-blue-100 text-blue-600' :
+                                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium uppercase ${os.status?.toLowerCase() === 'concluido' || os.status?.toLowerCase() === 'concluida' || os.status?.toLowerCase() === 'concluído' ? 'bg-emerald-100 text-emerald-600' :
+                                            os.deslocamento_iniciado_em && os.status !== 'concluido' ? 'bg-blue-100 text-blue-600' :
                                                 'bg-slate-100 text-slate-500'
                                             }`}>
-                                            {os.status?.replace('_', ' ') || 'Pendente'}
+                                            {os.status?.toLowerCase() === 'concluido' ? 'Concluído' :
+                                                os.deslocamento_iniciado_em && os.status !== 'concluido' ? 'Em Deslocamento' :
+                                                    os.status || 'Pendente'}
                                         </span>
+
                                     </div>
                                 </div>
                             ))

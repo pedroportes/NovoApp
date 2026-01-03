@@ -5,6 +5,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog'
 // import { Database } from '@/types/supabase'
 
 type ServiceOrder = any
@@ -19,6 +26,39 @@ export function ServiceOrders() {
     const [orders, setOrders] = useState<ServiceOrder[]>([])
     const [loading, setLoading] = useState(true)
     const [searchTerm, setSearchTerm] = useState('')
+
+    // Navigation State
+    const [isNavDialogOpen, setIsNavDialogOpen] = useState(false)
+    const [selectedOsForNav, setSelectedOsForNav] = useState<any>(null)
+
+    const handleNavigationStart = async (app: 'waze' | 'google') => {
+        if (!selectedOsForNav) return
+
+        // Update DB to notify Admin
+        // Only update if it hasn't been started yet to avoid spamming updates if they click again
+        // But the user might want to re-trigger? Let's just update.
+        const { error } = await supabase
+            .from('ordens_servico')
+            .update({ deslocamento_iniciado_em: new Date().toISOString() })
+            .eq('id', selectedOsForNav.id)
+
+        if (error) console.error('Erro ao atualizar deslocamento:', error)
+
+        // Open App
+        const address = getClientAddress(selectedOsForNav)
+        const encodedAddress = encodeURIComponent(address)
+
+        if (app === 'waze') {
+            // Waze Deep Link
+            window.open(`https://waze.com/ul?q=${encodedAddress}&navigate=yes`, '_blank')
+        } else {
+            // Google Maps
+            window.open(`https://www.google.com/maps/search/?api=1&query=${encodedAddress}`, '_blank')
+        }
+
+        setIsNavDialogOpen(false)
+        setSelectedOsForNav(null)
+    }
 
     const { setFabAction } = useOutletContext<{ setFabAction: (action: (() => void) | null) => void }>() ?? { setFabAction: () => { } }
 
@@ -74,7 +114,7 @@ export function ServiceOrders() {
             if (clienteIds.length > 0) {
                 const { data: clientData } = await supabase
                     .from('clientes')
-                    .select('id, whatsapp, telefone, logradouro, numero, cidade, uf')
+                    .select('id, whatsapp, telefone, logradouro, numero, cidade, endereco')
                     .in('id', clienteIds)
 
                 if (clientData) {
@@ -142,8 +182,13 @@ export function ServiceOrders() {
     // Helper to extract address for map query
     const getClientAddress = (os: any) => {
         if (!os.clientes) return ''
-        const { logradouro, cidade, uf } = os.clientes
-        return `${logradouro || ''} - ${cidade || ''} ${uf || ''}`
+        const { logradouro, cidade, endereco } = os.clientes
+
+        if (logradouro) {
+            return `${logradouro}${cidade ? ` - ${cidade}` : ''}`
+        }
+
+        return endereco || ''
     }
 
     // Helper to get phone
@@ -235,7 +280,11 @@ export function ServiceOrders() {
                                                 variant="outline"
                                                 size="icon"
                                                 className="h-9 w-9 rounded-full border-orange-200 text-orange-600 hover:bg-orange-50 hover:text-orange-700"
-                                                onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(getClientAddress(os))}`, '_blank')}
+                                                onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    setSelectedOsForNav(os)
+                                                    setIsNavDialogOpen(true)
+                                                }}
                                                 title="Navegar"
                                             >
                                                 <MapPin className="h-4 w-4" />
@@ -278,6 +327,34 @@ export function ServiceOrders() {
                     ))}
                 </div>
             )}
+
+            <Dialog open={isNavDialogOpen} onOpenChange={setIsNavDialogOpen}>
+                <DialogContent className="sm:max-w-md bg-white rounded-2xl border-0 shadow-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="text-xl font-bold text-slate-800">Iniciar Navegação</DialogTitle>
+                        <DialogDescription>
+                            Escolha o aplicativo para navegar até o cliente:<br />
+                            <span className="font-semibold text-slate-700">{selectedOsForNav ? getClientAddress(selectedOsForNav) : ''}</span>
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex gap-4 py-4">
+                        <Button
+                            className="flex-1 h-20 flex-col gap-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl"
+                            onClick={() => handleNavigationStart('waze')}
+                        >
+                            <span className="text-2xl">🚙</span>
+                            <span className="font-bold">Waze</span>
+                        </Button>
+                        <Button
+                            className="flex-1 h-20 flex-col gap-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl"
+                            onClick={() => handleNavigationStart('google')}
+                        >
+                            <span className="text-2xl">🗺️</span>
+                            <span className="font-bold">Google Maps</span>
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

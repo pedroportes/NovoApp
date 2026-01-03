@@ -4,6 +4,7 @@ import { LayoutDashboard, Users, ClipboardList, Settings, Menu, LogOut, Plus, Wr
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from './ui/button'
+import { AdminAlerts } from './AdminAlerts'
 
 export function MainLayout() {
     const location = useLocation()
@@ -71,6 +72,7 @@ export function MainLayout() {
 
     return (
         <div className="min-h-screen bg-background text-foreground flex flex-col md:flex-row font-sans">
+            <AdminAlerts />
             {/* Desktop Sidebar (Kept functional but styled) */}
             <aside className="hidden md:flex w-72 flex-col border-r border-border bg-white shadow-xl z-20">
                 <div className="h-20 flex items-center px-8 border-b border-gray-100">

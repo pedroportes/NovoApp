@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useOutletContext } from 'react-router-dom'
+import { useOutletContext, useNavigate } from 'react-router-dom'
 import { Plus, Search, Pencil, Trash2, Phone, Mail, User as UserIcon, MapPin, FileText, Camera } from 'lucide-react'
 import { ocrService } from '@/services/ocrService'
 import { compressImage } from '@/lib/utils'
@@ -38,6 +38,7 @@ interface Client {
 
 export function Clients() {
     const { userData } = useAuth()
+    const navigate = useNavigate()
     const [clients, setClients] = useState<Client[]>([])
     const [loading, setLoading] = useState(true)
     const [searchTerm, setSearchTerm] = useState('')
@@ -835,6 +836,15 @@ export function Clients() {
                                         <MapPin className="h-4 w-4 md:h-5 md:w-5" />
                                     </Button>
                                 )}
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-10 w-10 md:h-12 md:w-12 rounded-full border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700"
+                                    onClick={() => navigate(`/service-orders/new?client_id=${client.id}`)}
+                                    title="Nova OS"
+                                >
+                                    <FileText className="h-4 w-4 md:h-5 md:w-5" />
+                                </Button>
                             </div>
 
                             <div className="mt-4 flex items-center gap-3 pt-4 border-t border-border">

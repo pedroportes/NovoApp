@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams, useOutletContext } from 'react-router-dom'
+import { useNavigate, useParams, useOutletContext, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Plus, Trash2, Camera, ChevronDown, ChevronRight, Printer, User, ClipboardList, PenTool } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -173,6 +173,9 @@ export function NewServiceOrder() {
         }
     }, [userData])
 
+    const [searchParams] = useSearchParams()
+    const queryClientId = searchParams.get('client_id')
+
     useEffect(() => {
         if (userData?.empresa_id) {
             fetchDependencyData()
@@ -181,6 +184,16 @@ export function NewServiceOrder() {
                 })
         }
     }, [userData?.empresa_id, id])
+
+    // Pre-fill client from URL if available and clients list is loaded
+    useEffect(() => {
+        if (queryClientId && clients.length > 0 && !formData.cliente_id) {
+            const clientExists = clients.find(c => c.id === queryClientId)
+            if (clientExists) {
+                setFormData(prev => ({ ...prev, cliente_id: queryClientId }))
+            }
+        }
+    }, [queryClientId, clients, formData.cliente_id])
 
     const fetchDependencyData = async () => {
         const { data: clientsData, error: clientError } = await supabase
