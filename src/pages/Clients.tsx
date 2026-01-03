@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useOutletContext } from 'react-router-dom'
-import { Plus, Search, Pencil, Trash2, Phone, Mail, User as UserIcon, MapPin, FileText } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Phone, Mail, User as UserIcon, MapPin, FileText, Camera } from 'lucide-react'
+import { ocrService } from '@/services/ocrService'
 import { compressImage } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -70,6 +71,8 @@ export function Clients() {
     const addressInputRef = useRef<HTMLInputElement>(null)
     const debounceRef = useRef<NodeJS.Timeout | null>(null)
     const [searchingCnpj, setSearchingCnpj] = useState(false)
+    const [processingOcr, setProcessingOcr] = useState(false)
+    const ocrInputRef = useRef<HTMLInputElement>(null)
 
     // Upload States
     const [avatarFile, setAvatarFile] = useState<File | null>(null)
@@ -396,6 +399,93 @@ export function Clients() {
                                         }
                                     }}
                                 />
+                            </div>
+
+                            {/* OCR / Import via Photo */}
+                            {/* OCR / Import via Photo - Glassmorphism */}
+                            <div className="relative overflow-hidden rounded-2xl bg-white/40 backdrop-blur-xl border border-white/50 shadow-lg p-6 mb-8 group transition-all hover:shadow-xl hover:bg-white/50">
+                                <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-purple-500/5 to-blue-500/10 pointer-events-none" />
+
+                                <div className="relative flex items-center justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20 group-hover:scale-110 transition-transform duration-300">
+                                            <Camera className="h-6 w-6" />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-bold text-slate-800 text-lg">Escanear Ficha Manual</h3>
+                                            <p className="text-sm text-slate-500">Use a IA para preencher os dados automaticamente</p>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <input
+                                            type="file"
+                                            ref={ocrInputRef}
+                                            accept="image/*"
+                                            capture="environment"
+                                            className="hidden"
+                                            onChange={async (e) => {
+                                                const file = e.target.files?.[0]
+                                                if (!file) return
+
+                                                setProcessingOcr(true)
+                                                try {
+                                                    const compressedFile = await compressImage(file, 1024, 0.7)
+                                                    const data = await ocrService.processHandwriting(compressedFile)
+
+                                                    if (data) {
+                                                        setFormData(prev => ({
+                                                            ...prev,
+                                                            nome_razao: data.nome || prev.nome_razao,
+                                                            whatsapp: data.telefone ? formatPhone(data.telefone) : prev.whatsapp,
+                                                            cep: data.cep?.replace(/(\d{5})(\d)/, '$1-$2') || prev.cep,
+                                                            logradouro: data.logradouro || prev.logradouro,
+                                                            numero: data.numero || prev.numero,
+                                                            complemento: data.complemento || prev.complemento,
+                                                            bairro: data.bairro || prev.bairro,
+                                                            cidade: data.cidade || prev.cidade,
+                                                            uf: data.uf || prev.uf,
+                                                        }))
+
+                                                        // Trigger CEP search if CEP is new and valid
+                                                        if (data.cep && data.cep !== formData.cep) {
+                                                            const cepClean = data.cep.replace(/\D/g, '')
+                                                            if (cepClean.length === 8) {
+                                                                searchCep(cepClean) // Fire and forget update
+                                                            }
+                                                        }
+
+                                                        alert('Ficha processada com sucesso! Verifique os dados.')
+                                                    }
+                                                } catch (error: any) {
+                                                    console.error(error)
+                                                    alert(`Erro ao processar imagem: ${error.message || error}`)
+                                                } finally {
+                                                    setProcessingOcr(false)
+                                                    if (ocrInputRef.current) ocrInputRef.current.value = ''
+                                                }
+                                            }}
+                                        />
+                                        <Button
+                                            type="button"
+                                            onClick={() => ocrInputRef.current?.click()}
+                                            disabled={processingOcr}
+                                            className="h-12 px-6 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl shadow-lg shadow-blue-500/25 transition-all hover:scale-105 active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
+                                        >
+                                            {processingOcr ? (
+                                                <div className="flex items-center gap-2">
+                                                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                                                    <span>Processando...</span>
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center gap-2">
+                                                    <Camera className="h-4 w-4" />
+                                                    <span>Escanear Ficha Manual</span>
+                                                </div>
+                                            )}
+                                        </Button>
+                                    </div>
+                                </div>
                             </div>
 
                             <div className="space-y-4">
