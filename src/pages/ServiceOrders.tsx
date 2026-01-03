@@ -125,7 +125,7 @@ export function ServiceOrders() {
 
     return (
         <div className="space-y-6 pb-20 md:pb-0">
-            <div className="flex justify-end mb-4">
+            <div className="flex justify-end mb-4 hidden md:flex">
                 <Button className="h-14 text-base md:w-auto w-full shadow-lg bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold" onClick={() => navigate('/service-orders/new')}>
                     <Plus className="mr-2 h-5 w-5" />
                     Nova OS

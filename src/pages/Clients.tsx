@@ -363,7 +363,7 @@ export function Clients() {
                             Novo Cliente
                         </Button>
                     </DialogTrigger>
-                    <DialogContent className="w-[95%] max-w-[600px] h-[90vh] overflow-y-auto rounded-xl">
+                    <DialogContent className="w-[95%] max-w-[600px] max-h-[85vh] overflow-y-auto rounded-xl">
                         <DialogHeader>
                             <DialogTitle>{editingClientId ? 'Editar Cliente' : 'Novo Cliente'}</DialogTitle>
                             <DialogDescription>Preencha os dados do cliente.</DialogDescription>
