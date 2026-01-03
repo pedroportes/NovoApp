@@ -19,10 +19,13 @@ import { TechnicianFinancial } from './pages/TechnicianFinancial'
 import { TechnicianFinancialPrint } from './pages/TechnicianFinancialPrint'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 
+import { Toaster } from 'sonner'
+
 function App() {
     return (
         <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
             <AuthProvider>
+                <Toaster richColors position="top-right" />
                 <BrowserRouter>
                     <Routes>
                         {/* Public Routes */}

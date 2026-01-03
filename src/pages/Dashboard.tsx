@@ -62,7 +62,7 @@ export function Dashboard() {
                 .from('ordens_servico')
                 .select('valor_total')
                 .eq('empresa_id', userData.empresa_id)
-                .eq('status', 'concluida')
+                .in('status', ['CONCLUIDO', 'concluido', 'concluída', 'concluida']) // Match all variations
 
             const totalRevenue = revenueData?.reduce((acc, curr) => acc + (curr.valor_total || 0), 0) || 0
 
@@ -71,7 +71,7 @@ export function Dashboard() {
                 .from('ordens_servico')
                 .select('*', { count: 'exact', head: true })
                 .eq('empresa_id', userData.empresa_id)
-                .not('status', 'in', '("concluida","cancelada")')
+                .not('status', 'in', '("CONCLUIDO","concluido","concluída","CANCELADO","cancelado")')
 
             // 3. New Clients (Total count)
             const { count: clientsCount } = await supabase
@@ -160,7 +160,7 @@ export function Dashboard() {
                             toast.info(`Técnico em deslocamento para OS #${payload.new.id.slice(0, 6)}`, {
                                 icon: <Truck className="h-4 w-4" />
                             })
-                        } else if (newStatus === 'concluida') {
+                        } else if (['CONCLUIDO', 'concluido'].includes(newStatus)) {
                             toast.success(`OS #${payload.new.id.slice(0, 6)} concluída!`, {
                                 icon: <CheckCircle className="h-4 w-4" />
                             })
@@ -300,8 +300,8 @@ export function Dashboard() {
                                     <div className="text-right">
                                         <p className="text-sm font-bold text-slate-800">{formatCurrency(os.valor_total || 0)}</p>
                                         <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium uppercase ${os.status === 'concluida' ? 'bg-emerald-100 text-emerald-600' :
-                                                os.status === 'em_deslocamento' ? 'bg-blue-100 text-blue-600' :
-                                                    'bg-slate-100 text-slate-500'
+                                            os.status === 'em_deslocamento' ? 'bg-blue-100 text-blue-600' :
+                                                'bg-slate-100 text-slate-500'
                                             }`}>
                                             {os.status?.replace('_', ' ') || 'Pendente'}
                                         </span>
