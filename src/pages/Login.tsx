@@ -64,21 +64,43 @@ export function Login() {
                 }
 
                 // Check role to redirect and validate correct login type
-                const { data: userProfile, error: profileError } = await supabase
+                let { data: userProfile, error: profileError } = await supabase
                     .from('usuarios')
                     .select('cargo, empresa_id, empresas(nome)')
                     .eq('id', authUser.id)
                     .single()
 
                 if (profileError || !userProfile) {
-                    console.error('Erro ao buscar perfil:', profileError)
-                    // Se não achou perfil mas logou no Auth, pode ser erro de sincronia.
-                    // O usuário disse que já sincronizou, então isso não deveria acontecer,
-                    // mas se acontecer, damos um erro claro.
-                    setError('Perfil de usuário não encontrado. Contate o suporte.')
-                    await supabase.auth.signOut()
-                    setLoading(false)
-                    return
+                    // TENTATIVA DE AUTO-RECUPERAÇÃO (Self-Healing)
+                    console.warn('Perfil não encontrado. Tentando recuperação automática...')
+
+                    const { data: recoveryResult, error: recoveryError } = await supabase
+                        .rpc('ensure_complete_signup')
+
+                    if (recoveryError || !recoveryResult?.success) {
+                        console.error('Falha na recuperação:', recoveryError || recoveryResult)
+                        setError('Perfil não encontrado e falha na recuperação. Contate o suporte.')
+                        await supabase.auth.signOut()
+                        setLoading(false)
+                        return
+                    }
+
+                    // Se recuperou, tenta buscar o perfil novamente
+                    const { data: retryProfile, error: retryError } = await supabase
+                        .from('usuarios')
+                        .select('cargo, empresa_id, empresas(nome)')
+                        .eq('id', authUser.id)
+                        .single()
+
+                    if (retryError || !retryProfile) {
+                        setError('Conta recuperada, mas erro ao carregar dados. Tente entrar novamente.')
+                        await supabase.auth.signOut()
+                        setLoading(false)
+                        return
+                    }
+
+                    // Atualiza a variável local para continuar o fluxo
+                    userProfile = retryProfile
                 }
 
                 console.log('Login Info:', {
