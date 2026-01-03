@@ -30,16 +30,27 @@ export function ServiceOrders() {
     // Navigation State
     const [isNavDialogOpen, setIsNavDialogOpen] = useState(false)
     const [selectedOsForNav, setSelectedOsForNav] = useState<any>(null)
+    const [etaMinutes, setEtaMinutes] = useState('')
 
     const handleNavigationStart = async (app: 'waze' | 'google') => {
         if (!selectedOsForNav) return
 
+        const updates: any = { deslocamento_iniciado_em: new Date().toISOString() }
+
+        if (etaMinutes) {
+            const minutes = parseInt(etaMinutes)
+            if (!isNaN(minutes)) {
+                // Calculate arrival time
+                const arrivalTime = new Date()
+                arrivalTime.setMinutes(arrivalTime.getMinutes() + minutes)
+                updates.previsao_chegada = arrivalTime.toISOString()
+            }
+        }
+
         // Update DB to notify Admin
-        // Only update if it hasn't been started yet to avoid spamming updates if they click again
-        // But the user might want to re-trigger? Let's just update.
         const { error } = await supabase
             .from('ordens_servico')
-            .update({ deslocamento_iniciado_em: new Date().toISOString() })
+            .update(updates)
             .eq('id', selectedOsForNav.id)
 
         if (error) console.error('Erro ao atualizar deslocamento:', error)
@@ -56,8 +67,11 @@ export function ServiceOrders() {
             window.open(`https://www.google.com/maps/search/?api=1&query=${encodedAddress}`, '_blank')
         }
 
-        setIsNavDialogOpen(false)
-        setSelectedOsForNav(null)
+
+
+        // Keep dialog open so user knows it worked
+        // setIsNavDialogOpen(false)
+        // setSelectedOsForNav(null)
     }
 
     const { setFabAction } = useOutletContext<{ setFabAction: (action: (() => void) | null) => void }>() ?? { setFabAction: () => { } }
@@ -283,6 +297,7 @@ export function ServiceOrders() {
                                                 onClick={(e) => {
                                                     e.stopPropagation()
                                                     setSelectedOsForNav(os)
+                                                    setEtaMinutes('') // Reset input using empty string
                                                     setIsNavDialogOpen(true)
                                                 }}
                                                 title="Navegar"
@@ -337,21 +352,35 @@ export function ServiceOrders() {
                             <span className="font-semibold text-slate-700">{selectedOsForNav ? getClientAddress(selectedOsForNav) : ''}</span>
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="flex gap-4 py-4">
-                        <Button
-                            className="flex-1 h-20 flex-col gap-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl"
-                            onClick={() => handleNavigationStart('waze')}
-                        >
-                            <span className="text-2xl">🚙</span>
-                            <span className="font-bold">Waze</span>
-                        </Button>
-                        <Button
-                            className="flex-1 h-20 flex-col gap-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl"
-                            onClick={() => handleNavigationStart('google')}
-                        >
-                            <span className="text-2xl">🗺️</span>
-                            <span className="font-bold">Google Maps</span>
-                        </Button>
+
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-slate-600">Previsão GPS (minutos)</label>
+                            <Input
+                                type="number"
+                                placeholder="Ex: 20"
+                                className="h-12 text-lg bg-slate-50 border-slate-200"
+                                value={etaMinutes}
+                                onChange={e => setEtaMinutes(e.target.value)}
+                            />
+                        </div>
+
+                        <div className="flex gap-4">
+                            <Button
+                                className="flex-1 h-20 flex-col gap-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl"
+                                onClick={() => handleNavigationStart('waze')}
+                            >
+                                <span className="text-2xl">🚙</span>
+                                <span className="font-bold">Waze</span>
+                            </Button>
+                            <Button
+                                className="flex-1 h-20 flex-col gap-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl"
+                                onClick={() => handleNavigationStart('google')}
+                            >
+                                <span className="text-2xl">🗺️</span>
+                                <span className="font-bold">Google Maps</span>
+                            </Button>
+                        </div>
                     </div>
                 </DialogContent>
             </Dialog>

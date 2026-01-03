@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
@@ -28,82 +28,74 @@ export function AdminAlerts() {
                     const newData = payload.new as any
                     const oldData = payload.old as any
 
-                    // Check if displacement started: old was null/diff, new is set
+                    // Check if displacement started
                     const started = !oldData.deslocamento_iniciado_em && newData.deslocamento_iniciado_em
 
-                    if (started) {
-                        console.log('AdminAlerts: Displacement started!', newData)
-
-                        // Play sound (Simple notification sound)
-                        try {
-                            const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3')
-                            await audio.play()
-                        } catch (e) {
-                            console.error('Audio play failed', e)
-                        }
-
-                        // Fetch details to show nice message
-                        const { data: cliente } = await supabase
-                            .from('clientes')
-                            .select('nome_razao')
-                            .eq('id', newData.cliente_id)
-                            .single()
-
-                        const { data: tecnico } = await supabase
-                            .from('usuarios')
-                            .select('nome_completo')
-                            .eq('id', newData.tecnico_id)
-                            .single()
-
-                        toast.info('Técnico em Deslocamento!', {
-                            description: `${tecnico?.nome_completo || 'Técnico'} iniciou navegação para ${cliente?.nome_razao || 'Cliente'}`,
-                            duration: 10000,
-                            icon: <Car className="h-5 w-5 text-blue-500" />,
-                            action: {
-                                label: 'Ver OS',
-                                onClick: () => navigate(`/service-orders/${newData.id}`)
-                            }
-                        })
-                    }
-
-                    // Check if OS was completed: old was not completed, new is CONCLUIDO
+                    // Check if OS was completed
                     const completed = (oldData.status !== 'CONCLUIDO' && oldData.status !== 'Concluido') &&
                         (newData.status === 'CONCLUIDO' || newData.status === 'Concluido')
 
-                    if (completed) {
-                        console.log('AdminAlerts: OS Completed!', newData)
-
-                        // Play success sound
+                    if (started || completed) {
                         try {
-                            // Positive success chime
-                            const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3')
-                            await audio.play()
+                            // Play appropriate sound
+                            if (started && audioRef.current) {
+                                await audioRef.current.play()
+                            } else if (completed && successAudioRef.current) {
+                                await successAudioRef.current.play()
+                            }
                         } catch (e) {
-                            console.error('Audio play failed', e)
+                            console.error('Audio play failed:', e)
                         }
 
+                        // Wait 1s for DB consistency
+                        await new Promise(r => setTimeout(r, 1000))
+
                         // Fetch details
+                        const { data: osDetails } = await supabase
+                            .from('ordens_servico')
+                            .select('previsao_chegada, cliente_id, tecnico_id')
+                            .eq('id', newData.id)
+                            .single()
+
                         const { data: cliente } = await supabase
                             .from('clientes')
                             .select('nome_razao')
-                            .eq('id', newData.cliente_id)
+                            .eq('id', osDetails?.cliente_id || newData.cliente_id)
                             .single()
 
                         const { data: tecnico } = await supabase
                             .from('usuarios')
                             .select('nome_completo')
-                            .eq('id', newData.tecnico_id)
+                            .eq('id', osDetails?.tecnico_id || newData.tecnico_id)
                             .single()
 
-                        toast.success('Serviço Concluído!', {
-                            description: `${tecnico?.nome_completo || 'Técnico'} finalizou a OS do cliente ${cliente?.nome_razao || 'Cliente'}`,
-                            duration: 10000,
-                            // icon: <CheckCircle className="h-5 w-5 text-emerald-500" />, // Using default success icon from Sonner
-                            action: {
-                                label: 'Ver Detalhes',
-                                onClick: () => navigate(`/service-orders/${newData.id}`)
+                        // Prepare Data
+                        let timeString = ''
+                        if (osDetails?.previsao_chegada) {
+                            const date = new Date(osDetails.previsao_chegada)
+                            if (!isNaN(date.getTime())) {
+                                timeString = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
                             }
-                        })
+                        }
+
+                        // Set State to Open Modal
+                        if (started) {
+                            setAlertData({
+                                type: 'started',
+                                title: 'Técnico em Deslocamento!',
+                                description: `${tecnico?.nome_completo || 'Técnico'} iniciou navegação para ${cliente?.nome_razao || 'Cliente'}`,
+                                osId: newData.id,
+                                eta: timeString
+                            })
+                        } else {
+                            setAlertData({
+                                type: 'completed',
+                                title: 'Serviço Concluído!',
+                                description: `${tecnico?.nome_completo || 'Técnico'} finalizou a OS do cliente ${cliente?.nome_razao || 'Cliente'}`,
+                                osId: newData.id
+                            })
+                        }
+                        setIsOpen(true)
                     }
                 }
             )
@@ -114,5 +106,70 @@ export function AdminAlerts() {
         }
     }, [userData, navigate])
 
-    return null
+    const handleClose = () => {
+        setIsOpen(false)
+        if (audioRef.current) {
+            audioRef.current.pause()
+            audioRef.current.currentTime = 0
+        }
+        if (successAudioRef.current) {
+            successAudioRef.current.pause()
+            successAudioRef.current.currentTime = 0
+        }
+    }
+
+    const handleView = () => {
+        if (alertData?.osId) {
+            navigate(`/service-orders/${alertData.osId}`)
+            handleClose()
+        }
+    }
+
+    if (!userData || userData.cargo !== 'admin') return null
+
+    return (
+        <>
+            <div className="hidden">
+                <audio ref={audioRef} src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" preload="auto" />
+                <audio ref={successAudioRef} src="https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3" preload="auto" />
+            </div>
+
+            <Dialog open={isOpen} onOpenChange={setIsOpen}>
+                <DialogContent className="sm:max-w-md border-0 shadow-2xl bg-white/95 backdrop-blur-xl">
+                    <DialogHeader>
+                        <DialogTitle className={`text-2xl font-bold flex items-center gap-3 ${alertData?.type === 'completed' ? 'text-emerald-600' : 'text-blue-600'}`}>
+                            {alertData?.type === 'completed' ? (
+                                <CheckCircle className="h-8 w-8" />
+                            ) : (
+                                <Car className="h-8 w-8" />
+                            )}
+                            {alertData?.title}
+                        </DialogTitle>
+                        <DialogDescription className="text-base text-slate-600 pt-2">
+                            {alertData?.description}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {alertData?.eta && (
+                        <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex flex-col items-center justify-center my-2">
+                            <span className="text-xs uppercase font-bold text-blue-400 tracking-wider">Previsão de Chegada</span>
+                            <span className="text-3xl font-black text-blue-600">{alertData.eta}</span>
+                        </div>
+                    )}
+
+                    <DialogFooter className="flex-col sm:flex-row gap-2 mt-4">
+                        <Button variant="outline" onClick={handleClose} className="h-12 text-slate-500 hover:text-slate-700">
+                            Fechar
+                        </Button>
+                        <Button
+                            className={`h-12 font-bold ${alertData?.type === 'completed' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'}`}
+                            onClick={handleView}
+                        >
+                            Ver Detalhes da OS
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </>
+    )
 }

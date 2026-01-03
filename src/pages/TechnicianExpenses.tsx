@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
+import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -39,6 +40,99 @@ export function TechnicianExpenses() {
 
     const [comprovanteFile, setComprovanteFile] = useState<File | null>(null)
     const [origemPagamento, setOrigemPagamento] = useState<'empresa' | 'proprio'>('empresa')
+    const [analyzing, setAnalyzing] = useState(false)
+
+    // Helper to convert file to base64
+    const fileToBase64 = (file: File): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader()
+            reader.readAsDataURL(file)
+            reader.onload = () => resolve(reader.result as string)
+            reader.onerror = error => reject(error)
+        })
+    }
+
+    // New: Compression Helper
+    const compressImage = async (file: File): Promise<File> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader()
+            reader.readAsDataURL(file)
+            reader.onload = (event) => {
+                const img = new Image()
+                img.src = event.target?.result as string
+                img.onload = () => {
+                    const canvas = document.createElement('canvas')
+                    const ctx = canvas.getContext('2d')
+
+                    // Max dimensions
+                    const MAX_WIDTH = 800
+                    const MAX_HEIGHT = 800
+                    let width = img.width
+                    let height = img.height
+
+                    if (width > height) {
+                        if (width > MAX_WIDTH) {
+                            height *= MAX_WIDTH / width
+                            width = MAX_WIDTH
+                        }
+                    } else {
+                        if (height > MAX_HEIGHT) {
+                            width *= MAX_HEIGHT / height
+                            height = MAX_HEIGHT
+                        }
+                    }
+
+                    canvas.width = width
+                    canvas.height = height
+                    ctx?.drawImage(img, 0, 0, width, height)
+
+                    canvas.toBlob((blob) => {
+                        if (blob) {
+                            const newFile = new File([blob], file.name, {
+                                type: 'image/jpeg',
+                                lastModified: Date.now(),
+                            })
+                            resolve(newFile)
+                        } else {
+                            reject(new Error('Canvas to Blob failed'))
+                        }
+                    }, 'image/jpeg', 0.7) // 70% quality, JPEG
+                }
+            }
+            reader.onerror = (error) => reject(error)
+        })
+    }
+
+    const analyzeReceipt = async (file: File) => {
+        setAnalyzing(true)
+        try {
+            const base64 = await fileToBase64(file)
+
+            const { data, error } = await supabase.functions.invoke('analyze-receipt', {
+                body: { image: base64 }
+            })
+
+            if (error) throw error
+
+            if (data) {
+                if (data.descricao) setDescricao(data.descricao)
+                if (data.valor) setValor(data.valor.replace('.', ','))
+                if (data.categoria) setCategoria(data.categoria as ExpenseCategory)
+
+                toast.success('Comprovante analisado pela IA!', {
+                    description: 'Dados preenchidos automaticamente.'
+                })
+            }
+
+        } catch (error) {
+            console.error('Erro na análise IA:', error)
+            toast.error('Erro ao analisar imagem', {
+                description: 'Preencha os dados manualmente.'
+            })
+        } finally {
+            setAnalyzing(false)
+        }
+    }
 
     useEffect(() => {
         if (userData?.id) {
@@ -70,7 +164,22 @@ export function TechnicianExpenses() {
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
-            setComprovanteFile(e.target.files[0])
+            const originalFile = e.target.files[0]
+
+            // Compress before set and analyze
+            toast.promise(
+                async () => {
+                    const compressed = await compressImage(originalFile)
+                    setComprovanteFile(compressed)
+                    analyzeReceipt(compressed)
+                    return 'Imagem otimizada para envio!'
+                },
+                {
+                    loading: 'Otimizando imagem...',
+                    success: 'Imagem pronta!',
+                    error: 'Erro ao otimizar imagem'
+                }
+            )
         }
     }
 
@@ -126,7 +235,7 @@ export function TechnicianExpenses() {
             fetchExpenses()
         } catch (error) {
             console.error('Erro ao salvar despesa:', error)
-            alert('Erro ao salvar despesa. Tente novamente.')
+            toast.error('Erro ao salvar despesa. Tente novamente.')
         } finally {
             setSubmitting(false)
         }
@@ -224,6 +333,30 @@ export function TechnicianExpenses() {
                     </CardHeader>
                     <CardContent>
                         <form onSubmit={handleSubmit} className="space-y-4">
+                            {/* Upload de Comprovante (MOVIDO PARA O TOPO) */}
+                            <div>
+                                <label className="text-sm font-medium text-slate-700 mb-1.5 block">📸 Comprovante / Nota Fiscal</label>
+                                <div className="space-y-2">
+                                    <Input
+                                        type="file"
+                                        accept="image/*,application/pdf"
+                                        onChange={handleFileChange}
+                                        className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"
+                                    />
+                                    {analyzing && (
+                                        <div className="flex items-center gap-2 text-sm text-emerald-600 animate-pulse">
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            <span>IA analisando cupom... Preenchendo dados...</span>
+                                        </div>
+                                    )}
+                                    {!analyzing && !comprovanteFile && (
+                                        <p className="text-xs text-slate-400">
+                                            📎 Tire uma foto! A IA vai tentar ler os dados para você.
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+
                             <div>
                                 <label className="text-sm font-medium text-slate-700 mb-1.5 block">Descrição</label>
                                 <Input
@@ -282,19 +415,7 @@ export function TechnicianExpenses() {
                                 </p>
                             </div>
 
-                            {/* Upload de Comprovante */}
-                            <div>
-                                <label className="text-sm font-medium text-slate-700 mb-1.5 block">📸 Comprovante / Nota Fiscal</label>
-                                <Input
-                                    type="file"
-                                    accept="image/*,application/pdf"
-                                    onChange={handleFileChange}
-                                    className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"
-                                />
-                                <p className="text-xs text-slate-400 mt-1">
-                                    📎 Tire uma foto do cupom fiscal como prova do gasto. O admin poderá visualizar.
-                                </p>
-                            </div>
+
 
                             <div>
                                 <label className="text-sm font-medium text-slate-700 mb-1.5 block">Categoria</label>

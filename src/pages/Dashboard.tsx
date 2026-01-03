@@ -95,6 +95,7 @@ export function Dashboard() {
                     valor_total, 
                     created_at,
                     deslocamento_iniciado_em,
+                    previsao_chegada,
                     tecnico:tecnico_id (nome_completo)
                 `)
                 .eq('empresa_id', userData.empresa_id)
@@ -316,7 +317,11 @@ export function Dashboard() {
                                                 'bg-slate-100 text-slate-500'
                                             }`}>
                                             {os.status?.toLowerCase() === 'concluido' ? 'Concluído' :
-                                                os.deslocamento_iniciado_em && os.status !== 'concluido' ? 'Em Deslocamento' :
+                                                os.deslocamento_iniciado_em && os.status !== 'concluido' ? (
+                                                    os.previsao_chegada ?
+                                                        `Chegada: ${new Date(os.previsao_chegada).getHours().toString().padStart(2, '0')}:${new Date(os.previsao_chegada).getMinutes().toString().padStart(2, '0')}` :
+                                                        'Em Deslocamento'
+                                                ) :
                                                     os.status || 'Pendente'}
                                         </span>
 
