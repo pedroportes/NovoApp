@@ -217,7 +217,7 @@ export function MainLayout() {
                 )}
 
                 {/* Main Content Scrollable */}
-                <main className="flex-1 overflow-y-auto overflow-x-hidden bg-transparent z-10 -mt-8 md:mt-0 md:p-8 px-4 pb-28 pt-4 md:bg-[#f3f4f6]">
+                <main className="flex-1 overflow-y-auto overflow-x-hidden bg-transparent z-10 -mt-8 md:mt-0 md:p-8 px-4 pb-32 pt-4 md:bg-[#f3f4f6]">
                     {/* Desktop Header */}
                     <header className="hidden md:flex h-20 items-center justify-between mb-8">
                         <div>
