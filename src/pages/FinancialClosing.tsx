@@ -4,9 +4,13 @@ import { financialService, TechnicianBalance } from '@/services/financialService
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { ArrowLeft, CheckCircle2, DollarSign, TrendingUp, TrendingDown, Receipt } from 'lucide-react'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { ArrowLeft, CheckCircle2, DollarSign, TrendingUp, TrendingDown, Receipt, Banknote } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 
 export function FinancialClosing() {
     const { userData } = useAuth()
@@ -18,6 +22,12 @@ export function FinancialClosing() {
     const [balance, setBalance] = useState<TechnicianBalance | null>(null)
     const [pendingExpenses, setPendingExpenses] = useState<any[]>([])
     const [approvedExpenses, setApprovedExpenses] = useState<any[]>([])
+
+    // Advance Dialog State
+    const [isAdvanceDialogOpen, setIsAdvanceDialogOpen] = useState(false)
+    const [advanceValue, setAdvanceValue] = useState('')
+    const [advanceNote, setAdvanceNote] = useState('')
+    const [advanceSubmitting, setAdvanceSubmitting] = useState(false)
 
     // Load technicians on mount
     useEffect(() => {
@@ -99,9 +109,9 @@ export function FinancialClosing() {
         }
     }
 
-    const handleAuthorize = async (id: string) => {
+    const handleAuthorize = async (id: string, method: 'balance' | 'direct') => {
         try {
-            await financialService.authorizeExpense(id)
+            await financialService.authorizeExpense(id, method)
             if (selectedTech) await loadBalance(selectedTech)
         } catch (error) {
             console.error('Error authorizing expense:', error)
@@ -110,14 +120,14 @@ export function FinancialClosing() {
     }
 
     const handleCloseMonth = async () => {
-        if (!balance || !selectedTech) return
+        if (!balance || !selectedTech || !userData?.empresa_id) return
         if (!confirm(`Confirma o fechamento do mês para ${balance.technicianName}?\nValor: ${formatCurrency(balance.finalBalance)}\nIsso marcará ${balance.osCount} OSs como pagas.`)) return
 
         setSubmitting(true)
         try {
             await financialService.closeMonth(balance, userData!.empresa_id)
             alert('Mês fechado com sucesso!')
-            await loadBalance(selectedTech) // Reload to show zeroed balance
+            if (selectedTech) await loadBalance(selectedTech) // Reload to show zeroed balance
         } catch (error) {
             console.error('Error closing month:', error)
             alert('Erro ao realizar fechamento')
@@ -128,6 +138,45 @@ export function FinancialClosing() {
 
     const formatCurrency = (val: number) => {
         return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val)
+    }
+
+    const handleGiveAdvance = async () => {
+        if (!selectedTech || !advanceValue) {
+            toast.error('Informe o valor do adiantamento')
+            return
+        }
+
+        const valor = parseFloat(advanceValue.replace(',', '.'))
+        if (isNaN(valor) || valor <= 0) {
+            toast.error('Valor inválido')
+            return
+        }
+
+        setAdvanceSubmitting(true)
+        try {
+            const { error } = await supabase.from('financeiro_fluxo').insert({
+                empresa_id: userData!.empresa_id,
+                tecnico_id: selectedTech,
+                tipo: 'ADIANTAMENTO',
+                valor: valor,
+                descricao: advanceNote || `Adiantamento para ${balance?.technicianName || 'técnico'}`,
+                status: 'PENDENTE',
+                data_lancamento: new Date().toISOString().split('T')[0]
+            })
+
+            if (error) throw error
+
+            toast.success('Adiantamento registrado com sucesso!')
+            setIsAdvanceDialogOpen(false)
+            setAdvanceValue('')
+            setAdvanceNote('')
+            if (selectedTech) await loadBalance(selectedTech) // Refresh balance
+        } catch (error) {
+            console.error('Erro ao registrar adiantamento:', error)
+            toast.error('Erro ao registrar adiantamento')
+        } finally {
+            setAdvanceSubmitting(false)
+        }
     }
 
     if (loading && !technicians.length) return <div className="p-8 text-center text-emerald-600">Carregando financeiro...</div>
@@ -265,23 +314,33 @@ export function FinancialClosing() {
                             <p className="text-sm text-slate-500 italic">
                                 * Ao zerar o mês, todas as OSs listadas serão marcadas como pagas.
                             </p>
-                            <Button
-                                onClick={handleCloseMonth}
-                                disabled={submitting || balance.finalBalance <= 0}
-                                className={cn(
-                                    "h-14 px-8 rounded-xl text-lg font-bold shadow-xl shadow-emerald-300/30 transition-all",
-                                    balance.finalBalance > 0
-                                        ? "bg-gradient-to-r from-emerald-600 to-teal-500 hover:scale-105"
-                                        : "bg-slate-200 text-slate-400 cursor-not-allowed"
-                                )}
-                            >
-                                {submitting ? 'Processando...' : (
-                                    <>
-                                        <CheckCircle2 className="mr-2 h-6 w-6" />
-                                        Zerar Mês e Pagar
-                                    </>
-                                )}
-                            </Button>
+                            <div className="flex gap-3">
+                                <Button
+                                    onClick={() => setIsAdvanceDialogOpen(true)}
+                                    variant="outline"
+                                    className="h-14 px-6 rounded-xl font-bold border-amber-300 text-amber-700 hover:bg-amber-50 hover:border-amber-400 transition-all"
+                                >
+                                    <Banknote className="mr-2 h-5 w-5" />
+                                    Dar Adiantamento
+                                </Button>
+                                <Button
+                                    onClick={handleCloseMonth}
+                                    disabled={submitting || balance.finalBalance <= 0}
+                                    className={cn(
+                                        "h-14 px-8 rounded-xl text-lg font-bold shadow-xl shadow-emerald-300/30 transition-all",
+                                        balance.finalBalance > 0
+                                            ? "bg-gradient-to-r from-emerald-600 to-teal-500 hover:scale-105"
+                                            : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                                    )}
+                                >
+                                    {submitting ? 'Processando...' : (
+                                        <>
+                                            <CheckCircle2 className="mr-2 h-6 w-6" />
+                                            Zerar Mês e Pagar
+                                        </>
+                                    )}
+                                </Button>
+                            </div>
                         </div>
                     </div>
 
@@ -334,14 +393,14 @@ export function FinancialClosing() {
                                                 <Button
                                                     size="sm"
                                                     className="bg-green-600 hover:bg-green-700 text-white text-xs"
-                                                    onClick={() => handleAuthorize(exp.id)}
+                                                    onClick={() => handleAuthorize(exp.id, 'direct')}
                                                 >
                                                     💳 PIX
                                                 </Button>
                                                 <Button
                                                     size="sm"
                                                     className="bg-amber-600 hover:bg-amber-700 text-white text-xs"
-                                                    onClick={() => handleAuthorize(exp.id)}
+                                                    onClick={() => handleAuthorize(exp.id, 'direct')}
                                                 >
                                                     💵 Dinheiro
                                                 </Button>
@@ -350,7 +409,7 @@ export function FinancialClosing() {
                                                 size="sm"
                                                 variant="outline"
                                                 className="w-full border-purple-300 text-purple-700 hover:bg-purple-50 text-xs"
-                                                onClick={() => handleAuthorize(exp.id)}
+                                                onClick={() => handleAuthorize(exp.id, 'balance')}
                                             >
                                                 📊 Adicionar ao Saldo
                                             </Button>
@@ -569,6 +628,58 @@ export function FinancialClosing() {
                     <p className="text-lg font-medium">Selecione um técnico para visualizar o fechamento</p>
                 </div>
             )}
+
+            {/* Advance Dialog */}
+            <Dialog open={isAdvanceDialogOpen} onOpenChange={setIsAdvanceDialogOpen}>
+                <DialogContent className="sm:max-w-md bg-white rounded-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                            <Banknote className="h-6 w-6 text-amber-600" />
+                            Dar Adiantamento
+                        </DialogTitle>
+                        <DialogDescription>
+                            Registrar um adiantamento para <strong>{balance?.technicianName || 'o técnico selecionado'}</strong>.
+                            Este valor será descontado no próximo fechamento.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="advanceValue">Valor (R$)</Label>
+                            <Input
+                                id="advanceValue"
+                                type="text"
+                                inputMode="decimal"
+                                placeholder="0,00"
+                                className="h-14 text-2xl font-bold text-center bg-amber-50 border-amber-200 focus:ring-amber-500"
+                                value={advanceValue}
+                                onChange={(e) => setAdvanceValue(e.target.value)}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="advanceNote">Observação (opcional)</Label>
+                            <Input
+                                id="advanceNote"
+                                placeholder="Ex: Adiantamento semanal"
+                                className="bg-slate-50"
+                                value={advanceNote}
+                                onChange={(e) => setAdvanceNote(e.target.value)}
+                            />
+                        </div>
+                    </div>
+
+                    <DialogFooter className="gap-2">
+                        <Button variant="outline" onClick={() => setIsAdvanceDialogOpen(false)}>Cancelar</Button>
+                        <Button
+                            onClick={handleGiveAdvance}
+                            disabled={advanceSubmitting || !advanceValue}
+                            className="bg-amber-600 hover:bg-amber-700 text-white"
+                        >
+                            {advanceSubmitting ? 'Registrando...' : 'Confirmar Adiantamento'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

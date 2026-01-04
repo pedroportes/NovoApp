@@ -16,6 +16,7 @@ export interface TechnicianBalance {
     commissionIds: string[]
     expenseIds: string[]
     expenseDetails: any[]
+    advancesDetails?: any[] // Added for display
 }
 
 
@@ -71,6 +72,8 @@ export const financialService = {
                 console.warn('Tabela historico_comissoes não acessível:', e)
             }
 
+            let advancesList: any[] = []
+
             // 3. Get Pending Advances/Bonuses - with graceful error handling
             try {
                 const { data: flows, error: flowError } = await (supabase
@@ -83,6 +86,7 @@ export const financialService = {
                     flows.forEach((flow: any) => {
                         if (flow.tipo === 'ADIANTAMENTO') {
                             totalAdvances += flow.valor
+                            advancesList.push(flow) // Store for details
                         } else if (flow.tipo === 'BONUS') {
                             totalBonus += flow.valor
                         }
@@ -152,6 +156,7 @@ export const financialService = {
                 osIds,
                 osDetails,
                 advancesIds,
+                advancesDetails: advancesList, // Use the variable populated above
                 commissionIds,
                 expenseIds,
                 expenseDetails: expenses || []
@@ -291,10 +296,16 @@ export const financialService = {
     /**
      * Authorizes the expense to be added to balance (Reimbursement Step).
      */
-    authorizeExpense: async (expenseId: string) => {
+    /**
+     * Authorizes the expense.
+     * @param method 'balance' (add to comms) or 'direct' (paid via PIX/Cash immediately)
+     */
+    authorizeExpense: async (expenseId: string, method: 'balance' | 'direct' = 'balance') => {
+        const newStatus = method === 'balance' ? 'aprovado' : 'pago'
+
         const { error } = await (supabase
             .from('despesas_tecnicos') as any)
-            .update({ status: 'aprovado' }) // 'aprovado' status triggers inclusion in getTechnicianBalance
+            .update({ status: newStatus })
             .eq('id', expenseId)
 
         if (error) throw error

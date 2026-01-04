@@ -6,7 +6,9 @@ import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { ArrowLeft, Plus, Receipt, CheckCircle, Clock, XCircle, Loader2 } from 'lucide-react'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ArrowLeft, Plus, Receipt, CheckCircle, Clock, XCircle, Loader2, Calendar, Car, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -15,15 +17,18 @@ interface Expense {
     id: string
     descricao: string
     valor: number
-    status: 'pendente' | 'aprovado' | 'rejeitado'
+    status: 'pendente' | 'aprovado' | 'rejeitado' | 'pago'
+    status_aprovacao?: 'pendente' | 'aprovado' | 'rejeitado'
     data_despesa?: string
+    data_gasto?: string
     created_at?: string
     categoria?: string
     comprovante_url?: string
     origem_pagamento?: 'empresa' | 'proprio'
+    placa_carro?: string
 }
 
-type ExpenseCategory = 'combustivel' | 'alimentacao' | 'material' | 'outros'
+type ExpenseCategory = 'combustivel' | 'alimentacao' | 'material' | 'manutencao_veiculo' | 'outros'
 
 export function TechnicianExpenses() {
     const { userData } = useAuth()
@@ -37,6 +42,12 @@ export function TechnicianExpenses() {
     const [descricao, setDescricao] = useState('')
     const [valor, setValor] = useState('')
     const [categoria, setCategoria] = useState<ExpenseCategory>('combustivel')
+    const [dataGasto, setDataGasto] = useState(new Date().toISOString().split('T')[0])
+    const [placaCarro, setPlacaCarro] = useState('')
+
+    // Vehicles state
+    const [vehicles, setVehicles] = useState<any[]>([])
+    const [loadingVehicles, setLoadingVehicles] = useState(false)
 
     const [comprovanteFile, setComprovanteFile] = useState<File | null>(null)
     const [origemPagamento, setOrigemPagamento] = useState<'empresa' | 'proprio'>('empresa')
@@ -52,7 +63,7 @@ export function TechnicianExpenses() {
         })
     }
 
-    // New: Compression Helper
+    // Compression Helper
     const compressImage = async (file: File): Promise<File> => {
         return new Promise((resolve, reject) => {
             const reader = new FileReader()
@@ -117,7 +128,17 @@ export function TechnicianExpenses() {
             if (data) {
                 if (data.descricao) setDescricao(data.descricao)
                 if (data.valor) setValor(data.valor.replace('.', ','))
-                if (data.categoria) setCategoria(data.categoria as ExpenseCategory)
+                if (data.categoria) {
+                    // Map generic categories to our specific ones
+                    let cat = data.categoria.toLowerCase()
+                    if (cat.includes('manutencao') || cat.includes('conserto') || cat.includes('oficina')) {
+                        setCategoria('manutencao_veiculo')
+                    } else if (['combustivel', 'alimentacao', 'material', 'outros'].includes(cat)) {
+                        setCategoria(cat as ExpenseCategory)
+                    } else {
+                        setCategoria('outros')
+                    }
+                }
 
                 toast.success('Comprovante analisado pela IA!', {
                     description: 'Dados preenchidos automaticamente.'
@@ -137,6 +158,9 @@ export function TechnicianExpenses() {
     useEffect(() => {
         if (userData?.id) {
             fetchExpenses()
+            if (userData.empresa_id) {
+                fetchVehicles()
+            }
         }
     }, [userData?.id])
 
@@ -162,6 +186,20 @@ export function TechnicianExpenses() {
         }
     }
 
+    const fetchVehicles = async () => {
+        if (!userData?.empresa_id) return
+        setLoadingVehicles(true)
+        const { data, error } = await supabase
+            .from('veiculos')
+            .select('*')
+            .eq('empresa_id', userData.empresa_id)
+            .order('placa')
+
+        if (error) console.error('Erro ao buscar veículos:', error)
+        else setVehicles(data || [])
+        setLoadingVehicles(false)
+    }
+
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             const originalFile = e.target.files[0]
@@ -185,7 +223,15 @@ export function TechnicianExpenses() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (!descricao || !valor) return
+        if (!descricao || !valor) {
+            toast.error('Preencha descrição e valor')
+            return
+        }
+
+        if ((categoria === 'combustivel' || categoria === 'manutencao_veiculo') && !placaCarro) {
+            toast.error('Selecione um veículo para esta categoria')
+            return
+        }
 
         setSubmitting(true)
 
@@ -220,7 +266,11 @@ export function TechnicianExpenses() {
                     categoria,
                     origem_pagamento: origemPagamento,
                     comprovante_url: comprovanteUrl,
-                    status: 'pendente'
+                    status: 'pendente',
+                    status_aprovacao: 'pendente',
+                    data_gasto: dataGasto,
+                    placa_carro: placaCarro || null,
+                    tipo_despesa: categoria === 'manutencao_veiculo' ? 'manutencao' : 'outros'
                 })
 
             if (error) throw error
@@ -231,8 +281,11 @@ export function TechnicianExpenses() {
             setCategoria('combustivel')
             setOrigemPagamento('empresa')
             setComprovanteFile(null)
+            setPlacaCarro('')
+            setDataGasto(new Date().toISOString().split('T')[0])
             setShowForm(false)
             fetchExpenses()
+            toast.success('Despesa registrada com sucesso!')
         } catch (error) {
             console.error('Erro ao salvar despesa:', error)
             toast.error('Erro ao salvar despesa. Tente novamente.')
@@ -269,6 +322,7 @@ export function TechnicianExpenses() {
             'combustivel': 'Combustível',
             'alimentacao': 'Alimentação',
             'material': 'Material',
+            'manutencao_veiculo': 'Manutenção Veículo',
             'outros': 'Outros'
         }
         return labels[cat] || cat
@@ -280,156 +334,149 @@ export function TechnicianExpenses() {
 
     const totals = expenses.reduce((acc, exp) => {
         acc.total += exp.valor
-        if (exp.status === 'pendente') acc.pendente += exp.valor
-        if (exp.status === 'aprovado') acc.aprovado += exp.valor
+        if (exp.status_aprovacao === 'pendente' || exp.status === 'pendente') acc.pendente += exp.valor
+        if (exp.origem_pagamento === 'proprio' && exp.status_aprovacao === 'aprovado' && exp.status !== 'pago') acc.reembolso += exp.valor
         return acc
-    }, { total: 0, pendente: 0, aprovado: 0 })
+    }, { total: 0, pendente: 0, reembolso: 0 })
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 md:p-8 space-y-6">
+        <div className="min-h-screen bg-slate-50 p-4 md:p-8 space-y-6 mt-6 md:mt-0">
             {/* Header */}
-            <div className="flex items-center gap-4">
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => navigate(-1)}
-                    className="rounded-full"
-                >
-                    <ArrowLeft className="h-5 w-5" />
-                </Button>
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-900">Meus Gastos</h1>
-                    <p className="text-sm text-slate-500">Registre e acompanhe suas despesas</p>
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => navigate(-1)}
+                        className="rounded-full hover:bg-slate-200"
+                    >
+                        <ArrowLeft className="h-5 w-5 text-slate-700" />
+                    </Button>
+                    <div>
+                        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Meus Gastos</h1>
+                    </div>
                 </div>
             </div>
 
             {/* Summary Cards */}
-            <div className="grid grid-cols-3 gap-3">
-                <Card className="bg-white/70 backdrop-blur border-amber-100">
-                    <CardContent className="p-4">
-                        <p className="text-xs text-amber-600 font-medium uppercase">Pendente</p>
-                        <p className="text-lg font-bold text-amber-700">{formatCurrency(totals.pendente)}</p>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <Card className="bg-amber-50 border-amber-100 shadow-sm">
+                    <CardHeader className="p-4 pb-2">
+                        <CardTitle className="text-xs font-medium text-amber-700 uppercase tracking-wider">Aguardando Aprovação</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0">
+                        <div className="text-2xl font-bold text-amber-900">{formatCurrency(totals.pendente)}</div>
                     </CardContent>
                 </Card>
-                <Card className="bg-white/70 backdrop-blur border-emerald-100">
-                    <CardContent className="p-4">
-                        <p className="text-xs text-emerald-600 font-medium uppercase">Aprovado</p>
-                        <p className="text-lg font-bold text-emerald-700">{formatCurrency(totals.aprovado)}</p>
+                <Card className="bg-blue-50 border-blue-100 shadow-sm">
+                    <CardHeader className="p-4 pb-2">
+                        <CardTitle className="text-xs font-medium text-blue-700 uppercase tracking-wider">A Receber (Reembolso)</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0">
+                        <div className="text-2xl font-bold text-blue-900">{formatCurrency(totals.reembolso)}</div>
                     </CardContent>
                 </Card>
-                <Card className="bg-white/70 backdrop-blur border-slate-100">
-                    <CardContent className="p-4">
-                        <p className="text-xs text-slate-600 font-medium uppercase">Total</p>
-                        <p className="text-lg font-bold text-slate-700">{formatCurrency(totals.total)}</p>
+                <Card className="bg-white border-slate-200 shadow-sm hidden md:block">
+                    <CardHeader className="p-4 pb-2">
+                        <CardTitle className="text-xs font-medium text-slate-700 uppercase tracking-wider">Total Histórico</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0">
+                        <div className="text-2xl font-bold text-slate-900">{formatCurrency(totals.total)}</div>
                     </CardContent>
                 </Card>
             </div>
 
             {/* New Expense Form */}
             {showForm ? (
-                <Card className="bg-white/90 backdrop-blur shadow-xl border-0 animate-in slide-in-from-bottom-4">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-lg">Nova Despesa</CardTitle>
+                <Card className="bg-white shadow-lg border-0 animate-in slide-in-from-bottom-4">
+                    <CardHeader className="pb-4 border-b border-slate-100">
+                        <CardTitle className="text-lg flex items-center gap-2">
+                            <Receipt className="h-5 w-5 text-emerald-600" />
+                            Nova Despesa
+                        </CardTitle>
                     </CardHeader>
-                    <CardContent>
-                        <form onSubmit={handleSubmit} className="space-y-4">
-                            {/* Upload de Comprovante (MOVIDO PARA O TOPO) */}
-                            <div>
-                                <label className="text-sm font-medium text-slate-700 mb-1.5 block">📸 Comprovante / Nota Fiscal</label>
-                                <div className="space-y-2">
-                                    <Input
-                                        type="file"
-                                        accept="image/*,application/pdf"
-                                        onChange={handleFileChange}
-                                        className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"
-                                    />
-                                    {analyzing && (
-                                        <div className="flex items-center gap-2 text-sm text-emerald-600 animate-pulse">
-                                            <Loader2 className="h-4 w-4 animate-spin" />
-                                            <span>IA analisando cupom... Preenchendo dados...</span>
+                    <CardContent className="p-6">
+                        <form onSubmit={handleSubmit} className="space-y-6">
+
+                            {/* Upload Area */}
+                            <div className="bg-slate-50 p-4 rounded-xl border-2 border-dashed border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/30 transition-all text-center group icon-upload">
+                                <input
+                                    type="file"
+                                    id="receipt-upload"
+                                    accept="image/*,application/pdf"
+                                    onChange={handleFileChange}
+                                    className="hidden"
+                                />
+                                <label htmlFor="receipt-upload" className="cursor-pointer block w-full h-full">
+                                    {analyzing ? (
+                                        <div className="flex flex-col items-center justify-center py-4">
+                                            <Loader2 className="h-8 w-8 animate-spin text-emerald-600 mb-2" />
+                                            <p className="text-sm font-medium text-emerald-700">Analisando comprovante...</p>
+                                        </div>
+                                    ) : comprovanteFile ? (
+                                        <div className="flex flex-col items-center justify-center py-2">
+                                            <CheckCircle className="h-8 w-8 text-emerald-600 mb-2" />
+                                            <p className="text-sm font-medium text-slate-900">{comprovanteFile.name}</p>
+                                            <p className="text-xs text-emerald-600">Comprovante anexado!</p>
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col items-center justify-center py-4">
+                                            <div className="bg-white p-3 rounded-full shadow-sm mb-3 group-hover:scale-110 transition-transform">
+                                                <Receipt className="h-6 w-6 text-slate-400 group-hover:text-emerald-600" />
+                                            </div>
+                                            <p className="text-sm font-medium text-slate-700">Toque p/ tirar foto do comprovante</p>
+                                            <p className="text-xs text-slate-400 mt-1">A IA preencherá os dados automaticamente</p>
                                         </div>
                                     )}
-                                    {!analyzing && !comprovanteFile && (
-                                        <p className="text-xs text-slate-400">
-                                            📎 Tire uma foto! A IA vai tentar ler os dados para você.
-                                        </p>
-                                    )}
+                                </label>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Data</Label>
+                                    <div className="relative">
+                                        <Calendar className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                                        <Input
+                                            type="date"
+                                            className="pl-9"
+                                            value={dataGasto}
+                                            onChange={e => setDataGasto(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Valor (R$)</Label>
+                                    <Input
+                                        placeholder="0,00"
+                                        className="text-right font-medium"
+                                        value={valor}
+                                        onChange={(e) => setValor(e.target.value)}
+                                    />
                                 </div>
                             </div>
 
-                            <div>
-                                <label className="text-sm font-medium text-slate-700 mb-1.5 block">Descrição</label>
+                            <div className="space-y-2">
+                                <Label>Descrição</Label>
                                 <Input
-                                    placeholder="Ex: Combustível para visita"
+                                    placeholder="Ex: Almoço, Combustível, Peça..."
                                     value={descricao}
                                     onChange={(e) => setDescricao(e.target.value)}
-                                    required
-                                />
-                            </div>
-                            <div>
-                                <label className="text-sm font-medium text-slate-700 mb-1.5 block">Valor (R$)</label>
-                                <Input
-                                    placeholder="0,00"
-                                    value={valor}
-                                    onChange={(e) => setValor(e.target.value)}
-                                    required
                                 />
                             </div>
 
-                            {/* Origem do Pagamento */}
-                            <div>
-                                <label className="text-sm font-medium text-slate-700 mb-1.5 block">Quem pagou essa despesa?</label>
+                            <div className="space-y-2">
+                                <Label>Categoria</Label>
                                 <div className="grid grid-cols-2 gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => setOrigemPagamento('empresa')}
-                                        className={cn(
-                                            "p-3 rounded-lg border-2 text-sm font-medium transition-all text-center",
-                                            origemPagamento === 'empresa'
-                                                ? "border-emerald-500 bg-emerald-50 text-emerald-700"
-                                                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                                        )}
-                                    >
-                                        💳 Cartão/Dinheiro da Empresa
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setOrigemPagamento('proprio')}
-                                        className={cn(
-                                            "p-3 rounded-lg border-2 text-sm font-medium transition-all text-center",
-                                            origemPagamento === 'proprio'
-                                                ? "border-blue-500 bg-blue-50 text-blue-700"
-                                                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                                        )}
-                                    >
-                                        💰 Paguei do Meu Bolso
-                                    </button>
-                                </div>
-                                {/* Texto explicativo */}
-                                <p className="text-xs text-slate-500 mt-2 bg-slate-50 p-2 rounded-lg">
-                                    {origemPagamento === 'empresa' ? (
-                                        <>📋 <strong>Empresa:</strong> Você usou o cartão corporativo ou dinheiro que o admin te deu de manhã para os gastos do dia.</>
-                                    ) : (
-                                        <>💵 <strong>Meu Bolso:</strong> Você pagou com seu próprio dinheiro/cartão. O admin vai te reembolsar via PIX ou em espécie após aprovar.</>
-                                    )}
-                                </p>
-                            </div>
-
-
-
-                            <div>
-                                <label className="text-sm font-medium text-slate-700 mb-1.5 block">Categoria</label>
-                                <div className="grid grid-cols-2 gap-2">
-                                    {(['combustivel', 'alimentacao', 'material', 'outros'] as ExpenseCategory[]).map((cat) => (
+                                    {(['combustivel', 'alimentacao', 'material', 'manutencao_veiculo', 'outros'] as ExpenseCategory[]).map((cat) => (
                                         <button
                                             key={cat}
                                             type="button"
                                             onClick={() => setCategoria(cat)}
                                             className={cn(
-                                                "p-3 rounded-xl border-2 text-sm font-medium transition-all",
+                                                "p-3 rounded-xl border text-sm font-medium transition-all",
                                                 categoria === cat
-                                                    ? "border-emerald-500 bg-emerald-50 text-emerald-700"
-                                                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                                                    ? "border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm"
+                                                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                                             )}
                                         >
                                             {getCategoryLabel(cat)}
@@ -437,24 +484,91 @@ export function TechnicianExpenses() {
                                     ))}
                                 </div>
                             </div>
-                            <div className="flex gap-2 pt-2">
+
+                            {/* Vehicle Selection - Conditional */}
+                            {(categoria === 'combustivel' || categoria === 'manutencao_veiculo') && (
+                                <div className="space-y-2 bg-slate-50 p-4 rounded-xl border border-slate-200 animate-in fade-in">
+                                    <Label className="flex items-center gap-2">
+                                        <Car className="h-4 w-4 text-slate-500" />
+                                        Selecione o Veículo
+                                    </Label>
+                                    <Select
+                                        value={placaCarro}
+                                        onValueChange={setPlacaCarro}
+                                    >
+                                        <SelectTrigger className="bg-white">
+                                            <SelectValue placeholder="Qual carro?" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {loadingVehicles ? (
+                                                <SelectItem value="loading" disabled>Carregando...</SelectItem>
+                                            ) : (
+                                                vehicles.map(v => (
+                                                    <SelectItem key={v.id} value={v.placa}>
+                                                        {v.modelo} - {v.placa}
+                                                    </SelectItem>
+                                                ))
+                                            )}
+                                        </SelectContent>
+                                    </Select>
+                                    {!placaCarro && (
+                                        <p className="text-xs text-amber-600 flex items-center gap-1">
+                                            <AlertCircle className="h-3 w-3" /> Obrigatório informar o veículo
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+
+                            <div className="space-y-3">
+                                <Label>Quem pagou?</Label>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setOrigemPagamento('empresa')}
+                                        className={cn(
+                                            "p-4 rounded-xl border text-sm font-medium transition-all text-center flex flex-col items-center gap-2",
+                                            origemPagamento === 'empresa'
+                                                ? "border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm"
+                                                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                                        )}
+                                    >
+                                        <div className="bg-white p-2 rounded-full shadow-sm">💳</div>
+                                        Empresa
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setOrigemPagamento('proprio')}
+                                        className={cn(
+                                            "p-4 rounded-xl border text-sm font-medium transition-all text-center flex flex-col items-center gap-2",
+                                            origemPagamento === 'proprio'
+                                                ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm"
+                                                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                                        )}
+                                    >
+                                        <div className="bg-white p-2 rounded-full shadow-sm">💰</div>
+                                        Reembolso (Meu Bolso)
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="flex gap-3 pt-4">
                                 <Button
                                     type="button"
                                     variant="outline"
-                                    className="flex-1"
+                                    className="flex-1 h-12"
                                     onClick={() => setShowForm(false)}
                                 >
                                     Cancelar
                                 </Button>
                                 <Button
                                     type="submit"
-                                    className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white h-12 shadow-lg shadow-emerald-200"
                                     disabled={submitting}
                                 >
                                     {submitting ? (
                                         <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...</>
                                     ) : (
-                                        'Salvar Despesa'
+                                        'Confirmar Despesa'
                                     )}
                                 </Button>
                             </div>
@@ -464,75 +578,78 @@ export function TechnicianExpenses() {
             ) : (
                 <Button
                     onClick={() => setShowForm(true)}
-                    className="w-full h-14 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-semibold shadow-lg shadow-emerald-200"
+                    className="w-full h-14 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold shadow-lg shadow-emerald-200 text-lg transition-transform hover:scale-[1.02] active:scale-[0.98]"
                 >
-                    <Plus className="mr-2 h-5 w-5" />
-                    Adicionar Despesa
+                    <Plus className="mr-2 h-6 w-6" />
+                    Adicionar Nova Despesa
                 </Button>
             )}
 
             {/* Expenses List */}
-            <div className="space-y-3">
-                <h2 className="text-lg font-semibold text-slate-800 px-1">Histórico</h2>
+            <div className="space-y-4">
+                <h2 className="text-lg font-bold text-slate-800 px-1">Últimos Lançamentos</h2>
 
                 {loading ? (
                     <div className="flex items-center justify-center py-12">
                         <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
                     </div>
                 ) : expenses.length === 0 ? (
-                    <Card className="bg-white/70 backdrop-blur border-dashed border-2 border-slate-200">
+                    <Card className="bg-slate-50 border-dashed border-2 border-slate-200 shadow-none">
                         <CardContent className="p-8 text-center">
                             <Receipt className="h-12 w-12 text-slate-300 mx-auto mb-3" />
-                            <p className="text-slate-500">Nenhuma despesa registrada</p>
-                            <p className="text-sm text-slate-400">Clique em "Adicionar Despesa" para começar</p>
+                            <p className="text-slate-500 font-medium">Nenhuma despesa registrada</p>
+                            <p className="text-sm text-slate-400">Toque no botão verde para começar</p>
                         </CardContent>
                     </Card>
                 ) : (
                     expenses.map((expense) => (
-                        <Card key={expense.id} className="bg-white/80 backdrop-blur hover:shadow-md transition-shadow">
+                        <Card key={expense.id} className="bg-white hover:shadow-md transition-shadow border-slate-100">
                             <CardContent className="p-4">
                                 <div className="flex items-start justify-between">
-                                    <div className="flex-1">
-                                        <p className="font-medium text-slate-800">{expense.descricao}</p>
-                                        <div className="flex flex-wrap items-center gap-2 mt-1">
-                                            <span className="text-xs text-slate-400">
-                                                {(expense.data_despesa || expense.created_at) && format(new Date(expense.data_despesa || expense.created_at!), "dd/MM/yyyy", { locale: ptBR })}
+                                    <div className="flex-1 space-y-1">
+                                        <p className="font-bold text-slate-800 line-clamp-1">{expense.descricao}</p>
+
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <span className="text-xs font-medium text-slate-500 flex items-center gap-1">
+                                                <Calendar className="h-3 w-3" />
+                                                {(expense.data_gasto || expense.data_despesa || expense.created_at) && format(new Date(expense.data_gasto || expense.data_despesa || expense.created_at!), "dd/MM", { locale: ptBR })}
                                             </span>
+
+                                            {expense.placa_carro && (
+                                                <span className="text-xs px-2 py-0.5 bg-slate-100 text-slate-600 rounded-md font-mono border border-slate-200">
+                                                    {expense.placa_carro}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        <div className="flex flex-wrap gap-1 pt-1">
                                             {expense.categoria && (
-                                                <span className="text-xs px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full">
+                                                <span className="text-[10px] px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full font-medium">
                                                     {getCategoryLabel(expense.categoria)}
                                                 </span>
                                             )}
-                                            {/* Pagamento Badge */}
-                                            {expense.origem_pagamento === 'proprio' ? (
-                                                <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-medium">
+                                            {expense.origem_pagamento === 'proprio' && (
+                                                <span className="text-[10px] px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full font-medium border border-blue-100">
                                                     Reembolso
-                                                </span>
-                                            ) : (
-                                                <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">
-                                                    Empresa
                                                 </span>
                                             )}
                                         </div>
-                                        {/* Link do comprovante se existir */}
-                                        {expense.comprovante_url && (
-                                            <div className="mt-2">
-                                                <a
-                                                    href={expense.comprovante_url}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="text-xs text-emerald-600 hover:underline flex items-center gap-1"
-                                                >
-                                                    <Receipt className="w-3 h-3" /> Ver Comprovante
-                                                </a>
-                                            </div>
-                                        )}
                                     </div>
-                                    <div className="text-right">
-                                        <p className="font-bold text-slate-800">{formatCurrency(expense.valor)}</p>
-                                        <div className="mt-1">
-                                            {getStatusBadge(expense.status)}
-                                        </div>
+
+                                    <div className="text-right flex flex-col items-end gap-1">
+                                        <p className="font-bold text-slate-900 text-lg">{formatCurrency(expense.valor)}</p>
+                                        {getStatusBadge(expense.status_aprovacao || expense.status)}
+
+                                        {expense.comprovante_url && (
+                                            <a
+                                                href={expense.comprovante_url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="mt-1 p-1.5 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors"
+                                            >
+                                                <Receipt className="w-4 h-4" />
+                                            </a>
+                                        )}
                                     </div>
                                 </div>
                             </CardContent>

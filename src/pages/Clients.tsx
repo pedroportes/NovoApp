@@ -354,7 +354,7 @@ export function Clients() {
     )
 
     return (
-        <div className="space-y-6 pb-20 md:pb-0">
+        <div className="space-y-6 pb-20 md:pb-0 mt-6 md:mt-0">
             <div className="flex justify-end mb-4">
 
                 <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -370,7 +370,7 @@ export function Clients() {
                             <DialogDescription>Preencha os dados do cliente.</DialogDescription>
                         </DialogHeader>
 
-                        <form onSubmit={handleSubmit} className="space-y-6 py-4" autoComplete="off">
+                        <form onSubmit={handleSubmit} className="space-y-6 pt-4 pb-48 md:pb-4" autoComplete="off">
 
                             {/* FOTO DA FACHADA / AVATAR */}
                             <div className="border-2 border-dashed border-border rounded-lg p-6 flex flex-col items-center justify-center bg-muted/20 relative min-h-[160px]">
@@ -776,19 +776,19 @@ export function Clients() {
             ) : (
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     {filteredClients.map((client) => (
-                        <div key={client.id} className="group relative flex flex-col justify-between rounded-xl border border-border bg-card p-6 shadow-md hover:shadow-lg transition-all active:scale-[0.98]">
-                            <div className="flex items-start gap-4">
-                                <div className="h-14 w-14 rounded-lg bg-muted overflow-hidden flex-shrink-0 border border-border">
+                        <div key={client.id} className="group relative flex flex-col justify-between rounded-xl border border-border bg-card p-4 shadow-md hover:shadow-lg transition-all active:scale-[0.98] min-w-0">
+                            <div className="flex items-start gap-3 md:gap-4">
+                                <div className="h-12 w-12 md:h-14 md:w-14 rounded-lg bg-muted overflow-hidden flex-shrink-0 border border-border">
                                     {client.avatar_url ? (
                                         <img src={client.avatar_url} alt={client.nome_razao} className="h-full w-full object-cover" />
                                     ) : (
                                         <div className="h-full w-full flex items-center justify-center bg-primary/10">
-                                            <UserIcon className="h-6 w-6 text-primary" />
+                                            <UserIcon className="h-5 w-5 md:h-6 md:w-6 text-primary" />
                                         </div>
                                     )}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <h3 className="font-bold text-lg truncate">{client.nome_razao}</h3>
+                                    <h3 className="font-bold text-base md:text-lg truncate">{client.nome_razao}</h3>
                                     {client.whatsapp && (
                                         <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
                                             <Phone className="h-3 w-3" /> {client.whatsapp}
@@ -808,20 +808,20 @@ export function Clients() {
                                         <Button
                                             variant="outline"
                                             size="icon"
-                                            className="h-10 w-10 md:h-12 md:w-12 rounded-full border-blue-200 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                                            className="h-11 w-11 md:h-12 md:w-12 rounded-full border-blue-200 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
                                             onClick={() => window.open(`tel:${client.whatsapp?.replace(/\D/g, '')}`, '_self')}
                                             title="Ligar"
                                         >
-                                            <Phone className="h-4 w-4 md:h-5 md:w-5" />
+                                            <Phone className="h-5 w-5" />
                                         </Button>
                                         <Button
                                             variant="outline"
                                             size="icon"
-                                            className="h-10 w-10 md:h-12 md:w-12 rounded-full border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
+                                            className="h-11 w-11 md:h-12 md:w-12 rounded-full border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
                                             onClick={() => window.open(`https://wa.me/55${client.whatsapp?.replace(/\D/g, '')}`, '_blank')}
                                             title="WhatsApp"
                                         >
-                                            <svg viewBox="0 0 24 24" className="h-4 w-4 md:h-5 md:w-5 fill-current" xmlns="http://www.w3.org/2000/svg"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" /></svg>
+                                            <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current" xmlns="http://www.w3.org/2000/svg"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" /></svg>
                                         </Button>
                                     </>
                                 )}
@@ -829,31 +829,31 @@ export function Clients() {
                                     <Button
                                         variant="outline"
                                         size="icon"
-                                        className="h-10 w-10 md:h-12 md:w-12 rounded-full border-orange-200 text-orange-600 hover:bg-orange-50 hover:text-orange-700"
+                                        className="h-11 w-11 md:h-12 md:w-12 rounded-full border-orange-200 text-orange-600 hover:bg-orange-50 hover:text-orange-700"
                                         onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${client.endereco} - ${client.cidade || ''} ${client.uf || ''}`)}`, '_blank')}
                                         title="Navegar"
                                     >
-                                        <MapPin className="h-4 w-4 md:h-5 md:w-5" />
+                                        <MapPin className="h-5 w-5" />
                                     </Button>
                                 )}
                                 <Button
                                     variant="outline"
                                     size="icon"
-                                    className="h-10 w-10 md:h-12 md:w-12 rounded-full border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700"
+                                    className="h-11 w-11 md:h-12 md:w-12 rounded-full border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700"
                                     onClick={() => navigate(`/service-orders/new?client_id=${client.id}`)}
                                     title="Nova OS"
                                 >
-                                    <FileText className="h-4 w-4 md:h-5 md:w-5" />
+                                    <FileText className="h-5 w-5" />
                                 </Button>
                             </div>
 
-                            <div className="mt-4 flex items-center gap-3 pt-4 border-t border-border">
-                                <Button variant="outline" className="flex-1 h-12 text-base font-medium" onClick={() => handleEdit(client)}>
-                                    <Pencil className="mr-2 h-4 w-4" />
+                            <div className="mt-4 flex items-center gap-2 pt-4 border-t border-border">
+                                <Button variant="outline" className="flex-1 h-9 text-xs font-medium" onClick={() => handleEdit(client)}>
+                                    <Pencil className="mr-2 h-3.5 w-3.5" />
                                     Editar
                                 </Button>
-                                <Button variant="destructive" className="flex-1 h-12 text-base font-medium" onClick={() => handleDelete(client.id, client.nome_razao)}>
-                                    <Trash2 className="mr-2 h-4 w-4" />
+                                <Button variant="destructive" className="flex-1 h-9 text-xs font-medium" onClick={() => handleDelete(client.id, client.nome_razao)}>
+                                    <Trash2 className="mr-2 h-3.5 w-3.5" />
                                     Excluir
                                 </Button>
                             </div>

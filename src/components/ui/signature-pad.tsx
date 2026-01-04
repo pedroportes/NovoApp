@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Button } from './button';
-import { Eraser } from 'lucide-react';
+import { Eraser, Lock, Unlock } from 'lucide-react';
 
 interface SignaturePadProps {
     onSignatureChange: (blob: Blob | null) => void;
@@ -11,6 +11,7 @@ export function SignaturePad({ onSignatureChange, initialImage }: SignaturePadPr
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [isDrawing, setIsDrawing] = useState(false);
     const [hasSignature, setHasSignature] = useState(false);
+    const [isLocked, setIsLocked] = useState(false);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -22,6 +23,16 @@ export function SignaturePad({ onSignatureChange, initialImage }: SignaturePadPr
             if (parent) {
                 canvas.width = parent.clientWidth;
                 canvas.height = 200; // Fixed height
+                // Re-draw image if exists (simplified for now, ideally store paths)
+                if (initialImage) {
+                    const ctx = canvas.getContext('2d');
+                    const img = new Image();
+                    img.crossOrigin = "Anonymous";
+                    img.src = initialImage;
+                    img.onload = () => {
+                        if (ctx) ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    }
+                }
             }
         };
 
@@ -35,7 +46,10 @@ export function SignaturePad({ onSignatureChange, initialImage }: SignaturePadPr
             img.crossOrigin = "Anonymous"; // Prevent tainted canvas
             img.src = initialImage;
             img.onload = () => {
-                if (ctx) ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                if (ctx) {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear before drawing
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                }
                 setHasSignature(true);
             }
         }
@@ -44,6 +58,7 @@ export function SignaturePad({ onSignatureChange, initialImage }: SignaturePadPr
     }, [initialImage]);
 
     const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
+        if (isLocked) return;
         setIsDrawing(true);
         setHasSignature(true);
         const canvas = canvasRef.current;
@@ -61,7 +76,7 @@ export function SignaturePad({ onSignatureChange, initialImage }: SignaturePadPr
     };
 
     const draw = (e: React.MouseEvent | React.TouchEvent) => {
-        if (!isDrawing) return;
+        if (!isDrawing || isLocked) return;
         const canvas = canvasRef.current;
         if (!canvas) return;
 
@@ -74,8 +89,10 @@ export function SignaturePad({ onSignatureChange, initialImage }: SignaturePadPr
     };
 
     const stopDrawing = () => {
-        setIsDrawing(false);
-        exportSignature();
+        if (isDrawing) {
+            setIsDrawing(false);
+            exportSignature();
+        }
     };
 
     const getCoordinates = (e: React.MouseEvent | React.TouchEvent, canvas: HTMLCanvasElement) => {
@@ -97,6 +114,7 @@ export function SignaturePad({ onSignatureChange, initialImage }: SignaturePadPr
     };
 
     const clear = () => {
+        if (isLocked) return;
         const canvas = canvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
@@ -117,7 +135,7 @@ export function SignaturePad({ onSignatureChange, initialImage }: SignaturePadPr
 
     return (
         <div className="w-full space-y-2">
-            <div className="border-2 border-dashed border-input rounded-md bg-white touch-none relative overflow-hidden">
+            <div className={`border-2 border-dashed rounded-md bg-white touch-none relative overflow-hidden transition-colors ${isLocked ? 'border-emerald-500/50 bg-emerald-50/30 cursor-not-allowed' : 'border-input'}`}>
                 <canvas
                     ref={canvasRef}
                     onMouseDown={startDrawing}
@@ -127,18 +145,50 @@ export function SignaturePad({ onSignatureChange, initialImage }: SignaturePadPr
                     onTouchStart={startDrawing}
                     onTouchMove={draw}
                     onTouchEnd={stopDrawing}
-                    className="w-full h-[200px] touch-none cursor-crosshair"
+                    className={`w-full h-[200px] touch-none ${isLocked ? 'pointer-events-none' : 'cursor-crosshair'}`}
                 />
-                {!hasSignature && (
+                {!hasSignature && !isLocked && (
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-muted-foreground/50">
                         Assine aqui
                     </div>
                 )}
+                {isLocked && (
+                    <div className="absolute top-2 right-2 text-emerald-600 bg-white/80 rounded-full p-1 shadow-sm">
+                        <Lock className="w-4 h-4" />
+                    </div>
+                )}
             </div>
-            <div className="flex justify-end">
-                <Button type="button" variant="outline" size="sm" onClick={clear}>
+            <div className="flex justify-between items-center bg-slate-50 p-2 rounded-xl">
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsLocked(!isLocked)}
+                    className={isLocked ? "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" : "text-slate-500 hover:text-slate-700"}
+                >
+                    {isLocked ? (
+                        <>
+                            <Unlock className="w-4 h-4 mr-2" />
+                            Destravar Assinatura
+                        </>
+                    ) : (
+                        <>
+                            <Lock className="w-4 h-4 mr-2" />
+                            Travar Assinatura
+                        </>
+                    )}
+                </Button>
+
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={clear}
+                    disabled={isLocked || !hasSignature}
+                    className="border-red-100 hover:bg-red-50 hover:text-red-600"
+                >
                     <Eraser className="w-4 h-4 mr-2" />
-                    Limpar Assinatura
+                    Limpar
                 </Button>
             </div>
         </div>

@@ -27,7 +27,7 @@ export function TechnicianDashboard() {
     }
 
     return (
-        <div className="min-h-screen bg-[#F0F4F2] p-4 space-y-6 pb-24 relative overflow-hidden">
+        <div className="min-h-screen bg-[#F0F4F2] p-4 space-y-6 pb-24 relative overflow-hidden mt-6">
             {/* Background Gradient Orbs */}
             <div className="fixed top-[-10%] left-[-10%] w-[50%] h-[50%] bg-emerald-300/20 rounded-full blur-[100px] pointer-events-none" />
             <div className="fixed bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-teal-300/20 rounded-full blur-[100px] pointer-events-none" />

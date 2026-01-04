@@ -153,10 +153,26 @@ export function ServiceOrders() {
         }
     }
 
-    const filteredOrders = orders.filter(os =>
-        (os.cliente_nome || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        os.id.toLowerCase().includes(searchTerm.toLowerCase())
-    )
+    const filteredOrders = orders.filter(os => {
+        const term = searchTerm.toLowerCase()
+        if (!term) return true
+
+        // Search by client name
+        if ((os.cliente_nome || '').toLowerCase().includes(term)) return true
+        // Search by ID
+        if (os.id.toLowerCase().includes(term)) return true
+        // Search by address
+        if (os.clientes?.logradouro?.toLowerCase().includes(term)) return true
+        if (os.clientes?.cidade?.toLowerCase().includes(term)) return true
+        if (os.clientes?.endereco?.toLowerCase().includes(term)) return true
+        // Search by phone
+        const cleanedTerm = term.replace(/\D/g, '') // Remove non-digits for phone matching
+        if (cleanedTerm && (os.clientes?.whatsapp?.replace(/\D/g, '').includes(cleanedTerm))) return true
+        if (cleanedTerm && (os.clientes?.telefone?.replace(/\D/g, '').includes(cleanedTerm))) return true
+        if (cleanedTerm && (os.cliente_whatsapp?.replace(/\D/g, '').includes(cleanedTerm))) return true
+
+        return false
+    })
 
     const formatCurrency = (value: number | null) => {
         if (!value) return 'R$ 0,00'
@@ -211,7 +227,7 @@ export function ServiceOrders() {
     }
 
     return (
-        <div className="space-y-6 pb-20 md:pb-0">
+        <div className="space-y-6 pb-20 md:pb-0 mt-6 md:mt-0">
             <div className="flex justify-end mb-4 hidden md:flex">
                 <Button className="h-14 text-base md:w-auto w-full shadow-lg bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold" onClick={() => navigate('/service-orders/new')}>
                     <Plus className="mr-2 h-5 w-5" />
@@ -222,7 +238,7 @@ export function ServiceOrders() {
             <div className="relative">
                 <Search className="absolute left-4 top-4 h-6 w-6 text-emerald-500/50" />
                 <Input
-                    placeholder="Buscar por cliente ou ID..."
+                    placeholder="Buscar por cliente, endereço, telefone ou ID..."
                     className="pl-14 h-14 text-lg shadow-xl shadow-emerald-500/5 border-0 bg-white/80 backdrop-blur-xl rounded-2xl focus:ring-2 focus:ring-emerald-500/20"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}

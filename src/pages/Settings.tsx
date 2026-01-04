@@ -158,7 +158,7 @@ export function Settings() {
     if (loading) return <div className="p-8 text-center">Carregando...</div>
 
     return (
-        <div className="space-y-6 pb-20 md:pb-0">
+        <div className="space-y-6 pb-20 md:pb-0 mt-6 md:mt-0">
             <div className="flex justify-between items-center">
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight">Configurações da Empresa</h1>

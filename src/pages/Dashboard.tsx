@@ -196,11 +196,11 @@ export function Dashboard() {
     const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val)
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-500">
+        <div className="space-y-6 animate-in fade-in duration-500 mt-8 md:mt-0">
             {/* GRID DE CARDS PRINCIPAIS */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 {/* Card - Receita */}
-                <div className="bg-white rounded-3xl shadow-lg shadow-slate-200/50 p-6 flex flex-col justify-between h-40 relative overflow-hidden group hover:-translate-y-1 transition-all duration-300">
+                <div className="bg-white rounded-3xl shadow-lg shadow-slate-200/50 p-6 flex flex-col justify-between h-32 relative overflow-hidden group hover:-translate-y-1 transition-all duration-300">
                     <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-50 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-150 duration-500" />
                     <div className="relative z-10 flex justify-between items-start">
                         <div className="p-3 bg-emerald-100/50 rounded-2xl text-emerald-600">
@@ -220,7 +220,7 @@ export function Dashboard() {
                 </div>
 
                 {/* Card - Receita Mensal */}
-                <div className="bg-white rounded-3xl shadow-lg shadow-slate-200/50 p-6 flex flex-col justify-between h-40 relative overflow-hidden group hover:-translate-y-1 transition-all duration-300">
+                <div className="bg-white rounded-3xl shadow-lg shadow-slate-200/50 p-6 flex flex-col justify-between h-32 relative overflow-hidden group hover:-translate-y-1 transition-all duration-300">
                     <div className="absolute top-0 right-0 w-24 h-24 bg-purple-50 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-150 duration-500" />
                     <div className="relative z-10 flex justify-between items-start">
                         <div className="p-3 bg-purple-100/50 rounded-2xl text-purple-600">
@@ -239,7 +239,7 @@ export function Dashboard() {
                 </div>
 
                 {/* Card - Serviços Ativos */}
-                <div className="bg-white rounded-3xl shadow-lg shadow-slate-200/50 p-6 flex flex-col justify-between h-40 relative overflow-hidden group hover:-translate-y-1 transition-all duration-300">
+                <div className="bg-white rounded-3xl shadow-lg shadow-slate-200/50 p-6 flex flex-col justify-between h-32 relative overflow-hidden group hover:-translate-y-1 transition-all duration-300">
                     <div className="absolute top-0 right-0 w-24 h-24 bg-sky-50 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-150 duration-500" />
                     <div className="relative z-10 flex justify-between items-start">
                         <div className="p-3 bg-sky-100/50 rounded-2xl text-sky-600">
@@ -258,7 +258,7 @@ export function Dashboard() {
                 </div>
 
                 {/* Card - Clientes */}
-                <div className="bg-white rounded-3xl shadow-lg shadow-slate-200/50 p-6 flex flex-col justify-between h-40 relative overflow-hidden group hover:-translate-y-1 transition-all duration-300">
+                <div className="bg-white rounded-3xl shadow-lg shadow-slate-200/50 p-6 flex flex-col justify-between h-32 relative overflow-hidden group hover:-translate-y-1 transition-all duration-300">
                     <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-50 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-150 duration-500" />
                     <div className="relative z-10 flex justify-between items-start">
                         <div className="p-3 bg-indigo-100/50 rounded-2xl text-indigo-600">

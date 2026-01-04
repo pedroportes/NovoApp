@@ -293,7 +293,7 @@ export function Technicians() {
     )
 
     return (
-        <div className="space-y-6 pb-20 md:pb-0">
+        <div className="space-y-6 pb-20 md:pb-0 mt-6 md:mt-0">
             <div className="flex justify-end mb-4">
 
                 <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -312,7 +312,7 @@ export function Technicians() {
                                 Preencha os dados e assine na tela.
                             </DialogDescription>
                         </DialogHeader>
-                        <form onSubmit={handleSubmit} className="space-y-6 py-4" autoComplete="off">
+                        <form onSubmit={handleSubmit} className="space-y-6 py-4 pb-24" autoComplete="off">
                             <input autoComplete="false" name="hidden" type="text" style={{ display: 'none' }} />
 
                             {/* FOTO (Avatar) - Mantido input file escondido */}
