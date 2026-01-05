@@ -1,15 +1,19 @@
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { Card } from '@/components/ui/card'
-import { ClipboardList, Plus, MapPin, DollarSign, LogOut, Receipt } from 'lucide-react'
+import { ClipboardList, Plus, MapPin, DollarSign, LogOut, Receipt, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useEffect } from 'react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { useLocationTracker } from '@/hooks/useLocationTracker'
 
 export function TechnicianDashboard() {
     const { userData, signOut } = useAuth()
     const navigate = useNavigate()
+
+    // Ativa o rastreamento de localização
+    const locationState = useLocationTracker()
 
     // We can reuse the main layout's FAB context if we want, 
     // or just put big buttons on the screen since it's mobile-first.
@@ -38,14 +42,36 @@ export function TechnicianDashboard() {
                     <h1 className="text-2xl font-bold text-emerald-950 tracking-tight">
                         Olá, {userData?.nome ? userData.nome.split(' ')[0] : 'Técnico'}
                     </h1>
-                    <p className="text-emerald-700/80 text-sm font-medium">
+                    <p className="text-emerald-700/80 text-sm font-medium flex items-center gap-2">
                         {format(new Date(), "EEEE, d 'de' MMMM", { locale: ptBR })}
+                        {locationState.isTracking && (
+                            <span className="flex items-center gap-1 text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
+                                <MapPin className="h-3 w-3" />
+                                GPS Ativo
+                            </span>
+                        )}
                     </p>
                 </div>
                 <div className="h-12 w-12 bg-emerald-100/80 backdrop-blur-sm rounded-full flex items-center justify-center text-emerald-700 font-bold border border-white/50 shadow-sm">
                     {userData?.nome?.[0] || 'T'}
                 </div>
             </header>
+
+            {/* Location Error Alert */}
+            {locationState.error && (
+                <div className="relative z-10 bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3">
+                    <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                        <p className="text-sm font-semibold text-amber-900">Localização Desativada</p>
+                        <p className="text-xs text-amber-700 mt-1">{locationState.error}</p>
+                        {locationState.permissionDenied && (
+                            <p className="text-xs text-amber-600 mt-2">
+                                Para ativar: Configurações do navegador → Permissões → Localização
+                            </p>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {/* Quick Actions Grid */}
             <div className="grid grid-cols-2 gap-4 relative z-10">

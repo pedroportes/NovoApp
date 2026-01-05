@@ -27,6 +27,10 @@
     --ring: 216 100% 40%;
     --radius: 0.5rem;
     /* 8px default */
+    --gradient-from: #0052CC;
+    /* Enterprise Blue */
+    --gradient-to: #0ea5e9;
+    /* Sky 500 */
   }
 
   /* ENTERPRISE THEME (High density, Blue, Professional) */
@@ -54,6 +58,8 @@
     --ring: 216 100% 40%;
     --radius: 0.25rem;
     /* 4px - Tight */
+    --gradient-from: #0052CC;
+    --gradient-to: #0ea5e9;
   }
 
   /* BENTO GRID (Modern, Soft, Apple-like) */
@@ -81,6 +87,10 @@
     --ring: 240 5% 64.9%;
     --radius: 1rem;
     /* 16px - Large/Soft */
+    --gradient-from: #18181b;
+    /* Zinc 950 */
+    --gradient-to: #3f3f46;
+    /* Zinc 700 */
   }
 
   /* DARK OPS (Night mode, High Contrast, Neon) */
@@ -109,6 +119,10 @@
     --input: 217 32.6% 17.5%;
     --ring: 142 70% 50%;
     --radius: 0.5rem;
+    --gradient-from: #020617;
+    /* Slate 950 */
+    --gradient-to: #0f172a;
+    /* Slate 900 */
   }
 
   /* AMETHYST (Purple, Elegant, Soft) */
@@ -136,6 +150,10 @@
     --ring: 262 83% 58%;
     --radius: 1rem;
     /* 16px - Large */
+    --gradient-from: #8b5cf6;
+    /* Violet 500 */
+    --gradient-to: #d946ef;
+    /* Fuchsia 500 */
   }
 
   /* MIDNIGHT (Deep Blue, Classic Dark Mode) */
@@ -164,6 +182,10 @@
     --ring: 217 91% 60%;
     --radius: 0.75rem;
     /* 12px - Medium */
+    --gradient-from: #172554;
+    /* Blue 950 */
+    --gradient-to: #1e3a8a;
+    /* Blue 900 */
   }
 }
 
@@ -179,7 +201,7 @@
 
 @layer utilities {
   .banking-gradient {
-    @apply bg-gradient-to-br from-[#10b981] to-[#0ea5e9];
+    background-image: linear-gradient(135deg, var(--gradient-from), var(--gradient-to));
   }
 
   .glass-card {

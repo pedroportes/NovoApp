@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { LiveMap } from '@/components/LiveMap'
 
 // Audio for notifications
 const playNotificationSound = () => {
@@ -413,6 +414,13 @@ export function Dashboard() {
                     </div>
                 )}
             </div>
+
+            {/* RASTREAMENTO EM TEMPO REAL (Somente Admin) */}
+            {userData?.cargo === 'admin' && (
+                <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/40 p-6">
+                    <LiveMap />
+                </div>
+            )}
         </div>
     )
 }

@@ -144,12 +144,17 @@ export function ServiceOrders() {
         }
     }
 
-    const getStatusColor = (status: string) => {
+    const getStatusColor = (status: string, hasDeslocamento?: boolean) => {
+        // Se está em deslocamento ativo (e não concluído), mostrar como azul
+        if (hasDeslocamento && !['concluído', 'concluido'].includes(status?.toLowerCase())) {
+            return 'bg-blue-500/10 text-blue-600 border-blue-500/20 shadow-[0_0_10px_rgba(59,130,246,0.2)]'
+        }
         switch (status?.toLowerCase()) {
             case 'aprovado': return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.2)]'
             case 'em andamento': return 'bg-blue-500/10 text-blue-600 border-blue-500/20'
+            case 'em deslocamento': return 'bg-blue-500/10 text-blue-600 border-blue-500/20 shadow-[0_0_10px_rgba(59,130,246,0.2)]'
             case 'pendente': return 'bg-amber-500/10 text-amber-600 border-amber-500/20'
-            case 'concluído': return 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-200'
+            case 'concluído': case 'concluido': return 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-200'
             default: return 'bg-slate-100 text-slate-500 border-slate-200'
         }
     }
@@ -223,9 +228,11 @@ export function ServiceOrders() {
                             <div className="absolute -top-10 -right-10 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl group-hover:bg-emerald-500/20 transition-all pointer-events-none" />
 
                             <div className="flex justify-between items-start mb-5 relative z-10">
-                                <div className={`px-4 py-1.5 rounded-full text-xs font-bold border flex items-center gap-1.5 ${getStatusColor(os.status || 'pendente')}`}>
+                                <div className={`px-4 py-1.5 rounded-full text-xs font-bold border flex items-center gap-1.5 ${getStatusColor(os.status || 'pendente', !!os.deslocamento_iniciado_em)}`}>
                                     <div className="w-1.5 h-1.5 rounded-full bg-current" />
-                                    {(os.status || 'Pendente').toUpperCase()}
+                                    {os.deslocamento_iniciado_em && !['concluído', 'concluido'].includes(os.status?.toLowerCase() || '')
+                                        ? 'EM DESLOCAMENTO'
+                                        : (os.status || 'Pendente').toUpperCase()}
                                 </div>
                                 <span className="text-xs text-slate-400 font-mono tracking-wider">#{os.id.slice(0, 8)}</span>
                             </div>
