@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useOutletContext, useNavigate } from 'react-router-dom'
-import { Plus, Search, Pencil, Trash2, Phone, Mail, User as UserIcon, MapPin, FileText, Camera } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Phone, Mail, User as UserIcon, MapPin, FileText, Camera, Upload } from 'lucide-react'
 import { ocrService } from '@/services/ocrService'
 import { compressImage } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
@@ -20,27 +20,15 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { SignaturePad } from '@/components/ui/signature-pad'
+import { useOfflineClients } from '@/hooks/useOfflineData'
+import { SyncService } from '@/services/syncService'
 
-interface Client {
-    id: string
-    nome_razao: string
-    cpf_cnpj?: string
-    whatsapp?: string
-    email?: string
-    endereco?: string
-    referencia?: string
-    avatar_url?: string
-    signature_url?: string
-    empresa_id: string
-    cidade?: string
-    uf?: string
-}
+import { LocalClient } from '@/lib/db'
 
 export function Clients() {
     const { userData } = useAuth()
     const navigate = useNavigate()
-    const [clients, setClients] = useState<Client[]>([])
-    const [loading, setLoading] = useState(true)
+    const { clients, loading } = useOfflineClients()
     const [searchTerm, setSearchTerm] = useState('')
 
     // Form States
@@ -61,7 +49,9 @@ export function Clients() {
         bairro: '',
         cidade: '',
         uf: '',
-        referencia: ''
+        referencia: '',
+        avatar_url: '',
+        signature_url: ''
     }
     const [formData, setFormData] = useState(initialFormState)
     const [searchingCep, setSearchingCep] = useState(false)
@@ -85,11 +75,14 @@ export function Clients() {
     const [signatureBlob, setSignatureBlob] = useState<Blob | null>(null)
     const [currentSignatureUrl, setCurrentSignatureUrl] = useState<string | null>(null)
 
+    // Removed useEffect for fetching, hook handles it
+    /*
     useEffect(() => {
         if (userData?.empresa_id) {
             fetchClients()
         }
     }, [userData?.empresa_id])
+    */
 
     const openNewClientDialog = useCallback(() => {
         setEditingClientId(null)
@@ -183,44 +176,31 @@ export function Clients() {
         setAddressSuggestions([])
     }
 
-    const fetchClients = async () => {
-        try {
-            const { data, error } = await supabase
-                .from('clientes')
-                .select('*')
-                .eq('empresa_id', userData!.empresa_id)
-                .order('nome_razao')
-
-            if (error) throw error
-            setClients(data as Client[])
-        } catch (error) {
-            console.error('Erro ao buscar clientes:', error)
-        } finally {
-            setLoading(false)
-        }
-    }
+    // fetchClients removed
 
 
-    const handleEdit = (client: Client) => {
+    const handleEdit = (client: LocalClient) => {
         setEditingClientId(client.id)
-        // Parse endereco if it exists (format: Logradouro, Numero - Bairro, Cidade/UF)
-        const enderecoParts = (client.endereco || '').split(' - ')
-        const logradouroNumero = enderecoParts[0]?.split(', ') || []
-        const bairroCidade = enderecoParts[1]?.split(', ') || []
+
+        // LocalClient stores address fields separately, so we typically don't need to parse string
+        // But if we ever synced legacy data that only had 'endereco' string, we might.
+        // For new app structure, we use the fields directly.
 
         setFormData({
             nome_razao: client.nome_razao || '',
             cpf_cnpj: client.cpf_cnpj || '',
             whatsapp: client.whatsapp || '',
             email: client.email || '',
-            cep: '',
-            logradouro: logradouroNumero[0] || '',
-            numero: logradouroNumero[1] || '',
-            complemento: '',
-            bairro: bairroCidade[0] || '',
-            cidade: bairroCidade[1]?.split('/')[0] || '',
-            uf: bairroCidade[1]?.split('/')[1] || '',
-            referencia: client.referencia || ''
+            cep: client.cep || '',
+            logradouro: client.logradouro || '',
+            numero: client.numero || '',
+            complemento: client.complemento || '',
+            bairro: client.bairro || '',
+            cidade: client.cidade || '',
+            uf: client.uf || '',
+            referencia: client.referencia || '',
+            avatar_url: client.avatar_url || '',
+            signature_url: client.signature_url || ''
         })
         setAvatarPreview(client.avatar_url || null)
         setCurrentSignatureUrl(client.signature_url || null)
@@ -231,16 +211,8 @@ export function Clients() {
         if (!confirm(`Tem certeza que deseja excluir o cliente ${name}?`)) return
 
         try {
-            const { error } = await (supabase
-                .from('clientes') as any)
-                .delete()
-                .eq('id', id)
-                .eq('empresa_id', userData!.empresa_id)
-
-            if (error) throw error
-
+            await SyncService.deleteClient(id)
             alert('Cliente excluído com sucesso.')
-            fetchClients()
         } catch (error: any) {
             alert('Erro ao excluir: ' + error.message)
         }
@@ -279,83 +251,97 @@ export function Clients() {
 
         try {
             // Uploads
-            let newAvatarUrl = avatarPreview
-            let newSignatureUrl = currentSignatureUrl
+            let avatarUrl = formData.avatar_url
+            let signatureUrl = formData.signature_url
 
+            // Avatar Upload
             if (avatarFile) {
-                // Compress before upload
-                const compressedBlob = await compressImage(avatarFile)
-                newAvatarUrl = await uploadFile(compressedBlob, `client-avatar`)
+                if (navigator.onLine) {
+                    const fileExt = avatarFile.name.split('.').pop()
+                    const fileName = `${Math.random()}.${fileExt}`
+                    const { error: uploadError } = await supabase.storage
+                        .from('avatars')
+                        .upload(fileName, avatarFile)
+
+                    if (uploadError) throw uploadError
+
+                    const { data: { publicUrl } } = supabase.storage
+                        .from('avatars')
+                        .getPublicUrl(fileName)
+                    avatarUrl = publicUrl
+                } else {
+                    console.warn("Offline image upload not supported yet.")
+                }
             }
 
+            // Signature Upload
             if (signatureBlob) {
-                newSignatureUrl = await uploadFile(signatureBlob, `client-sig`)
+                if (navigator.onLine) {
+                    const fileName = `signatures/${Math.random()}.png`
+                    const { error: uploadError } = await supabase.storage
+                        .from('avatars')
+                        .upload(fileName, signatureBlob)
+
+                    if (uploadError) throw uploadError
+
+                    const { data: { publicUrl } } = supabase.storage
+                        .from('avatars')
+                        .getPublicUrl(fileName)
+                    signatureUrl = publicUrl
+                }
             }
 
-            // Monta endereço completo a partir dos campos separados
-            const enderecoCompleto = [
-                formData.logradouro,
-                formData.numero,
-                formData.complemento ? `(${formData.complemento})` : '',
-                '-',
-                formData.bairro,
-                formData.cidade ? `${formData.cidade}/${formData.uf}` : ''
-            ].filter(Boolean).join(', ').replace(', -,', ' -')
+            await SyncService.saveClient({
+                id: editingClientId || undefined,
+                empresa_id: userData.empresa_id,
+                ...formData,
+                avatar_url: avatarUrl,
+                signature_url: signatureUrl,
+                ativo: true
+            })
 
-            const payload = {
-                nome_razao: formData.nome_razao,
-                cpf_cnpj: formData.cpf_cnpj,
-                whatsapp: formData.whatsapp,
-                email: formData.email,
-                endereco: enderecoCompleto,
-                referencia: formData.referencia,
-                avatar_url: newAvatarUrl,
-                signature_url: newSignatureUrl,
-                empresa_id: userData.empresa_id
-            }
-
-            let error;
-
-            if (editingClientId) {
-                // UPDATE
-                const { error: updateError } = await (supabase
-                    .from('clientes') as any)
-                    .update(payload)
-                    .eq('id', editingClientId)
-                    .eq('empresa_id', userData.empresa_id)
-                error = updateError
-            } else {
-                // CREATE
-                const { error: insertError } = await (supabase
-                    .from('clientes') as any)
-                    .insert([payload])
-                error = insertError
-            }
-
-            if (error) throw error
-
-            alert(editingClientId ? 'Cliente atualizado!' : 'Cliente cadastrado com sucesso!')
             setIsDialogOpen(false)
-            fetchClients()
+            resetForm()
 
         } catch (error: any) {
-            console.error(error)
-            alert('Erro: ' + error.message)
+            console.error('Erro ao salvar:', error)
+            alert('Erro ao salvar cliente: ' + error.message)
         } finally {
             setIsSubmitting(false)
         }
     }
 
-    const filteredClients = clients.filter(client =>
-        client.nome_razao?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        client.whatsapp?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        client.endereco?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (client as any).telefone?.toLowerCase().includes(searchTerm.toLowerCase())
-    )
+    const getClientAddress = (client: LocalClient) => {
+        if (client.endereco) return client.endereco;
+        return [
+            client.logradouro,
+            client.numero,
+            client.bairro,
+            client.cidade,
+            client.uf
+        ].filter(Boolean).join(', ');
+    }
+
+    const filteredClients = (clients || []).filter(client => {
+        const address = getClientAddress(client);
+        return (
+            client.nome_razao?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            client.whatsapp?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            address.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (client as any).telefone?.toLowerCase().includes(searchTerm.toLowerCase())
+        )
+    })
 
     return (
         <div className="space-y-6 pb-20 md:pb-0 mt-6 md:mt-0">
-            <div className="flex justify-end mb-4">
+            <div className="flex justify-end mb-4 gap-2">
+                <Button
+                    className="hidden md:flex h-14 text-base md:w-auto w-full shadow-lg bg-blue-600 hover:bg-blue-700 text-white"
+                    onClick={() => navigate('/clients/import')}
+                >
+                    <Upload className="mr-2 h-5 w-5" />
+                    Importar Excel/CSV
+                </Button>
 
                 <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                     <DialogTrigger asChild>
@@ -789,61 +775,71 @@ export function Clients() {
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <h3 className="font-bold text-base md:text-lg truncate">{client.nome_razao}</h3>
-                                    {client.whatsapp && (
-                                        <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
-                                            <Phone className="h-3 w-3" /> {client.whatsapp}
-                                        </p>
-                                    )}
-                                    {client.endereco && (
-                                        <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1 truncate">
-                                            <MapPin className="h-3 w-3" /> {client.endereco}
-                                        </p>
-                                    )}
+                                    <div className="text-sm text-muted-foreground space-y-1">
+                                        <div className="flex items-center gap-2">
+                                            <Phone className="h-4 w-4 shrink-0 text-green-500" />
+                                            <span className="truncate">{client.whatsapp || 'Sem telefone'}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <MapPin className="h-4 w-4 shrink-0 text-blue-500" />
+                                            <span className="truncate max-w-full">
+                                                {getClientAddress(client)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-2 mt-4 absolute right-4 top-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    {/* Actions moved or kept here? The original code had them in a separate div below or floating? 
+                                        Original code had them in a div `flex flex-wrap items-center gap-2 mt-4` inside the card flex flow.
+                                        Let's stick to the original structure I viewed.
+                                    */}
                                 </div>
                             </div>
 
-                            <div className="flex flex-wrap items-center gap-2 mt-4">
+                            {/* Actions Row */}
+                            <div className="flex items-center gap-2 mt-4 ml-1">
                                 {client.whatsapp && (
                                     <>
                                         <Button
                                             variant="outline"
                                             size="icon"
-                                            className="h-11 w-11 md:h-12 md:w-12 rounded-full border-blue-200 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                                            className="h-10 w-10 rounded-full border-blue-200 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
                                             onClick={() => window.open(`tel:${client.whatsapp?.replace(/\D/g, '')}`, '_self')}
                                             title="Ligar"
                                         >
-                                            <Phone className="h-5 w-5" />
+                                            <Phone className="h-4 w-4" />
                                         </Button>
                                         <Button
                                             variant="outline"
                                             size="icon"
-                                            className="h-11 w-11 md:h-12 md:w-12 rounded-full border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
+                                            className="h-10 w-10 rounded-full border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
                                             onClick={() => window.open(`https://wa.me/55${client.whatsapp?.replace(/\D/g, '')}`, '_blank')}
                                             title="WhatsApp"
                                         >
-                                            <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current" xmlns="http://www.w3.org/2000/svg"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" /></svg>
+                                            <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" xmlns="http://www.w3.org/2000/svg"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" /></svg>
                                         </Button>
                                     </>
                                 )}
-                                {client.endereco && (
+                                {getClientAddress(client) && (
                                     <Button
                                         variant="outline"
                                         size="icon"
-                                        className="h-11 w-11 md:h-12 md:w-12 rounded-full border-orange-200 text-orange-600 hover:bg-orange-50 hover:text-orange-700"
-                                        onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${client.endereco} - ${client.cidade || ''} ${client.uf || ''}`)}`, '_blank')}
+                                        className="h-10 w-10 rounded-full border-orange-200 text-orange-600 hover:bg-orange-50 hover:text-orange-700"
+                                        onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(getClientAddress(client))}`, '_blank')}
                                         title="Navegar"
                                     >
-                                        <MapPin className="h-5 w-5" />
+                                        <MapPin className="h-4 w-4" />
                                     </Button>
                                 )}
                                 <Button
                                     variant="outline"
                                     size="icon"
-                                    className="h-11 w-11 md:h-12 md:w-12 rounded-full border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700"
+                                    className="h-10 w-10 rounded-full border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700"
                                     onClick={() => navigate(`/service-orders/new?client_id=${client.id}`)}
                                     title="Nova OS"
                                 >
-                                    <FileText className="h-5 w-5" />
+                                    <FileText className="h-4 w-4" />
                                 </Button>
                             </div>
 

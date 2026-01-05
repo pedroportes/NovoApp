@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useNavigate, useParams, useOutletContext, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Plus, Trash2, Camera, ChevronDown, ChevronRight, Printer, User, ClipboardList, PenTool } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -7,6 +7,9 @@ import { Label } from '@/components/ui/label'
 import { SignaturePad } from '@/components/ui/signature-pad'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
+import { SyncService } from '@/services/syncService'
+import { LocalServiceOrder, db } from '@/lib/db'
+import { useOfflineClients, useOfflineTechnicians, useOfflineServices } from '@/hooks/useOfflineData'
 
 interface ServiceItem {
     descricao: string
@@ -22,9 +25,7 @@ export function NewServiceOrder() {
     const [submitting, setSubmitting] = useState(false)
     const [loading, setLoading] = useState(false)
 
-    // Data Sources
-    const [clients, setClients] = useState<any[]>([])
-    const [technicians, setTechnicians] = useState<any[]>([])
+
 
     // Form State
     const [formData, setFormData] = useState({
@@ -80,8 +81,6 @@ export function NewServiceOrder() {
         setSignatureBlob(blob)
     }
 
-    // Services
-    const [services, setServices] = useState<any[]>([])
     const [selectedServiceId, setSelectedServiceId] = useState('')
 
     // Calculator State
@@ -173,86 +172,118 @@ export function NewServiceOrder() {
         }
     }, [userData])
 
+    // --- Offline Data Hooks ---
     const [searchParams] = useSearchParams()
     const queryClientId = searchParams.get('client_id')
+    const queryDate = searchParams.get('date')
 
-    useEffect(() => {
-        if (userData?.empresa_id) {
-            fetchDependencyData()
-                .then(() => {
-                    if (id) fetchOrderData(id)
-                })
-        }
-    }, [userData?.empresa_id, id])
+    const { clients: rawClients, loading: loadingClients } = useOfflineClients()
+    const { technicians: rawTechnicians, loading: loadingTechs } = useOfflineTechnicians()
+    const { services: rawServices, loading: loadingServices } = useOfflineServices()
 
-    // Pre-fill client from URL if available and clients list is loaded
+    const clients = rawClients || []
+    const services = rawServices || []
+
+    // Filter technicians based on role
+    const technicians = useMemo(() => {
+        return rawTechnicians ? rawTechnicians.filter((t: any) => {
+            if (userData?.cargo?.toLowerCase() === 'tecnico') {
+                return t.id === userData.id
+            }
+            return true;
+        }).map((t: any) => ({
+            ...t,
+            nome: t.nome_completo || t.nome || 'Técnico'
+        })) : []
+    }, [rawTechnicians, userData])
+
+    // Pre-fill client from URL if available
     useEffect(() => {
-        if (queryClientId && clients.length > 0 && !formData.cliente_id) {
+        if (queryClientId && clients && clients.length > 0 && !formData.cliente_id) {
             const clientExists = clients.find(c => c.id === queryClientId)
             if (clientExists) {
                 setFormData(prev => ({ ...prev, cliente_id: queryClientId }))
             }
         }
-    }, [queryClientId, clients, formData.cliente_id])
 
-    const fetchDependencyData = async () => {
-        const { data: clientsData, error: clientError } = await supabase
-            .from('clientes')
-            .select('id, nome_razao, whatsapp')
-            .eq('empresa_id', userData!.empresa_id)
-            .order('nome_razao')
-
-        if (clientError) {
-            console.error('Erro buscando clientes:', clientError)
+        if (queryDate && !id) {
+            setFormData(prev => ({ ...prev, data_agendamento: queryDate }))
         }
+    }, [queryClientId, queryDate, clients, formData.cliente_id, id])
 
-        if (clientsData) {
-            setClients(clientsData)
+    // Load OS Data for Editing
+    useEffect(() => {
+        if (id && userData?.empresa_id) {
+            loadOrderData(id)
+        } else if (userData?.cargo?.toLowerCase() === 'tecnico') {
+            // Default to self if technician creating new
+            setFormData(prev => ({ ...prev, tecnico_id: userData.id }))
         }
+    }, [id, userData, technicians]) // added technicians dependency to ensure we have them before setting default? no, ID is string.
 
-        const { data: techData, error: techError } = await supabase
-            .from('usuarios')
-            .select('id, nome_completo, cargo')
-            .eq('empresa_id', userData!.empresa_id)
-            .eq('cargo', 'tecnico')
 
-        if (techError) console.error('Erro buscando tecnicos:', techError)
+    const loadOrderData = async (orderId: string) => {
+        setLoading(true)
+        try {
+            // Try Local DB First
+            let osData: any = await db.ordens_servico.get(orderId)
 
-        const { data: servicesData, error: serviceError } = await supabase
-            .from('servicos')
-            .select('*')
-            .eq('empresa_id', userData!.empresa_id)
-            .eq('ativo', true)
-            .order('nome')
-
-        if (serviceError) console.error('Erro buscando servicos:', serviceError)
-
-        // Filter out current user if they are admin to prevent self-assignment in this view, 
-        // OR just filter generally if strict mode is desired. 
-        // User requested: "Técnico 01" (Admin) should not appear. 
-        // We assume active admins shouldn't be in this list unless they are strictly technicians.
-        // Simple fix: If we fetched logged in user and they are admin, exclude them.
-        // Simple fix: If we fetched logged in user and they are admin, exclude them.
-        let filteredTechs = (techData || []).map((t: any) => ({
-            ...t,
-            nome: t.nome_completo || t.nome || 'Técnico' // Ensure 'nome' exists for the dropdown
-        }))
-
-        if (userData?.cargo?.toLowerCase() === 'admin') {
-            filteredTechs = filteredTechs.filter((t: any) => t.id !== userData.id)
-        }
-
-        // If logged in as Technician, restrict list to ONLY themselves
-        if (userData?.cargo?.toLowerCase() === 'tecnico') {
-            filteredTechs = filteredTechs.filter((t: any) => t.id === userData.id)
-            if (!id && filteredTechs.length > 0) {
-                setFormData(prev => ({ ...prev, tecnico_id: userData.id }))
+            // If not found locally, try network (if online) - hybrid approach
+            // But ideally everything should be sync'd. 
+            if (!osData && navigator.onLine) {
+                const { data, error } = await supabase
+                    .from('ordens_servico')
+                    .select('*')
+                    .eq('id', orderId)
+                    .single()
+                if (data) osData = data
             }
-        }
 
-        if (clientsData) setClients(clientsData)
-        setTechnicians(filteredTechs)
-        if (servicesData) setServices(servicesData)
+            if (osData) {
+                const [date, time] = osData.data_agendamento ? osData.data_agendamento.split('T') : ['', '']
+
+                // If technician, force their ID (security/logic check)
+                let selectedTechId = osData.tecnico_id
+                if (userData?.cargo?.toLowerCase() === 'tecnico') {
+                    selectedTechId = userData.id
+                }
+
+                setFormData({
+                    cliente_id: osData.cliente_id,
+                    tecnico_id: selectedTechId,
+                    tipo: osData.tipo,
+                    data_agendamento: date,
+                    hora_agendamento: time ? time.slice(0, 5) : '09:00',
+                    validade: osData.validade || '',
+                    descricao_servico: osData.descricao_servico || '',
+                    observacoes: osData.observacoes || '',
+                    desconto: osData.desconto ? osData.desconto.toString() : '',
+                    status: osData.status || 'PENDENTE'
+                })
+                setItems((osData.itens as ServiceItem[]) || [])
+
+                // Photos
+                const loadedPhotos = osData.fotos as any || { antes: [], depois: [] }
+                setPhotos({
+                    antes: Array.isArray(loadedPhotos.antes) ? loadedPhotos.antes : (loadedPhotos.antes ? [loadedPhotos.antes] : []),
+                    depois: Array.isArray(loadedPhotos.depois) ? loadedPhotos.depois : (loadedPhotos.depois ? [loadedPhotos.depois] : [])
+                })
+
+                if (osData.assinatura_cliente_url) {
+                    setInitialSignatureUrl(osData.assinatura_cliente_url)
+                }
+
+                // Init local inputs
+                if (osData.desconto) {
+                    setPercentInput(osData.desconto.toString())
+                }
+            }
+        } catch (error) {
+            console.error('Erro ao carregar OS:', error)
+            alert('Erro ao carregar dados da OS.')
+        } finally {
+            setLoading(false)
+        }
     }
 
 
@@ -444,27 +475,22 @@ export function NewServiceOrder() {
                 payload.assinatura_cliente_url = signatureUrl
             }
 
-            let error;
-
             if (id) {
-                const result = await (supabase
-                    .from('ordens_servico') as any)
-                    .update(payload)
-                    .eq('id', id)
-                error = result.error
+                // Update
+                await SyncService.saveServiceOrder({
+                    id,
+                    ...payload,
+                    status: finalStatus || payload.status
+                } as LocalServiceOrder);
             } else {
-                // For new OS, ensure status is set
-                if (!payload.status) payload.status = 'PENDENTE'
-
-                const result = await (supabase
-                    .from('ordens_servico') as any)
-                    .insert(payload)
-                error = result.error
+                // Create
+                if (!payload.status) payload.status = 'PENDENTE';
+                await SyncService.saveServiceOrder(payload as LocalServiceOrder);
             }
 
-            if (error) throw error
+            // if (error) throw error // No error throwing here, SyncService handles it or throws validation error
 
-            alert(id ? 'OS atualizada com sucesso!' : 'OS criada com sucesso!')
+            alert(id ? 'OS atualizada com sucesso (salva localmente)!' : 'OS criada com sucesso (salva localmente)!')
             navigate('/service-orders')
 
         } catch (error: any) {
@@ -501,9 +527,10 @@ export function NewServiceOrder() {
                         onClick={() => window.open(`/print/service-orders/${id}?type=${formData.tipo}`, '_blank')}
                     >
                         <Printer className="h-4 w-4" />
-                        Imprimir / PDF
+                        Gerar PDF
                     </Button>
                 )}
+
                 {id && formData.status !== 'CONCLUIDO' && (
                     <Button
                         className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/20"

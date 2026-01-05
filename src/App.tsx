@@ -5,12 +5,14 @@ import { Login } from '@/pages/Login'
 import { SignUp } from '@/pages/SignUp'
 import { Technicians } from '@/pages/Technicians'
 import { Clients } from '@/pages/Clients'
+import { ClientImport } from '@/pages/ClientImport'
 import { ServiceOrders } from './pages/ServiceOrders'
 import { NewServiceOrder } from './pages/NewServiceOrder'
 import { Services } from '@/pages/Services'
 import { PrintServiceOrder } from '@/pages/PrintServiceOrder'
 import { Settings } from './pages/Settings'
 import { Financial } from './pages/Financial'
+import { Schedule } from './pages/Schedule'
 import { ThemeProvider } from "@/components/theme-provider"
 import { AuthProvider } from '@/contexts/AuthContext'
 import { TechnicianDashboard } from './pages/TechnicianDashboard'
@@ -21,54 +23,60 @@ import { ProtectedRoute } from '@/components/ProtectedRoute'
 
 import { Toaster } from 'sonner'
 
+import { OfflineSyncProvider } from '@/components/OfflineSyncProvider'
+
 function App() {
     return (
         <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
             <AuthProvider>
-                <Toaster richColors position="top-right" />
-                <BrowserRouter>
-                    <Routes>
-                        {/* Public Routes */}
-                        <Route path="/login" element={<Login />} />
-                        <Route path="/signup" element={<SignUp />} />
+                <OfflineSyncProvider>
+                    <Toaster richColors position="top-right" />
+                    <BrowserRouter>
+                        <Routes>
+                            {/* Public Routes */}
+                            <Route path="/login" element={<Login />} />
+                            <Route path="/signup" element={<SignUp />} />
 
-                        {/* Protected Routes */}
-                        <Route element={
-                            <ProtectedRoute>
-                                <MainLayout />
-                            </ProtectedRoute>
-                        }>
-                            <Route path="/" element={<Dashboard />} />
-                            <Route path="/services" element={<Services />} />
-                            <Route path="/technicians" element={<Technicians />} />
-                            <Route path="/clients" element={<Clients />} />
-                            <Route path="/service-orders" element={<ServiceOrders />} />
-                            <Route path="/service-orders/new" element={<NewServiceOrder />} />
-                            <Route path="/service-orders/:id" element={<NewServiceOrder />} />
-                            <Route path="/settings" element={<Settings />} />
-                            <Route path="/financial" element={<Financial />} />
-                            <Route path="/tecnico/dashboard" element={<TechnicianDashboard />} />
-                            <Route path="/tech-dashboard" element={<TechnicianDashboard />} />
-                            <Route path="/tecnico/financeiro" element={<TechnicianFinancial />} />
-                            <Route path="/expenses" element={<TechnicianExpenses />} />
-                        </Route>
+                            {/* Protected Routes */}
+                            <Route element={
+                                <ProtectedRoute>
+                                    <MainLayout />
+                                </ProtectedRoute>
+                            }>
+                                <Route path="/" element={<Dashboard />} />
+                                <Route path="/services" element={<Services />} />
+                                <Route path="/technicians" element={<Technicians />} />
+                                <Route path="/clients" element={<Clients />} />
+                                <Route path="/clients/import" element={<ClientImport />} />
+                                <Route path="/service-orders" element={<ServiceOrders />} />
+                                <Route path="/service-orders/new" element={<NewServiceOrder />} />
+                                <Route path="/service-orders/:id" element={<NewServiceOrder />} />
+                                <Route path="/settings" element={<Settings />} />
+                                <Route path="/financial" element={<Financial />} />
+                                <Route path="/schedule" element={<Schedule />} />
+                                <Route path="/tecnico/dashboard" element={<TechnicianDashboard />} />
+                                <Route path="/tech-dashboard" element={<TechnicianDashboard />} />
+                                <Route path="/tecnico/financeiro" element={<TechnicianFinancial />} />
+                                <Route path="/expenses" element={<TechnicianExpenses />} />
+                            </Route>
 
-                        {/* Print Route (Authenticated but no Layout) */}
-                        <Route path="/print/service-orders/:id" element={
-                            <ProtectedRoute>
-                                <PrintServiceOrder />
-                            </ProtectedRoute>
-                        } />
-                        <Route path="/tecnico/extrato" element={
-                            <ProtectedRoute>
-                                <TechnicianFinancialPrint />
-                            </ProtectedRoute>
-                        } />
+                            {/* Print Route (Authenticated but no Layout) */}
+                            <Route path="/print/service-orders/:id" element={
+                                <ProtectedRoute>
+                                    <PrintServiceOrder />
+                                </ProtectedRoute>
+                            } />
+                            <Route path="/tecnico/extrato" element={
+                                <ProtectedRoute>
+                                    <TechnicianFinancialPrint />
+                                </ProtectedRoute>
+                            } />
 
-                        {/* Catch all - redirect to home */}
-                        <Route path="*" element={<Navigate to="/" replace />} />
-                    </Routes>
-                </BrowserRouter>
+                            {/* Catch all - redirect to home */}
+                            <Route path="*" element={<Navigate to="/" replace />} />
+                        </Routes>
+                    </BrowserRouter>
+                </OfflineSyncProvider>
             </AuthProvider>
         </ThemeProvider>
     )

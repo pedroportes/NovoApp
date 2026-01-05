@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Button } from './ui/button'
 import { AdminAlerts } from './AdminAlerts'
 
+
 export function MainLayout() {
     const location = useLocation()
     const navigate = useNavigate()
@@ -228,11 +229,11 @@ export function MainLayout() {
                         </div>
                         <div className="flex items-center gap-4">
                             <div className="flex flex-col items-end">
-                                <span className="font-bold text-slate-700">{userData?.nome}</span>
-                                <span className="text-xs text-slate-400">{userData?.email}</span>
+                                <span className="font-bold text-foreground">{userData?.nome}</span>
+                                <span className="text-xs text-muted-foreground">{userData?.email}</span>
                             </div>
-                            <div className="w-12 h-12 bg-slate-200 rounded-full overflow-hidden border-2 border-white shadow-sm">
-                                <div className="w-full h-full flex items-center justify-center bg-emerald-500 text-white font-bold text-xl">
+                            <div className="w-12 h-12 bg-muted rounded-full overflow-hidden border-2 border-background shadow-sm">
+                                <div className="w-full h-full flex items-center justify-center bg-primary text-primary-foreground font-bold text-xl">
                                     {userData?.nome?.[0]}
                                 </div>
                             </div>

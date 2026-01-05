@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react"
 
-type Theme = "dark" | "light" | "system"
+export type Theme = "enterprise" | "bento" | "dark-ops" | "system"
 
 type ThemeProviderProps = {
     children: React.ReactNode
@@ -32,19 +32,33 @@ export function ThemeProvider({
     useEffect(() => {
         const root = window.document.documentElement
 
+        // Clean up
         root.classList.remove("light", "dark")
+        root.removeAttribute("data-theme")
 
         if (theme === "system") {
             const systemTheme = window.matchMedia("(prefers-color-scheme: dark)")
                 .matches
-                ? "dark"
-                : "light"
+                ? "dark-ops"
+                : "enterprise"
 
-            root.classList.add(systemTheme)
+            // Map system preference to our themes
+            const resolvedTheme = systemTheme === "dark-ops" ? "dark-ops" : "enterprise"
+
+            root.setAttribute("data-theme", resolvedTheme)
+
+            if (resolvedTheme === "dark-ops") {
+                root.classList.add("dark")
+            }
             return
         }
 
-        root.classList.add(theme)
+        root.setAttribute("data-theme", theme)
+
+        // For Tailwind 'class' mode compatibility (dark variants)
+        if (theme === "dark-ops") {
+            root.classList.add("dark")
+        }
     }, [theme])
 
     const value = {
@@ -56,7 +70,7 @@ export function ThemeProvider({
     }
 
     return (
-        <ThemeProviderContext.Provider value={value} {...props}>
+        <ThemeProviderContext.Provider value={value}>
             {children}
         </ThemeProviderContext.Provider>
     )
@@ -71,4 +85,3 @@ export const useTheme = () => {
     return context
 }
 
-const props = {} // Prevent error with {...props} in return

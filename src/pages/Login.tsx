@@ -37,6 +37,11 @@ export function Login() {
         e.preventDefault()
         setError('')
 
+        if (!navigator.onLine) {
+            setError('Você precisa estar online para fazer login.')
+            return
+        }
+
         // Validation
         if (!email || !password) {
             setError('Preencha todos os campos')

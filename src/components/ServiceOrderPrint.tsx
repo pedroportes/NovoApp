@@ -41,7 +41,7 @@ const ReceiptLayout = ({ os, company, title }: { os: any, company: any, title: s
                     {/* Logo Area */}
                     <div className="w-1/3 border-r-2 border-black p-4 flex items-center justify-center">
                         <div className="text-center">
-                            <div className="w-24 h-24 mx-auto mb-2 flex items-center justify-center">
+                            <div className="w-40 h-40 mx-auto flex items-center justify-center">
                                 <img
                                     src={company?.logo_url || '/flowdrain-logo.png'}
                                     alt="Logo"
@@ -51,9 +51,6 @@ const ReceiptLayout = ({ os, company, title }: { os: any, company: any, title: s
                                         e.currentTarget.parentElement!.innerHTML = '<span class="text-4xl">🛠️</span>'
                                     }}
                                 />
-                            </div>
-                            <div className="text-xs font-bold uppercase text-blue-600">
-                                {company?.nome || 'Desentupidora'}
                             </div>
                         </div>
                     </div>

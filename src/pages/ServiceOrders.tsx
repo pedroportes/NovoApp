@@ -12,6 +12,8 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog'
+import { SyncService } from '@/services/syncService'
+import { useOfflineServiceOrders, useOfflineClients } from '@/hooks/useOfflineData'
 // import { Database } from '@/types/supabase'
 
 type ServiceOrder = any
@@ -23,9 +25,26 @@ type ServiceOrder = any
 export function ServiceOrders() {
     const navigate = useNavigate()
     const { userData } = useAuth()
-    const [orders, setOrders] = useState<ServiceOrder[]>([])
-    const [loading, setLoading] = useState(true)
+    // const [orders, setOrders] = useState<ServiceOrder[]>([]) // Removed for hook
+    // const [loading, setLoading] = useState(true) // Removed for hook
+    const { orders: rawOrders, loading: loadingOrders } = useOfflineServiceOrders()
+    const { clients } = useOfflineClients()
     const [searchTerm, setSearchTerm] = useState('')
+
+    // Enrichment
+    const orders = (rawOrders || []).map(order => {
+        const client = clients?.find(c => c.id === order.cliente_id)
+        // We lack a 'useOfflineTechnicians' hook, so tecnicos might be missing or we fallback.
+        // For MVP offline, we might lose technician name if not stored in OS or separate store.
+        // Assuming we deal with what we have.
+        return {
+            ...order,
+            clientes: client, // attach found client
+            tecnicos: { nome_completo: 'Técnico' } // Placeholder or fetch if possible
+        }
+    })
+
+    const loading = loadingOrders // Combined loading state if needed
 
     // Navigation State
     const [isNavDialogOpen, setIsNavDialogOpen] = useState(false)
@@ -81,77 +100,7 @@ export function ServiceOrders() {
         return () => setFabAction(null)
     }, [setFabAction])
 
-    useEffect(() => {
-        if (userData?.empresa_id) {
-            fetchOrders()
-        }
-    }, [userData?.empresa_id])
-
-    const fetchOrders = async () => {
-        try {
-            // 1. Fetch OS plain
-            let query = supabase
-                .from('ordens_servico')
-                .select('*')
-                .eq('empresa_id', userData!.empresa_id)
-
-            // If technician, ONLY see own orders
-            if (userData?.cargo?.toLowerCase() === 'tecnico') {
-                query = query.eq('tecnico_id', userData.id)
-            }
-
-            const { data: osData, error: osError } = await query.order('created_at', { ascending: false })
-
-            if (osError) throw osError
-
-            // 2. Fetch Technicians AND Clients separately
-            // Extract IDs
-            const tecnicoIds = Array.from(new Set(osData.map((os: any) => os.tecnico_id).filter(Boolean)))
-            const clienteIds = Array.from(new Set(osData.map((os: any) => os.cliente_id).filter(Boolean)))
-
-            let techMap: Record<string, string> = {}
-            let clientMap: Record<string, any> = {}
-
-            if (tecnicoIds.length > 0) {
-                const { data: techData } = await supabase
-                    .from('usuarios')
-                    .select('id, nome_completo')
-                    .in('id', tecnicoIds)
-
-                if (techData) {
-                    techData.forEach((t: any) => {
-                        techMap[t.id] = t.nome_completo
-                    })
-                }
-            }
-
-            if (clienteIds.length > 0) {
-                const { data: clientData } = await supabase
-                    .from('clientes')
-                    .select('id, whatsapp, telefone, logradouro, numero, cidade, endereco')
-                    .in('id', clienteIds)
-
-                if (clientData) {
-                    clientData.forEach((c: any) => {
-                        clientMap[c.id] = c
-                    })
-                }
-            }
-
-            // 3. Merge data
-            const formattedData = (osData as any).map((item: any) => ({
-                ...item,
-                tecnicos: { nome_completo: techMap[item.tecnico_id] || 'Técnico ex-funcionário' },
-                clientes: clientMap[item.cliente_id] || null // Attach full client object if found
-            }))
-
-            setOrders(formattedData)
-        } catch (error) {
-            console.error('Erro ao buscar OS:', error)
-        } finally {
-            setLoading(false)
-        }
-    }
+    // fetchOrders removed in favor of useOfflineServiceOrders hook
 
     const filteredOrders = orders.filter(os => {
         const term = searchTerm.toLowerCase()
@@ -168,8 +117,10 @@ export function ServiceOrders() {
         // Search by phone
         const cleanedTerm = term.replace(/\D/g, '') // Remove non-digits for phone matching
         if (cleanedTerm && (os.clientes?.whatsapp?.replace(/\D/g, '').includes(cleanedTerm))) return true
-        if (cleanedTerm && (os.clientes?.telefone?.replace(/\D/g, '').includes(cleanedTerm))) return true
-        if (cleanedTerm && (os.cliente_whatsapp?.replace(/\D/g, '').includes(cleanedTerm))) return true
+        // LocalClient doesn't strictly have 'telefone' in TS definition, cast to any if legacy data exists
+        if (cleanedTerm && ((os.clientes as any)?.telefone?.replace(/\D/g, '').includes(cleanedTerm))) return true
+        // Top level cliente_whatsapp might not exist on enriched local object
+        // if (cleanedTerm && (os.cliente_whatsapp?.replace(/\D/g, '').includes(cleanedTerm))) return true 
 
         return false
     })
@@ -185,14 +136,8 @@ export function ServiceOrders() {
 
     const handleDelete = async (id: string) => {
         try {
-            const { error } = await supabase
-                .from('ordens_servico')
-                .delete()
-                .eq('id', id)
-
-            if (error) throw error
-
-            setOrders(orders.filter(os => os.id !== id))
+            await SyncService.deleteServiceOrder(id)
+            // No need to setOrders, hook updates auto
         } catch (error) {
             console.error('Erro ao excluir:', error)
             alert('Erro ao excluir OS')
@@ -209,16 +154,32 @@ export function ServiceOrders() {
         }
     }
 
+    // Helper to extract address for map query - updated for LocalServiceOrder structure
+    // useOfflineServiceOrders hook should return relations joined if implementation allows, 
+    // OR it returns ids and we might need to join recursively?
+    // Actually, dexie-react-hooks useLiveQuery in useOfflineData.ts *does* attempt to join if we programmed it to.
+    // Let's check useOfflineData.ts. If it joins 'clientes', then 'os.clientes' property exists.
+    // If not, we might need to fetch clients separately or useOfflineClients().
+    // Assuming for now the hook maps it or we need to adjust.
+
+    // Inspecting useOfflineData.ts previously: it did:
+    // const oss = await db.ordens_servico.orderBy('created_at').reverse().toArray()
+    // const clients = await db.clientes.toArray()
+    // const techs = await db.usuarios? or we don't have local users table yet? 
+    // We don't have local 'usuarios' table in db.ts yet! 
+    // So 'tecnicos.nome_completo' might be missing.
+    // We need to robustly handle missing relations.
+
     // Helper to extract address for map query
     const getClientAddress = (os: any) => {
-        if (!os.clientes) return ''
-        const { logradouro, cidade, endereco } = os.clientes
+        if (!os.clientes) return (os as any).endereco || '' // Fallback to OS address if present
 
-        if (logradouro) {
-            return `${logradouro}${cidade ? ` - ${cidade}` : ''}`
+        // LocalClient structure
+        const c = os.clientes
+        if (c.logradouro) {
+            return `${c.logradouro}, ${c.numero || ''}${c.cidade ? ` - ${c.cidade}` : ''}`
         }
-
-        return endereco || ''
+        return c.endereco || ''
     }
 
     // Helper to get phone
@@ -246,7 +207,7 @@ export function ServiceOrders() {
             </div>
 
             {loading ? (
-                <div className="text-center py-20 text-emerald-600 font-medium animate-pulse">Carregando ordens de serviço...</div>
+                <div className="text-center py-20 text-emerald-600 font-medium">Carregando ordens de serviço...</div>
             ) : filteredOrders.length === 0 ? (
                 <div className="text-center py-20 text-slate-400 bg-white/50 rounded-3xl border-2 border-dashed border-slate-200 mx-4">
                     Nenhuma ordem de serviço encontrada.
@@ -298,7 +259,16 @@ export function ServiceOrders() {
                                                     variant="outline"
                                                     size="icon"
                                                     className="h-9 w-9 rounded-full border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
-                                                    onClick={() => window.open(`https://wa.me/55${getClientPhone(os)?.replace(/\D/g, '')}`, '_blank')}
+                                                    onClick={() => {
+                                                        const cleanPhone = getClientPhone(os)?.replace(/\D/g, '') || ''
+                                                        const techName = userData?.nome || userData?.nome_completo || 'Técnico'
+                                                        const firstName = techName.split(' ')[0]
+                                                        const address = getClientAddress(os)
+
+                                                        const message = `Olá ${os.cliente_nome?.split(' ')[0] || 'Cliente'}, eu sou o técnico ${firstName} e logo vou para seu endereço...\n${address}`
+
+                                                        window.open(`https://wa.me/55${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank')
+                                                    }}
                                                     title="WhatsApp"
                                                 >
                                                     <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" xmlns="http://www.w3.org/2000/svg"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" /></svg>

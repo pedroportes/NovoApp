@@ -199,6 +199,29 @@ export function Dashboard() {
         <div className="space-y-6 animate-in fade-in duration-500 mt-8 md:mt-0">
             {/* GRID DE CARDS PRINCIPAIS */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                {/* Card - Agenda / Calendário */}
+                <div
+                    onClick={() => navigate('/schedule')}
+                    className="bg-white rounded-3xl shadow-lg shadow-slate-200/50 p-6 flex flex-col justify-between h-32 relative overflow-hidden group hover:-translate-y-1 transition-all duration-300 cursor-pointer border border-transparent hover:border-emerald-200"
+                >
+                    <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-50 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-150 duration-500" />
+                    <div className="relative z-10 flex justify-between items-start">
+                        <div className="p-3 bg-emerald-100/50 rounded-2xl text-emerald-600">
+                            <ClipboardList className="h-6 w-6" />
+                        </div>
+                        <span className="flex items-center text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">
+                            <ArrowUpRight className="h-3 w-3 mr-1" />
+                            Ver
+                        </span>
+                    </div>
+                    <div className="relative z-10">
+                        <p className="text-sm font-medium text-slate-500 mb-1">Agenda</p>
+                        <h3 className="text-xl font-bold text-slate-800">
+                            Calendário
+                        </h3>
+                    </div>
+                </div>
+
                 {/* Card - Receita */}
                 <div className="bg-white rounded-3xl shadow-lg shadow-slate-200/50 p-6 flex flex-col justify-between h-32 relative overflow-hidden group hover:-translate-y-1 transition-all duration-300">
                     <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-50 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-150 duration-500" />

@@ -66,12 +66,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
             if (data) {
                 const row = data as Database['public']['Tables']['usuarios']['Row']
+                let companyName = ''
+                if (row.empresa_id) {
+                    const { data: company } = await supabase
+                        .from('empresas')
+                        .select('nome_fantasia')
+                        .eq('id', row.empresa_id)
+                        .maybeSingle()
+                    if (company) companyName = company.nome_fantasia
+                }
+
                 const userData: UserData = {
                     id: row.id,
                     empresa_id: row.empresa_id || null,
                     cargo: row.cargo || 'tecnico',
                     nome: (row as any).nome_completo || row.nome || '',
                     email: row.email || '',
+                    nome_fantasia: companyName
                 }
                 setUserData(userData)
                 setEmpresaId(row.empresa_id)

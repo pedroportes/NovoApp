@@ -4,9 +4,10 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Building2, Save, Upload, Loader2 } from 'lucide-react'
+import { Building2, Save, Upload, Loader2, Palette } from 'lucide-react'
 import { compressImage } from '@/lib/utils'
 import { useOutletContext } from 'react-router-dom'
+import { ThemeToggle } from '@/components/ThemeToggle'
 
 export function Settings() {
     const { userData } = useAuth()
@@ -315,6 +316,25 @@ export function Settings() {
                                     onChange={e => setFormData({ ...formData, estado: e.target.value })}
                                     maxLength={2}
                                 />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Appearance Section */}
+                <div className="space-y-6 bg-card p-6 rounded-xl border border-border shadow-sm h-fit md:col-span-2 lg:col-span-1">
+                    <h2 className="text-lg font-semibold flex items-center gap-2">
+                        <Palette className="h-5 w-5 text-primary" />
+                        Aparência
+                    </h2>
+                    <div className="space-y-4">
+                        <div className="flex flex-col gap-2">
+                            <Label>Tema do Sistema</Label>
+                            <p className="text-sm text-muted-foreground mb-2">
+                                Escolha a aparência que melhor se adapta ao seu estilo de trabalho.
+                            </p>
+                            <div className="w-full">
+                                <ThemeToggle />
                             </div>
                         </div>
                     </div>
