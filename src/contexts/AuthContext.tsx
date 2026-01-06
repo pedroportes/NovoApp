@@ -70,10 +70,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 if (row.empresa_id) {
                     const { data: company } = await supabase
                         .from('empresas')
-                        .select('nome_fantasia')
+                        .select('nome') // Corrigido de nome_fantasia para nome
                         .eq('id', row.empresa_id)
                         .maybeSingle()
-                    if (company) companyName = company.nome_fantasia
+                    if (company) companyName = company.nome
                 }
 
                 const userData: UserData = {

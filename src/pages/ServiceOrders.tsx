@@ -11,6 +11,7 @@ import {
     DialogDescription,
     DialogHeader,
     DialogTitle,
+    DialogFooter,
 } from '@/components/ui/dialog'
 import { SyncService } from '@/services/syncService'
 import { useOfflineServiceOrders, useOfflineClients } from '@/hooks/useOfflineData'
@@ -30,6 +31,10 @@ export function ServiceOrders() {
     const { orders: rawOrders, loading: loadingOrders } = useOfflineServiceOrders()
     const { clients } = useOfflineClients()
     const [searchTerm, setSearchTerm] = useState('')
+
+    // Delete Modal State
+    const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+    const [osToDelete, setOsToDelete] = useState<string | null>(null)
 
     // Enrichment
     const orders = (rawOrders || []).map(order => {
@@ -134,10 +139,12 @@ export function ServiceOrders() {
         return new Date(dateString).toLocaleDateString('pt-BR')
     }
 
-    const handleDelete = async (id: string) => {
+    const confirmDelete = async () => {
+        if (!osToDelete) return
         try {
-            await SyncService.deleteServiceOrder(id)
-            // No need to setOrders, hook updates auto
+            await SyncService.deleteServiceOrder(osToDelete)
+            setDeleteConfirmOpen(false)
+            setOsToDelete(null)
         } catch (error) {
             console.error('Erro ao excluir:', error)
             alert('Erro ao excluir OS')
@@ -149,13 +156,14 @@ export function ServiceOrders() {
         if (hasDeslocamento && !['concluído', 'concluido'].includes(status?.toLowerCase())) {
             return 'bg-blue-500/10 text-blue-600 border-blue-500/20 shadow-[0_0_10px_rgba(59,130,246,0.2)]'
         }
+
         switch (status?.toLowerCase()) {
-            case 'aprovado': return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.2)]'
+            case 'pendente': return 'bg-orange-500/10 text-orange-600 border-orange-500/20'
             case 'em andamento': return 'bg-blue-500/10 text-blue-600 border-blue-500/20'
-            case 'em deslocamento': return 'bg-blue-500/10 text-blue-600 border-blue-500/20 shadow-[0_0_10px_rgba(59,130,246,0.2)]'
-            case 'pendente': return 'bg-amber-500/10 text-amber-600 border-amber-500/20'
-            case 'concluído': case 'concluido': return 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-200'
-            default: return 'bg-slate-100 text-slate-500 border-slate-200'
+            case 'concluido':
+            case 'concluído': return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+            case 'cancelado': return 'bg-red-500/10 text-red-600 border-red-500/20'
+            default: return 'bg-slate-100 text-slate-600 border-slate-200'
         }
     }
 
@@ -176,26 +184,26 @@ export function ServiceOrders() {
     // We need to robustly handle missing relations.
 
     // Helper to extract address for map query
-    const getClientAddress = (os: any) => {
-        if (!os.clientes) return (os as any).endereco || '' // Fallback to OS address if present
-
-        // LocalClient structure
+    const getClientAddress = (os: ServiceOrder) => {
         const c = os.clientes
-        if (c.logradouro) {
-            return `${c.logradouro}, ${c.numero || ''}${c.cidade ? ` - ${c.cidade}` : ''}`
-        }
-        return c.endereco || ''
+        if (!c) return ''
+        return `${c.logradouro || ''}, ${c.numero || ''} - ${c.bairro || ''}, ${c.cidade || ''}`
     }
 
     // Helper to get phone
-    const getClientPhone = (os: any) => {
-        return os.clientes?.whatsapp || os.clientes?.telefone || os.cliente_whatsapp
+    const getClientPhone = (os: ServiceOrder) => {
+        // Tries to find phone in multiple places
+        return os.clientes?.whatsapp || (os.clientes as any)?.telefone || os.cliente_whatsapp
     }
 
     return (
-        <div className="space-y-6 pb-20 md:pb-0 mt-6 md:mt-0">
-            <div className="flex justify-end mb-4 hidden md:flex">
-                <Button className="h-14 text-base md:w-auto w-full shadow-lg bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold" onClick={() => navigate('/service-orders/new')}>
+        <div className="p-6 max-w-7xl mx-auto space-y-8 pb-32">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h1 className="text-3xl font-black text-slate-800 tracking-tight">Ordens de Serviço</h1>
+                    <p className="text-slate-500 font-medium mt-1">Gerencie sua empresa com eficiência. <span className='text-xs ml-2 opacity-50'>{userData?.email}</span></p>
+                </div>
+                <Button onClick={() => navigate('/service-orders/new')} className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20 rounded-2xl h-12 px-6 font-bold transition-all hover:scale-105 active:scale-95">
                     <Plus className="mr-2 h-5 w-5" />
                     Nova OS
                 </Button>
@@ -268,7 +276,7 @@ export function ServiceOrders() {
                                                     className="h-9 w-9 rounded-full border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
                                                     onClick={() => {
                                                         const cleanPhone = getClientPhone(os)?.replace(/\D/g, '') || ''
-                                                        const techName = userData?.nome || userData?.nome_completo || 'Técnico'
+                                                        const techName = (userData as any)?.nome || (userData as any)?.nome_completo || 'Técnico'
                                                         const firstName = techName.split(' ')[0]
                                                         const address = getClientAddress(os)
 
@@ -320,9 +328,8 @@ export function ServiceOrders() {
                                 <div className="flex gap-2">
                                     <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all" onClick={(e) => {
                                         e.stopPropagation()
-                                        if (confirm('Tem certeza que deseja excluir esta Ordem de Serviço?')) {
-                                            handleDelete(os.id)
-                                        }
+                                        setOsToDelete(os.id)
+                                        setDeleteConfirmOpen(true)
                                     }}>
                                         <Trash2 className="h-5 w-5" />
                                     </Button>
@@ -335,6 +342,26 @@ export function ServiceOrders() {
                     ))}
                 </div>
             )}
+
+            {/* Modal de Exclusão */}
+            <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+                <DialogContent className="sm:max-w-md bg-white rounded-2xl border-0 shadow-xl">
+                    <DialogHeader>
+                        <DialogTitle className="text-xl font-bold text-slate-800">Confirmar Exclusão</DialogTitle>
+                        <DialogDescription className="text-slate-500">
+                            Tem certeza que deseja excluir esta Ordem de Serviço? Esta ação removerá o item do sistema.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="gap-2 sm:gap-0 mt-4">
+                        <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)} className="rounded-xl border-slate-200">
+                            Cancelar
+                        </Button>
+                        <Button variant="destructive" onClick={confirmDelete} className="bg-red-500 hover:bg-red-600 rounded-xl">
+                            Excluir OS
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             <Dialog open={isNavDialogOpen} onOpenChange={setIsNavDialogOpen}>
                 <DialogContent className="sm:max-w-md bg-white rounded-2xl border-0 shadow-2xl">

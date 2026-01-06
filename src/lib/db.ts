@@ -44,6 +44,8 @@ export interface LocalServiceOrder {
     itens: any[]; // JSON
     fotos: any; // JSON
     assinatura_cliente_url?: string;
+    deslocamento_iniciado_em?: string;
+    previsao_chegada?: string;
     created_at?: string;
 
     // Sync metadata

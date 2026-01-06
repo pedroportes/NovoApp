@@ -101,16 +101,31 @@ export const SyncService = {
     // --- PUSH: Send Local Changes to Cloud ---
 
     async pushQueue() {
-        if (!navigator.onLine) return;
+        if (!navigator.onLine) {
+            console.log('[SyncService] Offline - skipping pushQueue');
+            return;
+        }
 
         // Get all items in queue
         const queueItems = await db.sync_queue.toArray();
-        if (queueItems.length === 0) return;
+        if (queueItems.length === 0) {
+            console.log('[SyncService] No items in queue to push');
+            return;
+        }
 
-        console.log(`🚀 Sync: Pushing ${queueItems.length} changes...`)
+        console.log(`🚀 [SyncService] Pushing ${queueItems.length} changes...`, queueItems);
 
-        for (const item of queueItems) {
+        // IMPORTANTE: Processar CLIENTES primeiro para evitar erro de FK nas OS
+        const clienteItems = queueItems.filter(item => item.table === 'clientes');
+        const osItems = queueItems.filter(item => item.table === 'ordens_servico');
+        const orderedItems = [...clienteItems, ...osItems];
+
+        console.log(`[SyncService] Order: ${clienteItems.length} clientes first, then ${osItems.length} OS`);
+
+        for (const item of orderedItems) {
             try {
+                console.log(`[SyncService] Processing queue item:`, item);
+
                 // Process based on table and action
                 if (item.table === 'clientes') {
                     await this.processClientSync(item);
@@ -120,30 +135,54 @@ export const SyncService = {
 
                 // If successful, remove from queue
                 await db.sync_queue.delete(item.id!);
+                console.log(`[SyncService] ✅ Removed item ${item.id} from queue`);
 
             } catch (error) {
-                console.error(`❌ Failed to sync item ${item.id}:`, error);
+                console.error(`[SyncService] ❌ Failed to sync item ${item.id}:`, error);
                 // Keep in queue to retry later? Or move to "DLQ" (Dead Letter Queue)?
                 // For now, leave in queue.
             }
         }
-        console.log('✅ Sync: Push complete.')
+        console.log('✅ [SyncService] Push complete.')
     },
 
     async processClientSync(item: SyncQueueItem) {
         const { data: payload, action } = item;
-        // Clean payload of local-only fields
-        const { id, synced, updated_at, ...cleanPayload } = payload;
-        // Note: For 'create', we often generate a UUID locally. Supabase accepts client-provided UUIDs if configured.
-        // If 'id' is a temporary ID (like 'local-'), we might need to let Supabase generate it and update local map.
-        // For simplicity, we assume we use UUIDs generated locally (crypto.randomUUID) which collide rarely.
+        // Clean payload of local-only fields - remove ALL non-database fields
+        const { id, synced, updated_at, action: localAction, ...cleanPayload } = payload;
+
+        console.log(`[SyncService] processClientSync - Action: ${action}, ID: ${id}`);
+        console.log('[SyncService] Client payload before cleanup:', cleanPayload);
+
+        // Remover campos que NÃO existem na tabela clientes do Supabase
+        // Campos válidos: id, empresa_id, nome_razao, cpf_cnpj, whatsapp, logradouro, numero, 
+        // bairro, cidade, created_at, email, address, reference, is_recurring, rating, 
+        // signature_url, photo_url, documento, referencia, avatar_url, endereco
+        const invalidFields = ['synced', 'updated_at', 'action'];
+        const validPayload = { ...cleanPayload };
+        for (const field of invalidFields) {
+            delete validPayload[field];
+        }
+
+        console.log('[SyncService] Client payload after cleanup:', validPayload);
 
         if (action === 'create' || action === 'update') {
             // Upsert to be safe
             // Ensure ID is included
-            const finalPayload = { id, ...cleanPayload };
-            const { error } = await supabase.from('clientes').upsert(finalPayload);
-            if (error) throw error;
+            const finalPayload = { id, ...validPayload };
+            console.log('[SyncService] Upserting client to Supabase:', finalPayload);
+
+            const { data, error } = await supabase.from('clientes').upsert(finalPayload).select();
+
+            if (error) {
+                console.error('[SyncService] ❌ Client upsert error:', error);
+                throw error;
+            }
+
+            console.log('[SyncService] ✅ Client synced successfully:', data);
+
+            // Mark local record as synced
+            await db.clientes.update(id, { synced: 1 });
         } else if (action === 'delete') {
             const { error } = await supabase.from('clientes').delete().eq('id', id);
             if (error) throw error;
@@ -154,17 +193,43 @@ export const SyncService = {
         const { data: payload, action } = item;
         const { id, synced, action: localAction, updated_at, ...cleanPayload } = payload;
 
-        // Handle photos? 
-        // Photos are URLs. If they are blob URLs (local), we need to upload them first.
-        // That's complex. For MVP, let's assume photos upload immediately if online, 
-        // or we need a separate PhotoQueue. 
-        // For this step, let's assume text data only or that photos are handled separately.
+        console.log(`[SyncService] processOSSync - Action: ${action}, ID: ${id}`);
+        console.log('[SyncService] OS Payload before cleanup:', cleanPayload);
 
-        const finalPayload = { id, ...cleanPayload };
+        // Clean potentially invalid fields just like clients
+        const validPayload = { ...cleanPayload };
+        const invalidFields = ['synced', 'action', 'updated_at', 'undefined', 'null'];
+        // Also remove specific known bad fields if necessary, though 'items' and 'fotos' are expected
+        for (const field of invalidFields) {
+            delete validPayload[field];
+        }
+
+        console.log('[SyncService] OS Payload final:', validPayload);
+
+        const finalPayload = { id, ...validPayload };
 
         if (action === 'create' || action === 'update') {
-            const { error } = await supabase.from('ordens_servico').upsert(finalPayload);
-            if (error) throw error;
+            console.log('[SyncService] Upserting to Supabase...');
+            const { data, error } = await supabase.from('ordens_servico').upsert(finalPayload).select();
+
+            if (error) {
+                console.error('[SyncService] ❌ Supabase upsert error:', error);
+                throw error;
+            }
+
+            console.log('[SyncService] ✅ Successfully synced to Supabase:', data);
+
+            // Update local record to mark as synced
+            await db.ordens_servico.update(id, { synced: 1 });
+        } else if (action === 'delete') {
+            console.log(`[SyncService] Deleting OS ${id} from Supabase...`);
+            const { error } = await supabase.from('ordens_servico').delete().eq('id', id);
+
+            if (error) {
+                console.error('[SyncService] ❌ Supabase delete error:', error);
+                throw error;
+            }
+            console.log('[SyncService] ✅ Successfully deleted from Supabase');
         }
     },
 
