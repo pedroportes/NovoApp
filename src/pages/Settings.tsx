@@ -4,10 +4,11 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Building2, Save, Upload, Loader2, Palette } from 'lucide-react'
+import { Building2, Save, Upload, Loader2, Palette, Download, Smartphone } from 'lucide-react'
 import { compressImage } from '@/lib/utils'
 import { useOutletContext } from 'react-router-dom'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { usePWAInstall } from '@/hooks/usePWAInstall'
 
 export function Settings() {
     const { userData } = useAuth()
@@ -15,6 +16,9 @@ export function Settings() {
     const [saving, setSaving] = useState(false)
     const [logoFile, setLogoFile] = useState<File | null>(null)
     const [logoPreview, setLogoPreview] = useState<string | null>(null)
+
+    // PWA Install hook
+    const { isInstallable, isInstalled, isLocalhost, install } = usePWAInstall()
 
     const [formData, setFormData] = useState({
         nome: '',
@@ -337,6 +341,41 @@ export function Settings() {
                                 <ThemeToggle />
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                {/* Install App Section */}
+                <div className="space-y-6 bg-card p-6 rounded-xl border border-border shadow-sm h-fit md:col-span-2 lg:col-span-1">
+                    <h2 className="text-lg font-semibold flex items-center gap-2">
+                        <Smartphone className="h-5 w-5 text-primary" />
+                        Instalar App
+                    </h2>
+                    <div className="space-y-4">
+                        {isInstalled ? (
+                            <div className="flex items-center gap-3 p-4 bg-emerald-50 dark:bg-emerald-950/30 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                                <Smartphone className="h-5 w-5 text-emerald-600" />
+                                <p className="font-medium text-emerald-800 dark:text-emerald-200">App Instalado!</p>
+                            </div>
+                        ) : (
+                            <Button
+                                onClick={() => {
+                                    if (isInstallable) {
+                                        install();
+                                    } else {
+                                        // Fallback: mostra instruções
+                                        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+                                        const message = isIOS
+                                            ? 'No Safari, toque em Compartilhar ↑ e depois em "Adicionar à Tela de Início"'
+                                            : 'No Chrome, toque no menu ⋮ e depois em "Adicionar à tela inicial"';
+                                        alert(message);
+                                    }
+                                }}
+                                className="w-full h-12 text-base bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600"
+                            >
+                                <Download className="mr-2 h-5 w-5" />
+                                Instalar
+                            </Button>
+                        )}
                     </div>
                 </div>
             </div>
