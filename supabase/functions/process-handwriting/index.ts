@@ -28,39 +28,38 @@ serve(async (req) => {
             throw new Error('OPENAI_API_KEY not set')
         }
 
-        // Remove header do base64 se existir (ex: data:image/jpeg;base64,)
-        // OpenAI expects just the data URI scheme or URL usually, but for base64 inside content, 
-        // we can pass the data URI directly.
-        // Let's ensure it has the prefix for OpenAI or use the base64 string depending on format.
-        // OpenAI Chat Completion with images accepts data URLs.
-
         let imageUrl = image;
-        if (!image.startsWith('data:image')) {
-            // If it's just raw base64, assume jpeg for simplicity or detect?
-            // Client sends raw base64 usually? Let's check previous code.
-            // Previous code stripped it: const base64Data = image.replace(/^data:image\/(png|jpeg|jpg);base64,/, '')
-            // So client might send with or without. Let's make sure we have a proper Data URL.
+        if (!image.startsWith('data:')) {
+            // Se vier sem prefixo, assume jpeg (mais comum) ou tenta detectar
             imageUrl = `data:image/jpeg;base64,${image}`
         }
 
         const prompt = `
-      Analise esta imagem de uma ficha de cadastro manuscrita.
-      Extraia os seguintes dados e retorne APENAS um JSON válido.
-      Se um campo não estiver legível ou presente, retorne null.
-      
-      Estrutura do JSON:
-      {
-        "nome": string | null,
-        "telefone": string | null (apenas números),
-        "cep": string | null (apenas números),
-        "logradouro": string | null,
-        "numero": string | null,
-        "complemento": string | null,
-        "bairro": string | null,
-        "cidade": string | null,
-        "uf": string | null
-      }
-    `
+            Analise esta imagem de uma nota ou ficha manuscrita.
+            Seu objetivo é extrair os dados de um cliente para cadastro.
+
+            ATENÇÃO CRÍTICA PARA O NOME:
+            1. O nome do cliente pode estar indicado por setas (ex: "-> Flávio"), rótulos ("Nome:", "Cliente:") ou estar em destaque.
+            2. Se houver algo como "R: Endereço -> Nome", extraia o Nome separadamente.
+            3. Procure por nomes próprios (ex: Flávio, João, Maria, Empresa X).
+
+            Extraia também:
+            - Telefone (Whatsapp)
+            - Endereço Completo: Logradouro (Rua/Av), Número, Complemento, Bairro, Cidade, UF, CEP.
+
+            Retorne estritamente um JSON com este formato (valores null se não encontrar):
+            {
+              "nome": string | null,
+              "telefone": string | null,
+              "cep": string | null,
+              "logradouro": string | null,
+              "numero": string | null,
+              "complemento": string | null,
+              "bairro": string | null,
+              "cidade": string | null,
+              "uf": string | null
+            }
+        `
 
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
@@ -84,7 +83,7 @@ serve(async (req) => {
                         ]
                     }
                 ],
-                max_tokens: 300,
+                max_tokens: 400,
                 response_format: { type: "json_object" }
             })
         })
