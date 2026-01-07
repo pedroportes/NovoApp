@@ -392,88 +392,75 @@ export function Clients() {
 
                             {/* OCR / Import via Photo */}
                             {/* OCR / Import via Photo - Glassmorphism */}
-                            <div className="relative overflow-hidden rounded-2xl bg-white/40 backdrop-blur-xl border border-white/50 shadow-lg p-6 mb-8 group transition-all hover:shadow-xl hover:bg-white/50">
+                            <div
+                                onClick={() => !processingOcr && ocrInputRef.current?.click()}
+                                className={`relative overflow-hidden rounded-2xl bg-white/40 backdrop-blur-xl border border-white/50 shadow-lg p-6 mb-8 group transition-all hover:shadow-xl hover:bg-white/50 cursor-pointer ${processingOcr ? 'opacity-70 pointer-events-none' : ''}`}
+                            >
                                 <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-purple-500/5 to-blue-500/10 pointer-events-none" />
 
-                                <div className="relative flex flex-col md:flex-row items-center justify-between gap-6">
-                                    <div className="flex items-center gap-4 w-full md:w-auto">
-                                        <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20 group-hover:scale-110 transition-transform duration-300 shrink-0">
+                                <div className="relative flex items-center gap-6">
+                                    <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20 group-hover:scale-110 transition-transform duration-300 shrink-0">
+                                        {processingOcr ? (
+                                            <div className="h-6 w-6 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                                        ) : (
                                             <Camera className="h-6 w-6" />
-                                        </div>
-                                        <div>
-                                            <h3 className="font-bold text-slate-800 text-lg leading-tight">Escanear Ficha Manual</h3>
-                                            <p className="text-sm text-slate-500">Use a IA para preencher os dados automaticamente</p>
-                                        </div>
+                                        )}
+                                    </div>
+                                    <div className="flex-1">
+                                        <h3 className="font-bold text-slate-800 text-lg leading-tight">Escanear Ficha Manual</h3>
+                                        <p className="text-sm text-slate-500">
+                                            {processingOcr ? 'Processando imagem...' : 'Toque aqui para usar a IA e preencher os dados automaticamente'}
+                                        </p>
                                     </div>
 
-                                    <div className="w-full md:w-auto">
-                                        <input
-                                            type="file"
-                                            ref={ocrInputRef}
-                                            accept="image/*"
-                                            capture="environment"
-                                            className="hidden"
-                                            onChange={async (e) => {
-                                                const file = e.target.files?.[0]
-                                                if (!file) return
+                                    <input
+                                        type="file"
+                                        ref={ocrInputRef}
+                                        accept="image/*"
+                                        capture="environment"
+                                        className="hidden"
+                                        onChange={async (e) => {
+                                            const file = e.target.files?.[0]
+                                            if (!file) return
 
-                                                setProcessingOcr(true)
-                                                try {
-                                                    const compressedFile = await compressImage(file, 1024, 0.7)
-                                                    const data = await ocrService.processHandwriting(compressedFile)
+                                            setProcessingOcr(true)
+                                            try {
+                                                const compressedFile = await compressImage(file, 1024, 0.7)
+                                                const data = await ocrService.processHandwriting(compressedFile)
 
-                                                    if (data) {
-                                                        setFormData(prev => ({
-                                                            ...prev,
-                                                            nome_razao: data.nome || prev.nome_razao,
-                                                            whatsapp: data.telefone ? formatPhone(data.telefone) : prev.whatsapp,
-                                                            cep: data.cep?.replace(/(\d{5})(\d)/, '$1-$2') || prev.cep,
-                                                            logradouro: data.logradouro || prev.logradouro,
-                                                            numero: data.numero || prev.numero,
-                                                            complemento: data.complemento || prev.complemento,
-                                                            bairro: data.bairro || prev.bairro,
-                                                            cidade: data.cidade || prev.cidade,
-                                                            uf: data.uf || prev.uf,
-                                                        }))
+                                                if (data) {
+                                                    setFormData(prev => ({
+                                                        ...prev,
+                                                        nome_razao: data.nome || prev.nome_razao,
+                                                        whatsapp: data.telefone ? formatPhone(data.telefone) : prev.whatsapp,
+                                                        cep: data.cep?.replace(/(\d{5})(\d)/, '$1-$2') || prev.cep,
+                                                        logradouro: data.logradouro || prev.logradouro,
+                                                        numero: data.numero || prev.numero,
+                                                        complemento: data.complemento || prev.complemento,
+                                                        bairro: data.bairro || prev.bairro,
+                                                        cidade: data.cidade || prev.cidade,
+                                                        uf: data.uf || prev.uf,
+                                                    }))
 
-                                                        // Trigger CEP search if CEP is new and valid
-                                                        if (data.cep && data.cep !== formData.cep) {
-                                                            const cepClean = data.cep.replace(/\D/g, '')
-                                                            if (cepClean.length === 8) {
-                                                                searchCep(cepClean) // Fire and forget update
-                                                            }
+                                                    // Trigger CEP search if CEP is new and valid
+                                                    if (data.cep && data.cep !== formData.cep) {
+                                                        const cepClean = data.cep.replace(/\D/g, '')
+                                                        if (cepClean.length === 8) {
+                                                            searchCep(cepClean) // Fire and forget update
                                                         }
-
-                                                        alert('Ficha processada com sucesso! Verifique os dados.')
                                                     }
-                                                } catch (error: any) {
-                                                    console.error(error)
-                                                    alert(`Erro ao processar imagem: ${error.message || error}`)
-                                                } finally {
-                                                    setProcessingOcr(false)
-                                                    if (ocrInputRef.current) ocrInputRef.current.value = ''
+
+                                                    alert('Ficha processada com sucesso! Verifique os dados.')
                                                 }
-                                            }}
-                                        />
-                                        <Button
-                                            type="button"
-                                            onClick={() => ocrInputRef.current?.click()}
-                                            disabled={processingOcr}
-                                            className="w-full md:w-auto h-12 px-6 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl shadow-lg shadow-blue-500/25 transition-all hover:scale-105 active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
-                                        >
-                                            {processingOcr ? (
-                                                <div className="flex items-center justify-center gap-2">
-                                                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                                                    <span>Processando...</span>
-                                                </div>
-                                            ) : (
-                                                <div className="flex items-center justify-center gap-2">
-                                                    <Camera className="h-4 w-4" />
-                                                    <span>Escanear Ficha Manual</span>
-                                                </div>
-                                            )}
-                                        </Button>
-                                    </div>
+                                            } catch (error: any) {
+                                                console.error(error)
+                                                alert(`Erro ao processar imagem: ${error.message || error}`)
+                                            } finally {
+                                                setProcessingOcr(false)
+                                                if (ocrInputRef.current) ocrInputRef.current.value = ''
+                                            }
+                                        }}
+                                    />
                                 </div>
                             </div>
 
