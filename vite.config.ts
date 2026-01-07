@@ -54,4 +54,7 @@ export default defineConfig({
             '@': path.resolve(process.cwd(), './src'),
         },
     },
+    optimizeDeps: {
+        include: ['xlsx-js-style'],
+    },
 })

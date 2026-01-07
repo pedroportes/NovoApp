@@ -13,6 +13,7 @@ import { PrintServiceOrder } from '@/pages/PrintServiceOrder'
 import { Settings } from './pages/Settings'
 import { Financial } from './pages/Financial'
 import { Schedule } from './pages/Schedule'
+import { Plans } from './pages/Plans'
 import { ThemeProvider } from "@/components/theme-provider"
 import { AuthProvider } from '@/contexts/AuthContext'
 import { TechnicianDashboard } from './pages/TechnicianDashboard'
@@ -57,7 +58,9 @@ function App() {
                                 <Route path="/tecnico/dashboard" element={<TechnicianDashboard />} />
                                 <Route path="/tech-dashboard" element={<TechnicianDashboard />} />
                                 <Route path="/tecnico/financeiro" element={<TechnicianFinancial />} />
+                                <Route path="/tecnico/financeiro" element={<TechnicianFinancial />} />
                                 <Route path="/expenses" element={<TechnicianExpenses />} />
+                                <Route path="/plans" element={<Plans />} />
                             </Route>
 
                             {/* Print Route (Authenticated but no Layout) */}

@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import { Plus, Search, FileText, Calendar, User, Trash2, Phone, MapPin } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
+import { useLicenseCheck } from '@/hooks/useLicenseCheck'
+import { UpgradeModal } from '@/components/subscription/UpgradeModal'
 import {
     Dialog,
     DialogContent,
@@ -15,95 +17,79 @@ import {
 } from '@/components/ui/dialog'
 import { SyncService } from '@/services/syncService'
 import { useOfflineServiceOrders, useOfflineClients } from '@/hooks/useOfflineData'
-// import { Database } from '@/types/supabase'
 
 type ServiceOrder = any
-// type ServiceOrder = Database['public']['Tables']['ordens_servico']['Row'] & {
-//    clientes: { nome_razao: string } | null
-//    tecnicos: { nome_completo: string } | null
-// }
 
 export function ServiceOrders() {
     const navigate = useNavigate()
     const { userData } = useAuth()
-    // const [orders, setOrders] = useState<ServiceOrder[]>([]) // Removed for hook
-    // const [loading, setLoading] = useState(true) // Removed for hook
     const { orders: rawOrders, loading: loadingOrders } = useOfflineServiceOrders()
     const { clients } = useOfflineClients()
     const [searchTerm, setSearchTerm] = useState('')
+
+    // License Check
+    const { canAddOS, isTrialExpired, usage, limits } = useLicenseCheck()
+    const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+    const [upgradeMessage, setUpgradeMessage] = useState('')
+
+    const handleNewOSClick = useCallback(() => {
+        if (!canAddOS) {
+            if (isTrialExpired) {
+                setUpgradeMessage("Seu período de teste expirou. Assine um plano para continuar criando Ordens de Serviço.")
+            } else {
+                setUpgradeMessage(`Você atingiu o limite de ${limits.os} OS do plano gratuito.`)
+            }
+            setShowUpgradeModal(true)
+            return
+        }
+        navigate('/service-orders/new')
+    }, [canAddOS, isTrialExpired, limits.os, navigate])
 
     // Delete Modal State
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
     const [osToDelete, setOsToDelete] = useState<string | null>(null)
 
-    // Enrichment
+    // ... (Enrichment logic stays same)
     const orders = (rawOrders || []).map(order => {
         const client = clients?.find(c => c.id === order.cliente_id)
-        // We lack a 'useOfflineTechnicians' hook, so tecnicos might be missing or we fallback.
-        // For MVP offline, we might lose technician name if not stored in OS or separate store.
-        // Assuming we deal with what we have.
         return {
             ...order,
-            clientes: client, // attach found client
-            tecnicos: { nome_completo: 'Técnico' } // Placeholder or fetch if possible
+            clientes: client,
+            tecnicos: { nome_completo: 'Técnico' }
         }
     })
 
-    const loading = loadingOrders // Combined loading state if needed
-
-    // Navigation State
+    const loading = loadingOrders
     const [isNavDialogOpen, setIsNavDialogOpen] = useState(false)
     const [selectedOsForNav, setSelectedOsForNav] = useState<any>(null)
     const [etaMinutes, setEtaMinutes] = useState('')
 
     const handleNavigationStart = async (app: 'waze' | 'google') => {
+        // ... (existing logic)
         if (!selectedOsForNav) return
-
         const updates: any = { deslocamento_iniciado_em: new Date().toISOString() }
-
         if (etaMinutes) {
             const minutes = parseInt(etaMinutes)
             if (!isNaN(minutes)) {
-                // Calculate arrival time
                 const arrivalTime = new Date()
                 arrivalTime.setMinutes(arrivalTime.getMinutes() + minutes)
                 updates.previsao_chegada = arrivalTime.toISOString()
             }
         }
-
-        // Update DB to notify Admin
-        const { error } = await supabase
-            .from('ordens_servico')
-            .update(updates)
-            .eq('id', selectedOsForNav.id)
-
+        const { error } = await supabase.from('ordens_servico').update(updates).eq('id', selectedOsForNav.id)
         if (error) console.error('Erro ao atualizar deslocamento:', error)
-
-        // Open App
         const address = getClientAddress(selectedOsForNav)
         const encodedAddress = encodeURIComponent(address)
-
-        if (app === 'waze') {
-            // Waze Deep Link
-            window.open(`https://waze.com/ul?q=${encodedAddress}&navigate=yes`, '_blank')
-        } else {
-            // Google Maps
-            window.open(`https://www.google.com/maps/search/?api=1&query=${encodedAddress}`, '_blank')
-        }
-
-
-
-        // Keep dialog open so user knows it worked
-        // setIsNavDialogOpen(false)
-        // setSelectedOsForNav(null)
+        if (app === 'waze') window.open(`https://waze.com/ul?q=${encodedAddress}&navigate=yes`, '_blank')
+        else window.open(`https://www.google.com/maps/search/?api=1&query=${encodedAddress}`, '_blank')
     }
 
     const { setFabAction } = useOutletContext<{ setFabAction: (action: (() => void) | null) => void }>() ?? { setFabAction: () => { } }
 
     useEffect(() => {
-        setFabAction(() => navigate('/service-orders/new'))
+        setFabAction(() => handleNewOSClick)
         return () => setFabAction(null)
-    }, [setFabAction])
+    }, [setFabAction, handleNewOSClick])
 
     // fetchOrders removed in favor of useOfflineServiceOrders hook
 
@@ -203,7 +189,7 @@ export function ServiceOrders() {
                     <h1 className="text-3xl font-black text-slate-800 tracking-tight">Ordens de Serviço</h1>
                     <p className="text-slate-500 font-medium mt-1">Gerencie sua empresa com eficiência. <span className='text-xs ml-2 opacity-50'>{userData?.email}</span></p>
                 </div>
-                <Button onClick={() => navigate('/service-orders/new')} className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20 rounded-2xl h-12 px-6 font-bold transition-all hover:scale-105 active:scale-95">
+                <Button onClick={handleNewOSClick} className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20 rounded-2xl h-12 px-6 font-bold transition-all hover:scale-105 active:scale-95">
                     <Plus className="mr-2 h-5 w-5" />
                     Nova OS
                 </Button>
@@ -218,6 +204,12 @@ export function ServiceOrders() {
                     onChange={(e) => setSearchTerm(e.target.value)}
                 />
             </div>
+
+            <UpgradeModal
+                isOpen={showUpgradeModal}
+                onClose={() => setShowUpgradeModal(false)}
+                description={upgradeMessage}
+            />
 
             {loading ? (
                 <div className="text-center py-20 text-emerald-600 font-medium">Carregando ordens de serviço...</div>

@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import XLSX from 'xlsx-js-style'
 import { useOutletContext, useNavigate } from 'react-router-dom'
-import { Plus, Search, Pencil, Trash2, Phone, Mail, User as UserIcon, MapPin, FileText, Camera, Upload } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Phone, Mail, User as UserIcon, MapPin, FileText, Camera, Upload, Download } from 'lucide-react'
+import { useLicenseCheck } from '@/hooks/useLicenseCheck'
+import { UpgradeModal } from '@/components/subscription/UpgradeModal'
 import { ocrService } from '@/services/ocrService'
 import { compressImage } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
@@ -35,6 +38,10 @@ export function Clients() {
     const [isDialogOpen, setIsDialogOpen] = useState(false)
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [editingClientId, setEditingClientId] = useState<string | null>(null)
+    const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+    const [upgradeMessage, setUpgradeMessage] = useState('')
+
+    const { canAddClient, isTrialExpired, usage, limits } = useLicenseCheck()
 
     // Form Data matches DB columns exactly now
     const initialFormState = {
@@ -90,12 +97,39 @@ export function Clients() {
         setIsDialogOpen(true)
     }, [])
 
+    const handleNewClientClick = useCallback(() => {
+        if (!canAddClient) {
+            if (isTrialExpired) {
+                setUpgradeMessage("Seu período de teste expirou. Assine um plano para continuar adicionando clientes.")
+            } else {
+                setUpgradeMessage(`Você atingiu o limite de ${limits.clients} clientes do plano gratuito.`)
+            }
+            setShowUpgradeModal(true)
+            return
+        }
+        openNewClientDialog()
+    }, [canAddClient, isTrialExpired, limits.clients, openNewClientDialog])
+
+    const handleImportClick = () => {
+        if (!canAddClient) {
+            if (isTrialExpired) {
+                setUpgradeMessage("Seu período de teste expirou.")
+            } else {
+                setUpgradeMessage(`Você atingiu o limite de clientes.`)
+            }
+            setShowUpgradeModal(true)
+            return
+        }
+        navigate('/clients/import')
+    }
+
     const { setFabAction } = useOutletContext<{ setFabAction: (action: (() => void) | null) => void }>() ?? { setFabAction: () => { } }
 
     useEffect(() => {
-        setFabAction(openNewClientDialog)
+        // Wrap the handler to ensure it matches the expected signature if needed, but it takes no args so it's fine
+        setFabAction(() => handleNewClientClick)
         return () => setFabAction(null)
-    }, [openNewClientDialog, setFabAction])
+    }, [handleNewClientClick, setFabAction])
 
     useEffect(() => {
         if (isDialogOpen && !editingClientId) {
@@ -332,21 +366,77 @@ export function Clients() {
         )
     })
 
+    const handleDownloadExample = () => {
+        const headers = ["Nome/Razao Social", "CPF/CNPJ", "Whatsapp", "Email", "CEP", "Logradouro", "Numero", "Complemento", "Bairro", "Cidade", "UF", "Referencia"]
+        const exampleRow = ["João Exemplo", "123.456.789-00", "41999999999", "joao@email.com", "80000-000", "Rua das Flores", "123", "Apto 101", "Centro", "Curitiba", "PR", "Perto da Praça"]
+
+        const worksheet = XLSX.utils.aoa_to_sheet([headers, exampleRow])
+
+        // Add styles to header row
+        const cols = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"]
+        cols.forEach(col => {
+            const cell = worksheet[`${col}1`]
+            if (cell) {
+                cell.s = {
+                    font: { bold: true, color: { rgb: "FFFFFF" } },
+                    fill: { fgColor: { rgb: "4F46E5" } }, // Indigo-600 like
+                    alignment: { horizontal: "center" }
+                }
+            }
+        })
+
+        // Adjust column widths
+        worksheet['!cols'] = [
+            { wch: 30 }, // Nome
+            { wch: 18 }, // CPF
+            { wch: 15 }, // Whatsapp
+            { wch: 25 }, // Email
+            { wch: 12 }, // CEP
+            { wch: 30 }, // Logradouro
+            { wch: 10 }, // Numero
+            { wch: 20 }, // Complemento
+            { wch: 20 }, // Bairro
+            { wch: 20 }, // Cidade
+            { wch: 5 },  // UF
+            { wch: 30 }, // Referencia
+        ]
+
+        const workbook = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Modelo Importação")
+        XLSX.writeFile(workbook, "modelo_importacao_clientes.xlsx")
+    }
+
     return (
         <div className="space-y-6 pb-20 md:pb-0 mt-6 md:mt-0">
-            <div className="flex justify-end mb-4 gap-2">
+            {/* Upgrade Modal */}
+            <UpgradeModal
+                isOpen={showUpgradeModal}
+                onClose={() => setShowUpgradeModal(false)}
+                description={upgradeMessage}
+            />
+
+            <div className="flex justify-end mb-4 gap-2 items-center flex-wrap">
                 <Button
-                    className="hidden md:flex h-14 text-base md:w-auto w-full shadow-lg bg-blue-600 hover:bg-blue-700 text-white"
-                    onClick={() => navigate('/clients/import')}
+                    variant="outline"
+                    className="h-9 text-sm px-3 bg-white hover:bg-slate-50 text-slate-700 border-slate-200 shadow-sm"
+                    onClick={handleDownloadExample}
                 >
-                    <Upload className="mr-2 h-5 w-5" />
-                    Importar Excel/CSV
+                    <Download className="mr-2 h-4 w-4" />
+                    Baixar Modelo
+                </Button>
+
+                <Button
+                    className="hidden md:flex h-9 text-sm px-3 shadow-sm bg-blue-600 hover:bg-blue-700 text-white"
+                    onClick={handleImportClick}
+                >
+                    <Upload className="mr-2 h-4 w-4" />
+                    Importar CSV
                 </Button>
 
                 <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                     <DialogTrigger asChild>
-                        <Button className="hidden md:flex h-14 text-base md:w-auto w-full shadow-lg" onClick={openNewClientDialog}>
-                            <Plus className="mr-2 h-5 w-5" />
+                        <Button className="hidden md:flex h-9 text-sm px-3 shadow-sm" onClick={handleNewClientClick}>
+                            <Plus className="mr-2 h-4 w-4" />
                             Novo Cliente
                         </Button>
                     </DialogTrigger>

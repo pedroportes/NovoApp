@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
+import XLSX from 'xlsx-js-style'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Check, AlertCircle, Upload, FileSpreadsheet } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -54,6 +55,57 @@ export function ClientImport() {
         setStep('map')
     }
 
+    const fileInputRef = useRef<HTMLInputElement>(null)
+
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+
+        try {
+            const data = await file.arrayBuffer()
+            const workbook = XLSX.read(data, { type: 'array' })
+            const firstSheetName = workbook.SheetNames[0]
+            const worksheet = workbook.Sheets[firstSheetName]
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as string[][]
+
+            const validData = jsonData.filter(row => row.some(cell => cell))
+
+            if (validData.length === 0) {
+                alert('Planilha vazia ou sem dados válidos.')
+                return
+            }
+
+            // Auto-map columns if headers match
+            const headers = validData[0] || []
+            const newMapping: Record<number, string> = {}
+
+            headers.forEach((header, index) => {
+                const h = header.toString().toLowerCase().trim()
+                if (h.includes('nome') || h.includes('razao')) newMapping[index] = 'nome_razao'
+                else if (h.includes('cpf') || h.includes('cnpj')) newMapping[index] = 'cpf_cnpj'
+                else if (h.includes('whats') || h.includes('celular')) newMapping[index] = 'whatsapp'
+                else if (h.includes('email')) newMapping[index] = 'email'
+                else if (h.includes('cep')) newMapping[index] = 'cep'
+                else if (h.includes('logradouro') || h.includes('rua')) newMapping[index] = 'logradouro'
+                else if (h.includes('numero') || h.includes('número')) newMapping[index] = 'numero'
+                else if (h.includes('bairro')) newMapping[index] = 'bairro'
+                else if (h.includes('cidade')) newMapping[index] = 'cidade'
+                else if (h.includes('uf') || h.includes('estado')) newMapping[index] = 'uf'
+                else if (h.includes('complemento')) newMapping[index] = 'complemento'
+                else if (h.includes('referencia')) newMapping[index] = 'referencia'
+            })
+
+            setColumnMapping(newMapping)
+            setParsedData(validData)
+            setStep('map')
+        } catch (error) {
+            console.error('Erro ao ler arquivo:', error)
+            alert('Erro ao processar o arquivo Excel.')
+        } finally {
+            if (fileInputRef.current) fileInputRef.current.value = ''
+        }
+    }
+
     const processAddress = (fullAddress: string) => {
         // Simple heuristic for "Rua X, 123 - Bairro, Cidade - UF"
         // This is not perfect but helps splitting common formats
@@ -101,6 +153,10 @@ export function ClientImport() {
 
             for (let i = 0; i < parsedData.length; i++) {
                 const row = parsedData[i]
+
+                // Skip header row if it contains known headers
+                if (i === 0 && row.some(cell => String(cell).toLowerCase().includes('nome/razao'))) continue;
+
                 const client: any = {
                     empresa_id: userData?.empresa_id,
                     ativo: true
@@ -183,8 +239,8 @@ export function ClientImport() {
         <div className="min-h-screen bg-slate-50 p-4 md:p-8">
             <div className="max-w-5xl mx-auto space-y-8">
                 <div className="flex items-center gap-4">
-                    <Button variant="ghost" onClick={() => navigate('/clients')}>
-                        <ArrowLeft className="h-4 w-4 mr-2" />
+                    <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => navigate('/clients')}>
+                        <ArrowLeft className="h-3 w-3 mr-2" />
                         Voltar
                     </Button>
                     <div>
@@ -200,23 +256,47 @@ export function ClientImport() {
                             <FileSpreadsheet className="h-6 w-6" />
                             <div>
                                 <h3 className="font-bold">Como funciona?</h3>
-                                <p className="text-sm">Vá na sua planilha (Excel ou Google Sheets), selecione as colunas com os dados dos clientes (Nome, Telefone, Endereço...), copie (Ctrl+C) e cole na caixa abaixo.</p>
+                                <p className="text-sm">Você pode <strong>Colar os dados</strong> abaixo OU <strong>Subir uma planilha Excel/CSV</strong>.</p>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col gap-4 mb-6">
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                accept=".xlsx, .xls, .csv"
+                                className="hidden"
+                                onChange={handleFileUpload}
+                            />
+                            <Button
+                                className="w-full h-10 text-xs border border-dashed border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:border-blue-500 transition-all rounded-lg flex gap-2 justify-center"
+                                onClick={() => fileInputRef.current?.click()}
+                            >
+                                <Upload className="h-3 w-3" />
+                                Carregar Excel (.xlsx)
+                            </Button>
+
+                            <div className="relative flex items-center justify-center my-2">
+                                <div className="absolute inset-0 flex items-center">
+                                    <div className="w-full border-t border-slate-200" />
+                                </div>
+                                <div className="relative bg-white px-2 text-[10px] text-slate-400 uppercase">Ou cole abaixo</div>
                             </div>
                         </div>
 
                         <textarea
-                            className="w-full h-96 p-4 border rounded-xl font-mono text-sm bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none"
+                            className="w-full h-48 p-3 border rounded-lg font-mono text-xs bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none"
                             placeholder="Cole seus dados aqui..."
                             value={rawText}
                             onChange={e => setRawText(e.target.value)}
                         />
 
                         <Button
-                            className="w-full h-12 text-lg bg-blue-600 hover:bg-blue-700 text-white"
+                            className="w-full h-9 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
                             onClick={handleParse}
                             disabled={!rawText.trim()}
                         >
-                            Próximo: Mapear Colunas
+                            Processar Texto
                         </Button>
                     </div>
                 )}
@@ -226,21 +306,28 @@ export function ClientImport() {
                     <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 space-y-6">
                         <div className="flex justify-between items-center">
                             <h2 className="font-bold text-xl">Identifique as Colunas</h2>
-                            <Button variant="outline" onClick={() => setStep('paste')}>Voltar e Colar Novamente</Button>
+                            <Button
+                                variant="outline"
+                                size="sm" // Smaller button
+                                className="h-8 text-xs"
+                                onClick={() => setStep('paste')}
+                            >
+                                Voltar
+                            </Button>
                         </div>
 
                         <div className="overflow-x-auto pb-4">
-                            <table className="w-full text-left text-sm whitespace-nowrap">
+                            <table className="w-full text-left text-xs whitespace-nowrap">
                                 <thead>
                                     <tr>
                                         {parsedData[0]?.map((_, index) => (
-                                            <th key={index} className="px-4 py-2 min-w-[200px] bg-slate-50 border-b">
+                                            <th key={index} className="px-3 py-2 min-w-[150px] bg-slate-50 border-b">
                                                 <select
-                                                    className="w-full p-2 rounded border border-slate-300 focus:border-blue-500"
+                                                    className="w-full p-1.5 rounded border border-slate-300 focus:border-blue-500 text-xs"
                                                     value={columnMapping[index] || ''}
                                                     onChange={(e) => setColumnMapping(prev => ({ ...prev, [index]: e.target.value }))}
                                                 >
-                                                    <option value="" className="text-slate-400">-- Selecione --</option>
+                                                    <option value="" className="text-slate-400">ignorada</option>
                                                     {AVAILABLE_FIELDS.map(f => (
                                                         <option key={f.value} value={f.value} disabled={Object.values(columnMapping).includes(f.value) && columnMapping[index] !== f.value && f.value !== ''}>
                                                             {f.label}
@@ -248,9 +335,9 @@ export function ClientImport() {
                                                     ))}
                                                 </select>
                                                 {/* Preview first 3 rows */}
-                                                <div className="mt-2 space-y-1 text-xs text-slate-500 font-normal">
+                                                <div className="mt-2 space-y-1 text-[10px] text-slate-500 font-normal">
                                                     {parsedData.slice(0, 3).map((row, rIdx) => (
-                                                        <div key={rIdx} className="truncate max-w-[180px] bg-white p-1 rounded border border-slate-100">
+                                                        <div key={rIdx} className="truncate max-w-[140px] bg-white p-1 rounded border border-slate-100">
                                                             {row[index] || '-'}
                                                         </div>
                                                     ))}
@@ -262,23 +349,25 @@ export function ClientImport() {
                             </table>
                         </div>
 
-                        <div className="flex items-center justify-between p-4 bg-emerald-50 text-emerald-800 rounded-xl">
+                        <div className="flex items-center justify-between p-3 bg-emerald-50 text-emerald-800 rounded-lg text-sm">
                             <div className="flex items-center gap-2">
-                                <Check className="h-5 w-5" />
-                                <span className="font-bold">{parsedData.length} linhas encontradas</span>
+                                <Check className="h-4 w-4" />
+                                <span className="font-bold">{parsedData.length} linhas</span>
                             </div>
-                            <div className="text-sm">
-                                Importando para empresa: <strong>{userData?.nome_fantasia || 'Empresa Atual'}</strong>
+                            <div className="text-xs">
+                                Empresa: <strong>{userData?.nome_fantasia || 'Atual'}</strong>
                             </div>
                         </div>
 
-                        <Button
-                            className="w-full h-14 text-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg"
-                            onClick={handleImport}
-                            disabled={importing || Object.keys(columnMapping).length === 0}
-                        >
-                            {importing ? `Importando ${progress.current}/${progress.total}...` : '✅ Confirmar Importação'}
-                        </Button>
+                        <div className="flex justify-end">
+                            <Button
+                                className="h-8 text-xs px-6 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm rounded-lg"
+                                onClick={handleImport}
+                                disabled={importing || !Object.values(columnMapping).some(v => v !== '')}
+                            >
+                                {importing ? `Importando ${progress.current}/${progress.total}...` : 'Confirmar Importação'}
+                            </Button>
+                        </div>
                     </div>
                 )}
             </div>

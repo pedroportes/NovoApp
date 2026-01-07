@@ -16,6 +16,8 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { SignaturePad } from '@/components/ui/signature-pad'
+import { useLicenseCheck } from '@/hooks/useLicenseCheck'
+import { UpgradeModal } from '@/components/subscription/UpgradeModal'
 
 interface Technician {
     id: string
@@ -42,9 +44,35 @@ export function Technicians() {
             navigate('/dashboard')
         }
     }, [userData, loading, navigate])
+
     const [searchTerm, setSearchTerm] = useState('')
 
-    // Form States
+    // License Check
+    const { canAddTeamMember, isTrialExpired, usage, limits, plan } = useLicenseCheck()
+    const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+    const [upgradeMessage, setUpgradeMessage] = useState('')
+
+    // Moved openNewTechDialog definition here to be used by handle
+    const openNewTechDialog = useCallback(() => {
+        setEditingTechId(null)
+        resetForm()
+        setIsDialogOpen(true)
+    }, [])
+
+    const handleNewTechClick = useCallback(() => {
+        if (!canAddTeamMember) {
+            if (isTrialExpired) {
+                setUpgradeMessage("Seu período de teste expirou. Assine um plano para adicionar membros à equipe.")
+            } else {
+                let limitMsg = `${limits.team}`
+                if (limits.team === 'unlimited') limitMsg = 'ilimitados'
+                setUpgradeMessage(`Seu plano atual (${plan.toUpperCase()}) permite apenas ${limitMsg} membro(s) na equipe. Faça um upgrade para adicionar mais.`)
+            }
+            setShowUpgradeModal(true)
+            return
+        }
+        openNewTechDialog()
+    }, [canAddTeamMember, isTrialExpired, limits.team, plan, openNewTechDialog])
     const [isDialogOpen, setIsDialogOpen] = useState(false)
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [editingTechId, setEditingTechId] = useState<string | null>(null)
@@ -76,18 +104,14 @@ export function Technicians() {
         }
     }, [userData?.empresa_id])
 
-    const openNewTechDialog = useCallback(() => {
-        setEditingTechId(null)
-        resetForm()
-        setIsDialogOpen(true)
-    }, [])
+    // openNewTechDialog removed from here (moved up)
 
     const { setFabAction } = useOutletContext<{ setFabAction: (action: (() => void) | null) => void }>() ?? { setFabAction: () => { } }
 
     useEffect(() => {
-        setFabAction(openNewTechDialog)
+        setFabAction(() => handleNewTechClick)
         return () => setFabAction(null)
-    }, [openNewTechDialog, setFabAction])
+    }, [handleNewTechClick, setFabAction])
 
     useEffect(() => {
         if (isDialogOpen && !editingTechId) {
@@ -296,14 +320,18 @@ export function Technicians() {
         <div className="space-y-6 pb-20 md:pb-0 mt-6 md:mt-0">
             <div className="flex justify-end mb-4">
 
+                <UpgradeModal
+                    isOpen={showUpgradeModal}
+                    onClose={() => setShowUpgradeModal(false)}
+                    description={upgradeMessage}
+                />
+
                 <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                     {userData?.cargo?.toLowerCase() === 'admin' && (
-                        <DialogTrigger asChild>
-                            <Button className="hidden md:flex h-14 text-base md:w-auto w-full shadow-lg" onClick={openNewTechDialog}>
-                                <Plus className="mr-2 h-5 w-5" />
-                                Novo Técnico
-                            </Button>
-                        </DialogTrigger>
+                        <Button className="hidden md:flex h-14 text-base md:w-auto w-full shadow-lg" onClick={handleNewTechClick}>
+                            <Plus className="mr-2 h-5 w-5" />
+                            Novo Técnico
+                        </Button>
                     )}
                     <DialogContent className="w-[95%] max-w-[600px] h-[90vh] overflow-y-auto rounded-xl">
                         <DialogHeader>
