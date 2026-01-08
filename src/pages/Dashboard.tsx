@@ -7,6 +7,8 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { LiveMap } from '@/components/LiveMap'
+import { useLicenseCheck } from '@/hooks/useLicenseCheck'
+import { Calendar as CalendarIcon, ShieldCheck, Clock } from 'lucide-react'
 
 // Audio for notifications
 const playNotificationSound = () => {
@@ -35,6 +37,7 @@ const playNotificationSound = () => {
 export function Dashboard() {
     const navigate = useNavigate()
     const { userData } = useAuth()
+    const { plan, isTrial, isTrialExpired, usage, limits } = useLicenseCheck()
     const { setFabAction } = useOutletContext<{ setFabAction: (action: (() => void) | null) => void }>() ?? { setFabAction: () => { } }
 
     const [stats, setStats] = useState({
@@ -198,6 +201,38 @@ export function Dashboard() {
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500 mt-8 md:mt-0">
+            {/* STATUS DO PLANO */}
+            <div className="flex flex-wrap items-center gap-3 mb-2">
+                <div className="flex items-center gap-2 bg-slate-100/50 backdrop-blur-sm px-3 py-1.5 rounded-2xl border border-slate-200/50">
+                    <ShieldCheck className="h-4 w-4 text-emerald-500" />
+                    <span className="text-xs font-bold text-slate-600 uppercase tracking-tight"> Plano {plan} </span>
+                </div>
+
+                {isTrial ? (
+                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-2xl border transition-colors ${isTrialExpired ? 'bg-red-50 border-red-200 text-red-600' : 'bg-amber-50 border-amber-200 text-amber-600'}`}>
+                        <Clock className="h-4 w-4" />
+                        <span className="text-xs font-bold uppercase tracking-tight">
+                            {isTrialExpired ? 'Período de Teste Expirado' : `Período de Teste (${7 - (usage.daysUsed || 0)} dias restantes)`}
+                        </span>
+                        {!isTrialExpired && (
+                            <button onClick={() => navigate('/settings/plan')} className="text-[10px] underline ml-1 hover:opacity-80">Assinar agora</button>
+                        )}
+                    </div>
+                ) : (
+                    <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-2xl text-emerald-600">
+                        <Check className="h-4 w-4" />
+                        <span className="text-xs font-bold uppercase tracking-tight"> Assinatura Ativa </span>
+                    </div>
+                )}
+
+                <div className="flex items-center gap-2 bg-slate-100/50 backdrop-blur-sm px-3 py-1.5 rounded-2xl border border-slate-200/50">
+                    <CalendarIcon className="h-4 w-4 text-slate-400" />
+                    <span className="text-xs font-medium text-slate-500 italic">
+                        Renovação automática
+                    </span>
+                </div>
+            </div>
+
             {/* GRID DE CARDS PRINCIPAIS */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 {/* Card - Agenda / Calendário */}
@@ -321,41 +356,38 @@ export function Dashboard() {
                             <p className="text-center text-slate-400 py-4">Nenhuma atividade recente.</p>
                         ) : (
                             recentActivities.map((os) => (
-                                <div key={os.id} onClick={() => navigate(`/service-orders/${os.id}`)} className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-2xl transition-colors cursor-pointer group">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 rounded-2xl bg-sky-100 text-sky-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                <div key={os.id} onClick={() => navigate(`/service-orders/${os.id}`)} className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-2xl transition-colors cursor-pointer group gap-3">
+                                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                                        <div className="w-10 h-10 md:w-12 md:h-12 shrink-0 rounded-2xl bg-sky-100 text-sky-600 flex items-center justify-center group-hover:scale-110 transition-transform">
                                             <ClipboardList className="h-5 w-5" />
                                         </div>
-                                        <div>
-                                            <div>
-                                                <p className="text-sm font-bold text-slate-800">{os.cliente_nome || 'Cliente sem nome'}</p>
-                                                <div className="flex items-center gap-1 text-xs text-slate-500">
-                                                    <span>OS #{os.id.slice(0, 8)}</span>
-                                                    {os.tecnico?.nome_completo && (
-                                                        <>
-                                                            <span>•</span>
-                                                            <span>{os.tecnico.nome_completo.split(' ')[0]}</span>
-                                                        </>
-                                                    )}
-                                                </div>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-sm font-bold text-slate-800 truncate">{os.cliente_nome || 'Cliente sem nome'}</p>
+                                            <div className="flex items-center gap-1 text-[10px] md:text-xs text-slate-500 whitespace-nowrap overflow-hidden">
+                                                <span className="shrink-0">OS #{os.id.slice(0, 8)}</span>
+                                                {os.tecnico?.nome_completo && (
+                                                    <>
+                                                        <span className="shrink-0">•</span>
+                                                        <span className="truncate">{os.tecnico.nome_completo.split(' ')[0]}</span>
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="text-right">
-                                        <p className="text-sm font-bold text-slate-800">{formatCurrency(os.valor_total || 0)}</p>
-                                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium uppercase ${os.status?.toLowerCase() === 'concluido' || os.status?.toLowerCase() === 'concluida' || os.status?.toLowerCase() === 'concluído' ? 'bg-emerald-100 text-emerald-600' :
+                                    <div className="text-right shrink-0">
+                                        <p className="text-sm font-bold text-slate-800 whitespace-nowrap">{formatCurrency(os.valor_total || 0)}</p>
+                                        <span className={`text-[9px] md:text-[10px] px-2 py-0.5 rounded-full font-medium uppercase whitespace-nowrap ${os.status?.toLowerCase() === 'concluido' || os.status?.toLowerCase() === 'concluida' || os.status?.toLowerCase() === 'concluído' ? 'bg-emerald-100 text-emerald-600' :
                                             os.deslocamento_iniciado_em && os.status !== 'concluido' ? 'bg-blue-100 text-blue-600' :
                                                 'bg-slate-100 text-slate-500'
                                             }`}>
                                             {os.status?.toLowerCase() === 'concluido' ? 'Concluído' :
-                                                os.deslocamento_iniciado_em && os.status !== 'concluido' ? (
+                                                os.deslocamento_iniciado_em && !['concluido', 'concluído'].includes(os.status?.toLowerCase() || '') ? (
                                                     os.previsao_chegada ?
                                                         `Chegada: ${new Date(os.previsao_chegada).getHours().toString().padStart(2, '0')}:${new Date(os.previsao_chegada).getMinutes().toString().padStart(2, '0')}` :
-                                                        'Em Deslocamento'
+                                                        'Deslocamento'
                                                 ) :
                                                     os.status || 'Pendente'}
                                         </span>
-
                                     </div>
                                 </div>
                             ))

@@ -46,6 +46,9 @@ export interface LocalServiceOrder {
     assinatura_cliente_url?: string;
     deslocamento_iniciado_em?: string;
     previsao_chegada?: string;
+    orcamento_gerado?: boolean;
+    recibo_gerado?: boolean;
+    contrato_gerado?: boolean;
     created_at?: string;
 
     // Sync metadata

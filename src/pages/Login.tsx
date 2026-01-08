@@ -328,7 +328,16 @@ export function Login() {
                         <ModeToggle />
                     </div> */}
                 </div>
+
+                {/* DEBUG: Project ID */}
+                <div className="mt-4 text-center">
+                    <p className="text-xs text-muted-foreground/50">
+                        Project: {import.meta.env.VITE_SUPABASE_URL?.split('.')[0].replace('https://', '')}
+                    </p>
+                </div>
             </div>
         </div>
     )
 }
+
+

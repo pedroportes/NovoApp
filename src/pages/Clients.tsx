@@ -426,20 +426,21 @@ export function Clients() {
                 </Button>
 
                 <Button
-                    className="hidden md:flex h-9 text-sm px-3 shadow-sm bg-blue-600 hover:bg-blue-700 text-white"
+                    className="h-9 text-sm px-3 shadow-sm bg-blue-600 hover:bg-blue-700 text-white"
                     onClick={handleImportClick}
                 >
                     <Upload className="mr-2 h-4 w-4" />
-                    Importar CSV
+                    <span className="hidden md:inline">Importar CSV</span>
+                    <span className="md:hidden">Importar</span>
+                </Button>
+
+                <Button className="h-9 text-sm px-3 shadow-sm" onClick={handleNewClientClick}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    <span className="hidden md:inline">Novo Cliente</span>
+                    <span className="md:hidden">Novo</span>
                 </Button>
 
                 <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                    <DialogTrigger asChild>
-                        <Button className="hidden md:flex h-9 text-sm px-3 shadow-sm" onClick={handleNewClientClick}>
-                            <Plus className="mr-2 h-4 w-4" />
-                            Novo Cliente
-                        </Button>
-                    </DialogTrigger>
                     <DialogContent className="w-[95%] max-w-[600px] max-h-[85vh] overflow-y-auto rounded-xl">
                         <DialogHeader>
                             <DialogTitle>{editingClientId ? 'Editar Cliente' : 'Novo Cliente'}</DialogTitle>

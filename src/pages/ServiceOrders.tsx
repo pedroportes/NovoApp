@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
-import { Plus, Search, FileText, Calendar, User, Trash2, Phone, MapPin } from 'lucide-react'
+import { Plus, Search, FileText, Calendar, User, Trash2, Phone, MapPin, Receipt, FileSignature, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { supabase } from '@/lib/supabase'
@@ -137,6 +137,23 @@ export function ServiceOrders() {
         }
     }
 
+    const handleGenerateDoc = async (os: any, type: string) => {
+        const column = type === 'ORCAMENTO' ? 'orcamento_gerado' : type === 'RECIBO' ? 'recibo_gerado' : 'contrato_gerado'
+
+        try {
+            // Update via SyncService for offline support and instant UI update
+            await SyncService.saveServiceOrder({
+                ...os,
+                [column]: true
+            })
+            // Open print page (Corrected path to match App.tsx)
+            window.open(`/print/service-orders/${os.id}?type=${type}`, '_blank')
+        } catch (error) {
+            console.error('Erro ao marcar documento:', error)
+            window.open(`/print/service-orders/${os.id}?type=${type}`, '_blank')
+        }
+    }
+
     const getStatusColor = (status: string, hasDeslocamento?: boolean) => {
         // Se está em deslocamento ativo (e não concluído), mostrar como azul
         if (hasDeslocamento && !['concluído', 'concluido'].includes(status?.toLowerCase())) {
@@ -257,7 +274,10 @@ export function ServiceOrders() {
                                                     variant="outline"
                                                     size="icon"
                                                     className="h-9 w-9 rounded-full border-blue-200 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
-                                                    onClick={() => window.open(`tel:${getClientPhone(os)?.replace(/\D/g, '')}`, '_self')}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        window.open(`tel:${getClientPhone(os)?.replace(/\D/g, '')}`, '_self')
+                                                    }}
                                                     title="Ligar"
                                                 >
                                                     <Phone className="h-4 w-4" />
@@ -266,7 +286,8 @@ export function ServiceOrders() {
                                                     variant="outline"
                                                     size="icon"
                                                     className="h-9 w-9 rounded-full border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
-                                                    onClick={() => {
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
                                                         const cleanPhone = getClientPhone(os)?.replace(/\D/g, '') || ''
                                                         const techName = (userData as any)?.nome || (userData as any)?.nome_completo || 'Técnico'
                                                         const firstName = techName.split(' ')[0]
@@ -317,17 +338,66 @@ export function ServiceOrders() {
                                     <span className="text-xs text-slate-400 font-bold uppercase">Valor Total</span>
                                     <span className="text-2xl font-black text-slate-800 tracking-tight">{formatCurrency(os.valor_total)}</span>
                                 </div>
-                                <div className="flex gap-2">
-                                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all" onClick={(e) => {
-                                        e.stopPropagation()
-                                        setOsToDelete(os.id)
-                                        setDeleteConfirmOpen(true)
-                                    }}>
-                                        <Trash2 className="h-5 w-5" />
-                                    </Button>
-                                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl text-emerald-600 bg-emerald-50 hover:bg-emerald-100 hover:scale-105 transition-all">
-                                        <FileText className="h-5 w-5" />
-                                    </Button>
+                                <div className="flex items-center gap-1.5 ml-2">
+                                    {/* Grupo: Controle */}
+                                    <div className="flex items-center bg-slate-100/50 p-0.5 rounded-lg border border-slate-200/50">
+                                        <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md text-slate-400 hover:text-red-500 hover:bg-white transition-all" onClick={(e) => {
+                                            e.stopPropagation()
+                                            setOsToDelete(os.id)
+                                            setDeleteConfirmOpen(true)
+                                        }}>
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                        </Button>
+
+                                        <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md text-slate-400 hover:text-amber-500 hover:bg-white transition-all" onClick={(e) => {
+                                            e.stopPropagation()
+                                            navigate(`/service-orders/${os.id}`)
+                                        }}>
+                                            <Pencil className="h-3.5 w-3.5" />
+                                        </Button>
+                                    </div>
+
+                                    {/* Grupo: Documentos */}
+                                    <div className="flex items-center gap-1">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            title="Orçamento"
+                                            className={`h-7 w-7 md:h-8 md:w-8 rounded-lg transition-all hover:scale-105 ${os.orcamento_gerado ? 'text-blue-600 bg-blue-50 shadow-sm border border-blue-100' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                handleGenerateDoc(os, 'ORCAMENTO')
+                                            }}
+                                        >
+                                            <FileText className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                                        </Button>
+
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            title="Recibo"
+                                            className={`h-7 w-7 md:h-8 md:w-8 rounded-lg transition-all hover:scale-105 ${os.recibo_gerado ? 'text-emerald-600 bg-emerald-50 shadow-sm border border-emerald-100' : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'}`}
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                handleGenerateDoc(os, 'RECIBO')
+                                            }}
+                                        >
+                                            <Receipt className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                                        </Button>
+
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            title="Contrato"
+                                            className={`h-7 w-7 md:h-8 md:w-8 rounded-lg transition-all hover:scale-105 ${os.contrato_gerado ? 'text-purple-600 bg-purple-50 shadow-sm border border-purple-100' : 'text-slate-400 hover:text-purple-600 hover:bg-purple-50'}`}
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                handleGenerateDoc(os, 'CONTRATO')
+                                            }}
+                                        >
+                                            <FileSignature className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                                        </Button>
+                                    </div>
                                 </div>
                             </div>
                         </div>

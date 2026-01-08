@@ -32,23 +32,23 @@ const ReceiptLayout = ({ os, company, title }: { os: any, company: any, title: s
     const finalTotal = os.valor_total || (subtotal - discountValue)
 
     return (
-        <div className="p-8 bg-white text-black font-sans max-w-[210mm] mx-auto print:p-0 print:max-w-none h-full min-h-[900px] relative text-xs md:text-sm">
+        <div className="p-4 md:p-8 bg-white text-black font-sans max-w-[210mm] mx-auto print:p-0 print:max-w-none h-full min-h-[900px] relative text-[10px] md:text-xs">
             {/* Main Border Container */}
-            <div className="border-2 border-black h-full min-h-[900px] relative flex flex-col">
+            <div className="border border-black md:border-2 h-full min-h-[900px] relative flex flex-col">
 
                 {/* Header */}
                 <div className="border-b-2 border-black flex">
                     {/* Logo Area */}
-                    <div className="w-1/3 border-r-2 border-black p-4 flex items-center justify-center">
-                        <div className="text-center">
-                            <div className="w-40 h-40 mx-auto flex items-center justify-center">
+                    <div className="w-[30%] border-r-2 border-black p-2 flex items-center justify-center overflow-hidden">
+                        <div className="text-center w-full">
+                            <div className="flex items-center justify-center min-h-[80px]">
                                 <img
                                     src={company?.logo_url || '/flowdrain-logo.png'}
                                     alt="Logo"
-                                    className="max-w-full max-h-full object-contain"
+                                    className="max-w-[140px] max-h-[100px] object-contain"
                                     onError={(e) => {
                                         e.currentTarget.style.display = 'none'
-                                        e.currentTarget.parentElement!.innerHTML = '<span class="text-4xl">🛠️</span>'
+                                        e.currentTarget.parentElement!.innerHTML = '<span class="text-4xl text-gray-300">🏢</span>'
                                     }}
                                 />
                             </div>
@@ -56,9 +56,9 @@ const ReceiptLayout = ({ os, company, title }: { os: any, company: any, title: s
                     </div>
 
                     {/* Company Info */}
-                    <div className="w-2/3 p-4 flex flex-col justify-center text-center">
-                        <h1 className="text-2xl font-bold uppercase mb-2">{company?.nome || 'NOME DA EMPRESA'}</h1>
-                        <p className="text-sm font-semibold uppercase tracking-widest text-gray-600">QUALIDADE E SATISFAÇÃO</p>
+                    <div className="w-[70%] p-2 md:p-4 flex flex-col justify-center text-center">
+                        <h1 className="text-lg md:text-2xl font-bold uppercase mb-1">{company?.nome || 'NOME DA EMPRESA'}</h1>
+                        <p className="text-[10px] md:text-sm font-semibold uppercase tracking-widest text-gray-600">QUALIDADE E SATISFAÇÃO</p>
                     </div>
                 </div>
 
@@ -74,7 +74,7 @@ const ReceiptLayout = ({ os, company, title }: { os: any, company: any, title: s
                 </div>
 
                 {/* Title Bar */}
-                <div className="bg-gray-200 border-b-2 border-black p-2 text-center font-bold text-lg uppercase">
+                <div className="bg-gray-200 border-b border-black md:border-b-2 p-1 md:p-2 text-center font-bold text-sm md:text-lg uppercase">
                     ID Nº {os.id?.slice(0, 8)} - {title}
                 </div>
 
@@ -135,8 +135,8 @@ const ReceiptLayout = ({ os, company, title }: { os: any, company: any, title: s
                             </div>
                         )}
                         <div className="flex flex-1">
-                            <div className="bg-gray-200 p-2 px-4 border-r-2 border-black flex-1 flex items-center justify-end">Valor do Serviço - Total</div>
-                            <div className="p-2 px-4 text-xl flex items-center w-32 justify-end">{formatCurrency(finalTotal)}</div>
+                            <div className="bg-gray-200 p-2 px-4 border-r-2 border-black flex-1 flex items-center justify-end text-[10px] md:text-xs">Valor do Serviço - Total</div>
+                            <div className="p-2 px-4 text-base md:text-xl flex items-center w-32 justify-end">{formatCurrency(finalTotal)}</div>
                         </div>
                     </div>
                 </div>
@@ -150,15 +150,15 @@ const ReceiptLayout = ({ os, company, title }: { os: any, company: any, title: s
                 )}
 
                 {/* Signature Section */}
-                <div className="mt-4 border-2 border-black flex h-48 mx-4 mb-4">
-                    <div className="w-1/3 flex items-center justify-center border-r-2 border-black p-4 font-bold text-sm">
+                <div className="mt-4 border-2 border-black flex h-32 md:h-48 mx-2 md:mx-4 mb-4">
+                    <div className="w-1/3 flex items-center justify-center border-r-2 border-black p-2 md:p-4 font-bold text-[10px] md:text-sm text-center">
                         Assinatura do responsável
                     </div>
                     <div className="w-2/3 flex flex-col items-center justify-center relative p-2">
                         {os.assinatura_cliente_url && (
-                            <img src={os.assinatura_cliente_url} alt="Assinatura" className="max-h-32 object-contain" />
+                            <img src={os.assinatura_cliente_url} alt="Assinatura" className="max-h-20 md:max-h-32 object-contain" />
                         )}
-                        <div className="mt-auto text-xs font-bold uppercase pt-2">
+                        <div className="mt-auto text-[10px] md:text-xs font-bold uppercase pt-2">
                             {company?.nome || 'Desentupidora'}
                         </div>
                     </div>

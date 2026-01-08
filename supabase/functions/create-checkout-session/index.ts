@@ -48,7 +48,7 @@ serve(async (req) => {
         if (!customer_id) {
             const customer = await stripe.customers.create({
                 email: user.email,
-                name: empresa.nome_fantasia || user.email,
+                name: empresa.nome || user.email,
                 metadata: {
                     empresa_id: empresa.id
                 }

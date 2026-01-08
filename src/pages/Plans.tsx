@@ -72,9 +72,9 @@ export function Plans() {
                 window.location.href = data.url
             }
 
-        } catch (error) {
+        } catch (error: any) {
             console.error('Erro ao criar checkout:', error)
-            alert('Erro ao iniciar pagamento. Verifique se a chave do Stripe está configurada.')
+            alert(`Erro ao iniciar pagamento: ${error.message || error}`)
         } finally {
             setLoading(null)
         }

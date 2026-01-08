@@ -54,7 +54,6 @@ export function Financial() {
     }
 
     useEffect(() => {
-        console.log('Supabase URL:', import.meta.env.VITE_SUPABASE_URL) // DEBUG
         if (userData?.empresa_id) {
             fetchFluxo()
         }
@@ -353,32 +352,32 @@ export function Financial() {
                                             <p className="text-center text-slate-400 py-4">Nenhuma atividade recente.</p>
                                         ) : (
                                             recentActivities.map((os) => (
-                                                <div key={os.id} className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-2xl transition-colors border border-transparent hover:border-slate-100">
-                                                    <div className="flex items-center gap-4">
-                                                        <div className="w-10 h-10 rounded-xl bg-sky-100 text-sky-600 flex items-center justify-center">
+                                                <div key={os.id} className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-2xl transition-colors border border-transparent hover:border-slate-100 gap-3">
+                                                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                        <div className="w-10 h-10 shrink-0 rounded-xl bg-sky-100 text-sky-600 flex items-center justify-center">
                                                             <ClipboardList className="h-5 w-5" />
                                                         </div>
-                                                        <div>
-                                                            <p className="text-sm font-bold text-slate-800">{os.cliente_nome || 'Cliente sem nome'}</p>
-                                                            <div className="flex items-center gap-1 text-xs text-slate-500">
-                                                                <span>OS #{os.id.slice(0, 6)}</span>
+                                                        <div className="min-w-0 flex-1">
+                                                            <p className="text-sm font-bold text-slate-800 truncate">{os.cliente_nome || 'Cliente sem nome'}</p>
+                                                            <div className="flex items-center gap-1 text-[10px] text-slate-500 whitespace-nowrap overflow-hidden">
+                                                                <span className="shrink-0">OS #{os.id.slice(0, 6)}</span>
                                                                 {os.tecnico?.nome_completo && (
                                                                     <>
-                                                                        <span>•</span>
-                                                                        <span>{os.tecnico.nome_completo.split(' ')[0]}</span>
+                                                                        <span className="shrink-0">•</span>
+                                                                        <span className="truncate">{os.tecnico.nome_completo.split(' ')[0]}</span>
                                                                     </>
                                                                 )}
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    <div className="text-right">
-                                                        <p className="text-sm font-bold text-slate-800">{formatCurrency(os.valor_total || 0)}</p>
-                                                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium uppercase ${os.status?.toLowerCase() === 'concluido' ? 'bg-emerald-100 text-emerald-600' :
+                                                    <div className="text-right shrink-0">
+                                                        <p className="text-sm font-bold text-slate-800 whitespace-nowrap">{formatCurrency(os.valor_total || 0)}</p>
+                                                        <span className={`text-[9px] px-2 py-0.5 rounded-full font-medium uppercase whitespace-nowrap ${os.status?.toLowerCase() === 'concluido' ? 'bg-emerald-100 text-emerald-600' :
                                                             os.deslocamento_iniciado_em ? 'bg-blue-100 text-blue-600' :
                                                                 'bg-slate-100 text-slate-500'
                                                             }`}>
                                                             {os.status?.toLowerCase() === 'concluido' ? 'Concluído' :
-                                                                os.deslocamento_iniciado_em ? 'Em Deslocamento' :
+                                                                os.deslocamento_iniciado_em ? 'Deslocamento' :
                                                                     os.status || 'Pendente'}
                                                         </span>
                                                     </div>
@@ -392,17 +391,17 @@ export function Financial() {
                             {/* Transaction List */}
                             <Card className="border-slate-200 shadow-sm h-full">
                                 <CardHeader className="pb-4">
-                                    <div className="flex items-center justify-between">
-                                        <CardTitle className="flex items-center gap-2">
+                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                                        <CardTitle className="flex items-center gap-2 text-base md:text-lg">
                                             <DollarSign className="h-5 w-5 text-emerald-500" />
                                             Transações Recentes
                                         </CardTitle>
-                                        <div className="flex gap-1">
+                                        <div className="flex gap-1 overflow-x-auto pb-1 md:pb-0 scrollbar-hide">
                                             <Button
                                                 variant={filterType === 'ALL' ? 'default' : 'outline'}
                                                 size="sm"
                                                 onClick={() => setFilterType('ALL')}
-                                                className={filterType === 'ALL' ? "bg-slate-800 text-white h-7 text-xs" : "h-7 text-xs"}
+                                                className={cn("h-7 text-[10px] md:text-xs px-2 md:px-3", filterType === 'ALL' ? "bg-slate-800 text-white" : "")}
                                             >
                                                 Todas
                                             </Button>
@@ -410,7 +409,7 @@ export function Financial() {
                                                 variant={filterType === 'ENTRADA' ? 'default' : 'outline'}
                                                 size="sm"
                                                 onClick={() => setFilterType('ENTRADA')}
-                                                className={filterType === 'ENTRADA' ? "bg-emerald-600 text-white h-7 text-xs" : "text-emerald-600 border-emerald-200 bg-emerald-50 h-7 text-xs"}
+                                                className={cn("h-7 text-[10px] md:text-xs px-2 md:px-3", filterType === 'ENTRADA' ? "bg-emerald-600 text-white" : "text-emerald-600 border-emerald-200 bg-emerald-50")}
                                             >
                                                 Entradas
                                             </Button>
@@ -418,7 +417,7 @@ export function Financial() {
                                                 variant={filterType === 'SAIDA' ? 'default' : 'outline'}
                                                 size="sm"
                                                 onClick={() => setFilterType('SAIDA')}
-                                                className={filterType === 'SAIDA' ? "bg-red-600 text-white h-7 text-xs" : "text-red-600 border-red-200 bg-red-50 h-7 text-xs"}
+                                                className={cn("h-7 text-[10px] md:text-xs px-2 md:px-3", filterType === 'SAIDA' ? "bg-red-600 text-white" : "text-red-600 border-red-200 bg-red-50")}
                                             >
                                                 Saídas
                                             </Button>
@@ -430,8 +429,8 @@ export function Financial() {
                                         <table className="w-full text-sm text-left">
                                             <thead className="bg-slate-50 text-slate-500 font-medium">
                                                 <tr>
-                                                    <th className="p-3">Descrição</th>
-                                                    <th className="p-3 text-right">Valor</th>
+                                                    <th className="p-2 md:p-3">Descrição</th>
+                                                    <th className="p-2 md:p-3 text-right">Valor</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-100">
@@ -442,19 +441,19 @@ export function Financial() {
                                                 ) : (
                                                     filteredFluxo.slice(0, 5).map((item) => (
                                                         <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
-                                                            <td className="p-3 font-medium text-slate-700">
-                                                                <div className="line-clamp-1">{item.descricao}</div>
-                                                                <div className="text-[10px] text-slate-400 font-normal flex items-center gap-1">
+                                                            <td className="p-2 md:p-3 font-medium text-slate-700 min-w-0">
+                                                                <div className="line-clamp-1 text-xs md:text-sm">{item.descricao}</div>
+                                                                <div className="text-[9px] md:text-[10px] text-slate-400 font-normal flex items-center gap-1">
                                                                     <span>{new Date(item.data_lancamento).toLocaleDateString()}</span>
                                                                     {item.responsavel && (
                                                                         <>
                                                                             <span>•</span>
-                                                                            <span className="text-emerald-600 font-medium truncate max-w-[100px]">{item.responsavel.split(' ')[0]}</span>
+                                                                            <span className="text-emerald-600 font-medium truncate max-w-[60px] md:max-w-[100px]">{item.responsavel.split(' ')[0]}</span>
                                                                         </>
                                                                     )}
                                                                 </div>
                                                             </td>
-                                                            <td className={cn("p-3 text-right font-bold whitespace-nowrap", item.tipo === 'ENTRADA' ? "text-emerald-700" : "text-red-700")}>
+                                                            <td className={cn("p-2 md:p-3 text-right font-bold whitespace-nowrap text-xs md:text-sm", item.tipo === 'ENTRADA' ? "text-emerald-700" : "text-red-700")}>
                                                                 {item.tipo === 'ENTRADA' ? '+' : '-'} {formatCurrency(item.valor)}
                                                             </td>
                                                         </tr>

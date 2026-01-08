@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useNavigate, useParams, useOutletContext, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Plus, Trash2, Camera, ChevronDown, ChevronRight, Printer, User, ClipboardList, PenTool } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Camera, ChevronDown, ChevronRight, Printer, User, ClipboardList, PenTool, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -428,7 +428,7 @@ export function NewServiceOrder() {
         }))
     }
 
-    const handleSubmit = async (targetStatus?: string) => {
+    const handleSubmit = async (options?: { status?: string, print?: boolean, forceType?: string }) => {
         if (!formData.cliente_id || !formData.tecnico_id) {
             alert('Selecione um cliente e um técnico.')
             return
@@ -448,7 +448,8 @@ export function NewServiceOrder() {
 
             const selectedClient = clients.find(c => c.id === formData.cliente_id)
 
-            const finalStatus = targetStatus || (id ? undefined : 'PENDENTE')
+            const finalStatus = options?.status || (id ? undefined : 'PENDENTE')
+            const finalType = options?.forceType || formData.tipo
 
             const payload: any = {
                 empresa_id: userData!.empresa_id,
@@ -457,7 +458,7 @@ export function NewServiceOrder() {
                 cliente_whatsapp: selectedClient?.whatsapp || null,
                 descricao_servico: formData.descricao_servico,
                 tecnico_id: formData.tecnico_id,
-                tipo: formData.tipo,
+                tipo: finalType,
                 data_agendamento: `${formData.data_agendamento}T${formData.hora_agendamento}:00`,
                 validade: formData.validade || null,
                 observacoes: formData.observacoes,
@@ -475,6 +476,8 @@ export function NewServiceOrder() {
                 payload.assinatura_cliente_url = signatureUrl
             }
 
+            let savedId = id;
+
             if (id) {
                 // Update
                 await SyncService.saveServiceOrder({
@@ -485,12 +488,17 @@ export function NewServiceOrder() {
             } else {
                 // Create
                 if (!payload.status) payload.status = 'PENDENTE';
-                await SyncService.saveServiceOrder(payload as LocalServiceOrder);
+                savedId = await SyncService.saveServiceOrder(payload as LocalServiceOrder);
             }
 
             // if (error) throw error // No error throwing here, SyncService handles it or throws validation error
 
-            alert(id ? 'OS atualizada com sucesso (salva localmente)!' : 'OS criada com sucesso (salva localmente)!')
+            if (options?.print && savedId) {
+                // Open PDF in new tab
+                window.open(`/print/service-orders/${savedId}?type=${finalType}`, '_blank')
+            }
+
+            alert(id ? 'OS atualizada com sucesso!' : 'OS criada com sucesso!')
             navigate('/service-orders')
 
         } catch (error: any) {
@@ -503,7 +511,7 @@ export function NewServiceOrder() {
 
     const handleConclude = async () => {
         if (confirm('Deseja realmente concluir esta OS? Isso irá gerar a comissão e o lançamento financeiro.')) {
-            await handleSubmit('CONCLUIDO')
+            await handleSubmit({ status: 'CONCLUIDO' })
         }
     }
 
@@ -544,6 +552,7 @@ export function NewServiceOrder() {
             {/* GERAL CARD */}
             <div className="bg-white rounded-3xl p-4 md:p-8 shadow-xl shadow-slate-200/50 space-y-8 relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-sky-400" />
+
 
                 <div className="flex items-center gap-3 mb-2">
                     <div className="p-2 bg-emerald-100 rounded-lg text-emerald-600">
@@ -869,10 +878,22 @@ export function NewServiceOrder() {
                 </div>
             </div>
 
-            <div className="fixed bottom-24 left-4 right-4 md:left-0 md:right-0 md:bottom-0 p-0 md:p-0 flex gap-4 md:static z-[100] md:z-0">
-                <Button variant="outline" className="flex-1 h-12" onClick={() => navigate(-1)} disabled={submitting}>Cancelar</Button>
-                <Button className="flex-1 h-12 font-bold shadow-lg" onClick={() => handleSubmit()} disabled={submitting}>{submitting ? 'Salvando...' : 'Salvar OS'}</Button>
+            <div className="fixed bottom-24 left-4 right-4 md:left-0 md:right-0 md:bottom-0 p-0 md:p-0 flex gap-2 md:static z-[100] md:z-0 items-center">
+                <Button variant="outline" className="flex-1 h-10 text-sm" onClick={() => navigate(-1)} disabled={submitting}>Cancelar</Button>
+
+                <Button
+                    variant="secondary"
+                    className="flex-1 h-10 text-sm bg-amber-100 text-amber-900 hover:bg-amber-200 border border-amber-200"
+                    onClick={() => handleSubmit({ forceType: 'ORCAMENTO', print: true })}
+                    disabled={submitting}
+                >
+                    <FileText className="h-4 w-4 mr-1" /> Salvar Orçamento
+                </Button>
+
+                <Button className="flex-1 h-10 text-sm font-bold shadow-sm" onClick={() => handleSubmit()} disabled={submitting}>
+                    {submitting ? 'Salvando...' : 'Salvar OS'}
+                </Button>
             </div>
-        </div>
+        </div >
     )
 }

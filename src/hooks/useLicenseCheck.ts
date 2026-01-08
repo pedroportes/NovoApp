@@ -26,7 +26,7 @@ interface LicenseStatus {
 }
 
 export function useLicenseCheck() {
-    const { user, company } = useAuth()
+    const { user, empresaId } = useAuth()
     const [status, setStatus] = useState<LicenseStatus>({
         loading: true,
         isTrial: true,
@@ -40,10 +40,10 @@ export function useLicenseCheck() {
     })
 
     useEffect(() => {
-        if (!user || !company) return
+        if (!user || !empresaId) return
 
         checkLicense()
-    }, [user, company])
+    }, [user, empresaId])
 
     const checkLicense = async () => {
         try {
@@ -51,7 +51,7 @@ export function useLicenseCheck() {
             const { data: companyData, error: companyError } = await supabase
                 .from('empresas')
                 .select('created_at, subscription_status, subscription_price_id')
-                .eq('id', company?.id)
+                .eq('id', empresaId)
                 .single()
 
             if (companyError || !companyData) throw new Error('Company not found')
@@ -67,9 +67,10 @@ export function useLicenseCheck() {
             if (companyData.subscription_status === 'active') {
                 const priceId = companyData.subscription_price_id
                 if (priceId === 'price_1Sn40G2HN3YhJoauSSD0AcEE') plan = 'essencial'
-                else if (priceId === 'price_1Sn41V2HN3YhJoauwIng5GnO') plan = 'pro'
+                else if (priceId === 'price_1Sn41V2HN3YhJoauwIng5GnO' || priceId === '12990') plan = 'pro'
                 else if (priceId === 'price_1Sn42t2HN3YhJoauLrtAaWr0') plan = 'operacional'
                 else if (priceId === 'price_1Sn44d2HN3YhJoaumqXIuvAg') plan = 'prime'
+                else plan = 'essencial' // Fallback to basic paid plan if price ID unknown but active
             }
 
             // 3. Calculate Trial Days
@@ -83,9 +84,9 @@ export function useLicenseCheck() {
 
             // 4. Get Usage Counts
             const [clientsCount, osCount, teamCount] = await Promise.all([
-                supabase.from('clientes').select('*', { count: 'exact', head: true }).eq('empresa_id', company?.id),
-                supabase.from('ordens_servico').select('*', { count: 'exact', head: true }).eq('empresa_id', company?.id),
-                supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('empresa_id', company?.id).eq('cargo', 'tecnico') // Assuming only techs count for quota
+                supabase.from('clientes').select('*', { count: 'exact', head: true }).eq('empresa_id', empresaId),
+                supabase.from('ordens_servico').select('*', { count: 'exact', head: true }).eq('empresa_id', empresaId),
+                supabase.from('usuarios').select('*', { count: 'exact', head: true }).eq('empresa_id', empresaId).eq('cargo', 'tecnico') // Assuming only techs count for quota
             ])
 
             const usage = {
@@ -125,14 +126,13 @@ export function useLicenseCheck() {
                 } else {
                     if (usage.clients >= (limits.clients as number)) canAddClient = false
                     if (usage.os >= (limits.os as number)) canAddOS = false
-                    // Trial allows 1 user (the owner) or maybe 1 extra? 
-                    // "Pequena equipe" suggestion implies trial might be limited. 
-                    // Let's allow 1 tech in trial for testing? Or just owner? 
-                    // User said: "1. Essencial (1 técnico)". So Trial probably just owner (0 extra techs).
                     if (usage.team >= (limits.team as number)) canAddTeamMember = false
                 }
             } else {
-                // Paid Plans
+                // Paid Plans - No limits for OS and Clients
+                canAddClient = true
+                canAddOS = true
+
                 if (limits.team !== 'unlimited' && usage.team >= (limits.team as number)) {
                     canAddTeamMember = false
                 }

@@ -69,6 +69,11 @@ function App() {
                                     <PrintServiceOrder />
                                 </ProtectedRoute>
                             } />
+                            <Route path="/print/:id" element={
+                                <ProtectedRoute>
+                                    <PrintServiceOrder />
+                                </ProtectedRoute>
+                            } />
                             <Route path="/tecnico/extrato" element={
                                 <ProtectedRoute>
                                     <TechnicianFinancialPrint />

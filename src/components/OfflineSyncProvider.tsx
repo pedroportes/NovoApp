@@ -55,25 +55,18 @@ export function OfflineSyncProvider({ children }: { children: React.ReactNode })
     return (
         <>
             {/* Visual Indicator of Connection Status */}
-            <div className={`fixed bottom-24 left-4 md:bottom-4 md:left-[300px] z-[60] flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium shadow-lg transition-all ${isOnline
-                ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-200'
-                : 'bg-amber-500/10 text-amber-600 border border-amber-200'
-                }`}>
+            <div
+                title={isSyncing ? "Sincronizando..." : isOnline ? "Online" : "Offline / Local"}
+                className={`fixed bottom-[88px] left-[70px] md:bottom-6 md:right-6 z-[60] flex items-center justify-center w-8 h-8 rounded-full shadow-lg transition-all ${isOnline
+                    ? 'bg-emerald-500 text-white border-2 border-white'
+                    : 'bg-amber-500 text-white border-2 border-white'
+                    }`}>
                 {isSyncing ? (
-                    <>
-                        <RefreshCw className="w-3 h-3 animate-spin" />
-                        Sincronizando...
-                    </>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
                 ) : isOnline ? (
-                    <>
-                        <Wifi className="w-3 h-3" />
-                        Online
-                    </>
+                    <Wifi className="w-4 h-4" />
                 ) : (
-                    <>
-                        <WifiOff className="w-3 h-3" />
-                        Modo Offline
-                    </>
+                    <WifiOff className="w-4 h-4" />
                 )}
             </div>
             {children}
