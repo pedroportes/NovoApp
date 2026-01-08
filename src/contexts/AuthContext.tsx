@@ -2,8 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { authStorage, UserData } from '@/lib/auth-storage'
-// import { Database } from '@/types/supabase'
-type Database = any
+import { Database } from '@/types/supabase'
 
 interface AuthContextType {
     user: User | null
@@ -62,8 +61,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (!data) {
                 console.warn('Usuário logado mas sem perfil na tabela usuarios. Tentando recuperação...')
                 const { data: recovery, error: recoveryError } = await supabase.rpc('ensure_complete_signup')
+                const recoveryData = recovery as any
 
-                if (recovery?.success) {
+                if (recoveryData?.success) {
                     // Tenta buscar novamente após recuperação
                     const { data: retryData } = await supabase
                         .from('usuarios')
