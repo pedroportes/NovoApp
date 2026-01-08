@@ -59,9 +59,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 .eq('id', userId)
                 .maybeSingle()
 
-            if (error) {
-                console.error('Erro ao buscar perfil do usuário:', error.message)
-                return
+            if (!data) {
+                console.warn('Usuário logado mas sem perfil na tabela usuarios. Tentando recuperação...')
+                const { data: recovery, error: recoveryError } = await supabase.rpc('ensure_complete_signup')
+
+                if (recovery?.success) {
+                    // Tenta buscar novamente após recuperação
+                    const { data: retryData } = await supabase
+                        .from('usuarios')
+                        .select('*')
+                        .eq('id', userId)
+                        .maybeSingle()
+                    if (retryData) {
+                        return loadUserData(userId) // Recarrega com os novos dados
+                    }
+                }
+                console.warn('Falha na recuperação de perfil:', recoveryError || recovery)
             }
 
             if (data) {
@@ -70,7 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 if (row.empresa_id) {
                     const { data: company } = await supabase
                         .from('empresas')
-                        .select('nome') // Corrigido de nome_fantasia para nome
+                        .select('nome')
                         .eq('id', row.empresa_id)
                         .maybeSingle()
                     if (company) companyName = company.nome
@@ -87,9 +100,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 setUserData(userData)
                 setEmpresaId(row.empresa_id)
                 authStorage.setUserData(userData)
-            } else {
-                // Usuário sem perfil público - Silent fail para não travar o app
-                console.warn('Usuário logado mas sem perfil na tabela usuarios.')
             }
         } catch (error) {
             console.error('Error loading user data:', error)
