@@ -149,8 +149,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
 
             return { success: false, error: 'Erro inesperado' }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Sign in error:', error)
+
+            // Detecta especificamente erro de conexão ou variáveis ausentes
+            if (error.message?.includes('fetch') || import.meta.env.VITE_SUPABASE_URL?.includes('placeholder')) {
+                return {
+                    success: false,
+                    error: 'Configuração Incompleta: Verifique se as variáveis de ambiente do Supabase estão configuradas na Vercel.'
+                }
+            }
+
             return { success: false, error: 'Erro de conexão. Tente novamente' }
         }
     }
