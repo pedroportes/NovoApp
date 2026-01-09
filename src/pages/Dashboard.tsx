@@ -356,19 +356,19 @@ export function Dashboard() {
                             <p className="text-center text-slate-400 py-4">Nenhuma atividade recente.</p>
                         ) : (
                             recentActivities.map((os) => (
-                                <div key={os.id} onClick={() => navigate(`/service-orders/${os.id}`)} className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-2xl transition-colors cursor-pointer group gap-3">
-                                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                                        <div className="w-10 h-10 md:w-12 md:h-12 shrink-0 rounded-2xl bg-sky-100 text-sky-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                            <ClipboardList className="h-5 w-5" />
+                                <div key={os.id} onClick={() => navigate(`/service-orders/${os.id}`)} className="flex items-center justify-between p-2 md:p-3 hover:bg-slate-50 rounded-2xl transition-colors cursor-pointer group gap-2 md:gap-3">
+                                    <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
+                                        <div className="w-8 h-8 md:w-12 md:h-12 shrink-0 rounded-2xl bg-sky-100 text-sky-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                            <ClipboardList className="h-4 w-4 md:h-5 md:w-5" />
                                         </div>
                                         <div className="min-w-0 flex-1">
-                                            <p className="text-sm font-bold text-slate-800 truncate">{os.cliente_nome || 'Cliente sem nome'}</p>
+                                            <p className="text-xs md:text-sm font-bold text-slate-800 truncate">{os.cliente_nome || 'Cliente sem nome'}</p>
                                             <div className="flex items-center gap-1 text-[10px] md:text-xs text-slate-500 whitespace-nowrap overflow-hidden">
-                                                <span className="shrink-0">OS #{os.id.slice(0, 8)}</span>
+                                                <span className="shrink-0">#{os.id.slice(0, 6)}</span>
                                                 {os.tecnico?.nome_completo && (
                                                     <>
                                                         <span className="shrink-0">•</span>
-                                                        <span className="truncate">{os.tecnico.nome_completo.split(' ')[0]}</span>
+                                                        <span className="truncate max-w-[80px] md:max-w-none">{os.tecnico.nome_completo.split(' ')[0]}</span>
                                                     </>
                                                 )}
                                             </div>

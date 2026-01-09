@@ -401,36 +401,42 @@ export function Financial() {
                                                 variant={filterType === 'ALL' ? 'default' : 'outline'}
                                                 size="sm"
                                                 onClick={() => setFilterType('ALL')}
-                                                className={cn("h-7 text-[10px] md:text-xs px-2 md:px-3", filterType === 'ALL' ? "bg-slate-800 text-white" : "")}
+                                                className={cn("h-7 px-2 md:px-3", filterType === 'ALL' ? "bg-slate-800 text-white" : "")}
+                                                title="Todas"
                                             >
-                                                Todas
+                                                <ClipboardList className="h-3.5 w-3.5 md:mr-1.5" />
+                                                <span className="hidden md:inline text-xs">Todas</span>
                                             </Button>
                                             <Button
                                                 variant={filterType === 'ENTRADA' ? 'default' : 'outline'}
                                                 size="sm"
                                                 onClick={() => setFilterType('ENTRADA')}
-                                                className={cn("h-7 text-[10px] md:text-xs px-2 md:px-3", filterType === 'ENTRADA' ? "bg-emerald-600 text-white" : "text-emerald-600 border-emerald-200 bg-emerald-50")}
+                                                className={cn("h-7 px-2 md:px-3", filterType === 'ENTRADA' ? "bg-emerald-600 text-white" : "text-emerald-600 border-emerald-200 bg-emerald-50")}
+                                                title="Entradas"
                                             >
-                                                Entradas
+                                                <ArrowUpCircle className="h-3.5 w-3.5 md:mr-1.5" />
+                                                <span className="hidden md:inline text-xs">Entradas</span>
                                             </Button>
                                             <Button
                                                 variant={filterType === 'SAIDA' ? 'default' : 'outline'}
                                                 size="sm"
                                                 onClick={() => setFilterType('SAIDA')}
-                                                className={cn("h-7 text-[10px] md:text-xs px-2 md:px-3", filterType === 'SAIDA' ? "bg-red-600 text-white" : "text-red-600 border-red-200 bg-red-50")}
+                                                className={cn("h-7 px-2 md:px-3", filterType === 'SAIDA' ? "bg-red-600 text-white" : "text-red-600 border-red-200 bg-red-50")}
+                                                title="Saídas"
                                             >
-                                                Saídas
+                                                <ArrowDownCircle className="h-3.5 w-3.5 md:mr-1.5" />
+                                                <span className="hidden md:inline text-xs">Saídas</span>
                                             </Button>
                                         </div>
                                     </div>
                                 </CardHeader>
                                 <CardContent>
                                     <div className="rounded-md border overflow-hidden">
-                                        <table className="w-full text-sm text-left">
+                                        <table className="w-full text-sm text-left table-fixed">
                                             <thead className="bg-slate-50 text-slate-500 font-medium">
                                                 <tr>
-                                                    <th className="p-2 md:p-3">Descrição</th>
-                                                    <th className="p-2 md:p-3 text-right">Valor</th>
+                                                    <th className="p-2 md:p-3 w-[70%]">Descrição</th>
+                                                    <th className="p-2 md:p-3 text-right w-[30%]">Valor</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-100">
