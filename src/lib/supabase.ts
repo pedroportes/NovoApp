@@ -4,14 +4,11 @@ import { Database } from '@/types/supabase'
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-const isPlaceholder = !supabaseUrl || !supabaseAnonKey || supabaseUrl.includes('placeholder')
-
-if (isPlaceholder) {
-    const errorMsg = '⚠️ SUPABASE NÃO CONFIGURADO: As variáveis de ambiente não foram encontradas na Vercel. O sistema está usando um URL de teste (placeholder).'
-    console.error(errorMsg)
+if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Supabase Environment Variables Missing! Please configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY')
 }
 
 export const supabase = createClient<Database>(
-    supabaseUrl || 'https://placeholder.supabase.co',
-    supabaseAnonKey || 'placeholder'
+    supabaseUrl,
+    supabaseAnonKey
 )
