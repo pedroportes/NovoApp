@@ -38,7 +38,10 @@ function App() {
                             <Route path="/login" element={<Login />} />
                             <Route path="/signup" element={<SignUp />} />
 
-                            {/* Protected Routes */}
+                            {/* Public Print Routes (Access via Link) */}
+                            <Route path="/print/service-orders/:id" element={<PrintServiceOrder />} />
+                            <Route path="/print/:id" element={<PrintServiceOrder />} />
+                            <Route path="/tecnico/extrato" element={<TechnicianFinancialPrint />} />
                             <Route element={
                                 <ProtectedRoute>
                                     <MainLayout />
@@ -63,22 +66,6 @@ function App() {
                                 <Route path="/plans" element={<Plans />} />
                             </Route>
 
-                            {/* Print Route (Authenticated but no Layout) */}
-                            <Route path="/print/service-orders/:id" element={
-                                <ProtectedRoute>
-                                    <PrintServiceOrder />
-                                </ProtectedRoute>
-                            } />
-                            <Route path="/print/:id" element={
-                                <ProtectedRoute>
-                                    <PrintServiceOrder />
-                                </ProtectedRoute>
-                            } />
-                            <Route path="/tecnico/extrato" element={
-                                <ProtectedRoute>
-                                    <TechnicianFinancialPrint />
-                                </ProtectedRoute>
-                            } />
 
                             {/* Catch all - redirect to home */}
                             <Route path="*" element={<Navigate to="/" replace />} />

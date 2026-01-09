@@ -20,36 +20,18 @@ export function PrintServiceOrder() {
 
     const fetchData = async () => {
         try {
-            // 1. Fetch OS Details
-            const { data: rawOsData, error: osError } = await supabase
-                .from('ordens_servico')
-                .select('*')
-                .eq('id', id!)
-                .single()
+            // Use the RPC function that allows public access via UUID
+            const { data: rpcData, error } = await supabase
+                .rpc('get_service_order_for_print' as any, { p_os_id: id })
 
-            const osData: any = rawOsData
+            if (error) throw error
+            if (!rpcData) throw new Error('Documento não encontrado.')
 
-            if (osError) throw osError
+            const { os: osData, client: clientData, company: companyData } = rpcData as any
 
             // Apply override if present
             if (typeOverride) {
                 osData.tipo = typeOverride
-            }
-
-            // 2. Fetch Client Details (if cliente_id exists)
-            let clientData = null
-            if (osData.cliente_id) {
-                const { data: cData, error: cError } = await supabase
-                    .from('clientes')
-                    .select('*')
-                    .eq('id', osData.cliente_id)
-                    .single()
-
-                if (!cError) {
-                    clientData = cData
-                } else {
-                    console.warn('Error fetching client:', cError)
-                }
             }
 
             // Merge client data into OS object for the component
@@ -59,24 +41,16 @@ export function PrintServiceOrder() {
             }
             setOs(osWithClient)
 
-            // 3. Fetch Company Details
-            if (osData.empresa_id) {
-                const { data: companyData, error: companyError } = await supabase
-                    .from('empresas')
-                    .select('*')
-                    .eq('id', osData.empresa_id)
-                    .single()
-
-                if (companyError) {
-                    console.warn('Error fetching company:', companyError)
-                    setCompany({ nome: 'FlowDrain Services' })
-                } else {
-                    setCompany(companyData)
-                }
+            // Set Company
+            if (!companyData) {
+                setCompany({ nome: 'FlowDrain Services' }) // Fallback
+            } else {
+                setCompany(companyData)
             }
+
         } catch (error) {
             console.error('Error fetching print data:', error)
-            alert('Erro ao carregar dados para impressão. Verifique o console para mais detalhes.')
+            alert('Erro ao carregar documento. O link pode estar expirado ou inválido.')
         } finally {
             setLoading(false)
         }
