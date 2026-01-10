@@ -16,89 +16,53 @@ export type Database = {
         Tables: {
             clientes: {
                 Row: {
-                    address: string | null
                     ativo: boolean | null
-                    avatar_url: string | null
                     bairro: string | null
                     cep: string | null
                     cidade: string | null
                     complemento: string | null
                     cpf_cnpj: string | null
-                    created_at: string
-                    documento: string | null
+                    created_at: string | null
                     email: string | null
                     empresa_id: string | null
-                    endereco: string | null
                     id: string
-                    is_recurring: boolean | null
                     logradouro: string | null
-                    nome: string | null
                     nome_razao: string
                     numero: string | null
-                    photo_url: string | null
-                    rating: number | null
-                    reference: string | null
-                    referencia: string | null
-                    signature_url: string | null
-                    telefone: string | null
                     uf: string | null
                     whatsapp: string | null
                 }
                 Insert: {
-                    address?: string | null
                     ativo?: boolean | null
-                    avatar_url?: string | null
                     bairro?: string | null
                     cep?: string | null
                     cidade?: string | null
                     complemento?: string | null
                     cpf_cnpj?: string | null
-                    created_at?: string
-                    documento?: string | null
+                    created_at?: string | null
                     email?: string | null
                     empresa_id?: string | null
-                    endereco?: string | null
                     id?: string
-                    is_recurring?: boolean | null
                     logradouro?: string | null
-                    nome?: string | null
                     nome_razao: string
                     numero?: string | null
-                    photo_url?: string | null
-                    rating?: number | null
-                    reference?: string | null
-                    referencia?: string | null
-                    signature_url?: string | null
-                    telefone?: string | null
                     uf?: string | null
                     whatsapp?: string | null
                 }
                 Update: {
-                    address?: string | null
                     ativo?: boolean | null
-                    avatar_url?: string | null
                     bairro?: string | null
                     cep?: string | null
                     cidade?: string | null
                     complemento?: string | null
                     cpf_cnpj?: string | null
-                    created_at?: string
-                    documento?: string | null
+                    created_at?: string | null
                     email?: string | null
                     empresa_id?: string | null
-                    endereco?: string | null
                     id?: string
-                    is_recurring?: boolean | null
                     logradouro?: string | null
-                    nome?: string | null
                     nome_razao?: string
                     numero?: string | null
-                    photo_url?: string | null
-                    rating?: number | null
-                    reference?: string | null
-                    referencia?: string | null
-                    signature_url?: string | null
-                    telefone?: string | null
                     uf?: string | null
                     whatsapp?: string | null
                 }
@@ -112,158 +76,176 @@ export type Database = {
                     },
                 ]
             }
-            documentos_os: {
+            despesas_tecnicos: {
                 Row: {
-                    created_at: string
+                    comprovante_url: string | null
+                    created_at: string | null
+                    descricao: string
+                    empresa_id: string | null
                     id: string
-                    nome: string
-                    ordem_servico_id: string
-                    tipo: string
-                    url: string
+                    status: string | null
+                    tecnico_id: string | null
+                    valor: number
                 }
                 Insert: {
-                    created_at?: string
+                    comprovante_url?: string | null
+                    created_at?: string | null
+                    descricao: string
+                    empresa_id?: string | null
                     id?: string
-                    nome: string
-                    ordem_servico_id: string
-                    tipo: string
-                    url: string
+                    status?: string | null
+                    tecnico_id?: string | null
+                    valor: number
                 }
                 Update: {
-                    created_at?: string
+                    comprovante_url?: string | null
+                    created_at?: string | null
+                    descricao?: string
+                    empresa_id?: string | null
                     id?: string
-                    nome?: string
-                    ordem_servico_id?: string
-                    tipo?: string
-                    url?: string
+                    status?: string | null
+                    tecnico_id?: string | null
+                    valor?: number
                 }
                 Relationships: [
                     {
-                        foreignKeyName: "documentos_os_ordem_servico_id_fkey"
-                        columns: ["ordem_servico_id"]
+                        foreignKeyName: "despesas_tecnicos_empresa_id_fkey"
+                        columns: ["empresa_id"]
                         isOneToOne: false
-                        referencedRelation: "ordens_servico"
+                        referencedRelation: "empresas"
+                        referencedColumns: ["id"]
+                    },
+                    {
+                        foreignKeyName: "despesas_tecnicos_tecnico_id_fkey"
+                        columns: ["tecnico_id"]
+                        isOneToOne: false
+                        referencedRelation: "usuarios"
                         referencedColumns: ["id"]
                     },
                 ]
             }
             empresas: {
                 Row: {
-                    active: boolean | null
-                    address: string | null
-                    bairro: string | null
-                    celular: string | null
-                    cep: string | null
-                    cidade: string | null
                     cnpj: string | null
-                    complemento: string | null
-                    configuracoes: Json | null
-                    created_at: string
+                    created_at: string | null
                     current_period_end: string | null
                     dono_id: string | null
-                    email: string | null
                     id: string
-                    logo_url: string | null
                     nome: string
                     nome_fantasia: string | null
-                    numero: string | null
-                    plano: string | null
-                    slug: string | null
                     stripe_customer_id: string | null
                     stripe_subscription_id: string | null
                     subscription_price_id: string | null
                     subscription_status: string | null
-                    telefone: string | null
-                    uf: string | null
-                    updated_at: string | null
                 }
                 Insert: {
-                    active?: boolean | null
-                    address?: string | null
-                    bairro?: string | null
-                    celular?: string | null
-                    cep?: string | null
-                    cidade?: string | null
                     cnpj?: string | null
-                    complemento?: string | null
-                    configuracoes?: Json | null
-                    created_at?: string
+                    created_at?: string | null
                     current_period_end?: string | null
                     dono_id?: string | null
+                    id?: string
+                    nome: string
+                    nome_fantasia?: string | null
+                    stripe_customer_id?: string | null
+                    stripe_subscription_id?: string | null
+                    subscription_price_id?: string | null
+                    subscription_status?: string | null
+                }
+                Update: {
+                    cnpj?: string | null
+                    created_at?: string | null
+                    current_period_end?: string | null
+                    dono_id?: string | null
+                    id?: string
+                    nome?: string
+                    nome_fantasia?: string | null
+                    stripe_customer_id?: string | null
+                    stripe_subscription_id?: string | null
+                    subscription_price_id?: string | null
+                    subscription_status?: string | null
+                }
+                Relationships: [
+                    {
+                        foreignKeyName: "empresas_dono_id_fkey"
+                        columns: ["dono_id"]
+                        isOneToOne: false
+                        referencedRelation: "usuarios"
+                        referencedColumns: ["id"]
+                    },
+                ]
+            }
+            empresa_settings: {
+                Row: {
+                    created_at: string | null
+                    email: string | null
+                    empresa_id: string | null
+                    endereco: string | null
+                    id: string
+                    logo_url: string | null
+                    nome: string
+                    plano: string | null
+                    status: string | null
+                    telefone: string | null
+                }
+                Insert: {
+                    created_at?: string | null
                     email?: string | null
+                    empresa_id?: string | null
+                    endereco?: string | null
                     id?: string
                     logo_url?: string | null
                     nome: string
-                    nome_fantasia?: string | null
-                    numero?: string | null
                     plano?: string | null
-                    slug?: string | null
-                    stripe_customer_id?: string | null
-                    stripe_subscription_id?: string | null
-                    subscription_price_id?: string | null
-                    subscription_status?: string | null
+                    status?: string | null
                     telefone?: string | null
-                    uf?: string | null
-                    updated_at?: string | null
                 }
                 Update: {
-                    active?: boolean | null
-                    address?: string | null
-                    bairro?: string | null
-                    celular?: string | null
-                    cep?: string | null
-                    cidade?: string | null
-                    cnpj?: string | null
-                    complemento?: string | null
-                    configuracoes?: Json | null
-                    created_at?: string
-                    current_period_end?: string | null
-                    dono_id?: string | null
+                    created_at?: string | null
                     email?: string | null
+                    empresa_id?: string | null
+                    endereco?: string | null
                     id?: string
                     logo_url?: string | null
                     nome?: string
-                    nome_fantasia?: string | null
-                    numero?: string | null
                     plano?: string | null
-                    slug?: string | null
-                    stripe_customer_id?: string | null
-                    stripe_subscription_id?: string | null
-                    subscription_price_id?: string | null
-                    subscription_status?: string | null
+                    status?: string | null
                     telefone?: string | null
-                    uf?: string | null
-                    updated_at?: string | null
                 }
                 Relationships: []
             }
             estoque: {
                 Row: {
-                    created_at: string
-                    descricao: string | null
+                    created_at: string | null
                     empresa_id: string | null
                     id: string
                     nome: string
-                    quantidade: number | null
-                    unidade: string | null
+                    quantidade_atual: number
+                    quantidade_minima: number
+                    unidade: string
+                    valor_custo: number | null
+                    valor_venda: number | null
                 }
                 Insert: {
-                    created_at?: string
-                    descricao?: string | null
+                    created_at?: string | null
                     empresa_id?: string | null
                     id?: string
                     nome: string
-                    quantidade?: number | null
-                    unidade?: string | null
+                    quantidade_atual?: number
+                    quantidade_minima?: number
+                    unidade?: string
+                    valor_custo?: number | null
+                    valor_venda?: number | null
                 }
                 Update: {
-                    created_at?: string
-                    descricao?: string | null
+                    created_at?: string | null
                     empresa_id?: string | null
                     id?: string
                     nome?: string
-                    quantidade?: number | null
-                    unidade?: string | null
+                    quantidade_atual?: number
+                    quantidade_minima?: number
+                    unidade?: string
+                    valor_custo?: number | null
+                    valor_venda?: number | null
                 }
                 Relationships: [
                     {
@@ -278,43 +260,34 @@ export type Database = {
             financeiro_fluxo: {
                 Row: {
                     categoria: string | null
-                    created_at: string
-                    data: string
-                    descricao: string | null
+                    created_at: string | null
+                    data_lancamento: string
+                    descricao: string
                     empresa_id: string | null
                     id: string
-                    metodo_pagamento: string | null
-                    ordem_servico_id: string | null
                     status: string | null
-                    tecnico_id: string | null
                     tipo: string
                     valor: number
                 }
                 Insert: {
                     categoria?: string | null
-                    created_at?: string
-                    data?: string
-                    descricao?: string | null
+                    created_at?: string | null
+                    data_lancamento?: string
+                    descricao: string
                     empresa_id?: string | null
                     id?: string
-                    metodo_pagamento?: string | null
-                    ordem_servico_id?: string | null
                     status?: string | null
-                    tecnico_id?: string | null
                     tipo: string
                     valor: number
                 }
                 Update: {
                     categoria?: string | null
-                    created_at?: string
-                    data?: string
-                    descricao?: string | null
+                    created_at?: string | null
+                    data_lancamento?: string
+                    descricao?: string
                     empresa_id?: string | null
                     id?: string
-                    metodo_pagamento?: string | null
-                    ordem_servico_id?: string | null
                     status?: string | null
-                    tecnico_id?: string | null
                     tipo?: string
                     valor?: number
                 }
@@ -326,15 +299,62 @@ export type Database = {
                         referencedRelation: "empresas"
                         referencedColumns: ["id"]
                     },
+                ]
+            }
+            historico_comissoes: {
+                Row: {
+                    comissao_percentual: number
+                    created_at: string | null
+                    data_fechamento: string | null
+                    empresa_id: string | null
+                    id: string
+                    os_id: string | null
+                    status_pagamento: string | null
+                    tecnico_id: string | null
+                    valor_base: number
+                    valor_comissao: number
+                }
+                Insert: {
+                    comissao_percentual: number
+                    created_at?: string | null
+                    data_fechamento?: string | null
+                    empresa_id?: string | null
+                    id?: string
+                    os_id?: string | null
+                    status_pagamento?: string | null
+                    tecnico_id?: string | null
+                    valor_base: number
+                    valor_comissao: number
+                }
+                Update: {
+                    comissao_percentual?: number
+                    created_at?: string | null
+                    data_fechamento?: string | null
+                    empresa_id?: string | null
+                    id?: string
+                    os_id?: string | null
+                    status_pagamento?: string | null
+                    tecnico_id?: string | null
+                    valor_base?: number
+                    valor_comissao?: number
+                }
+                Relationships: [
                     {
-                        foreignKeyName: "financeiro_fluxo_ordem_servico_id_fkey"
-                        columns: ["ordem_servico_id"]
+                        foreignKeyName: "historico_comissoes_empresa_id_fkey"
+                        columns: ["empresa_id"]
+                        isOneToOne: false
+                        referencedRelation: "empresas"
+                        referencedColumns: ["id"]
+                    },
+                    {
+                        foreignKeyName: "historico_comissoes_os_id_fkey"
+                        columns: ["os_id"]
                         isOneToOne: false
                         referencedRelation: "ordens_servico"
                         referencedColumns: ["id"]
                     },
                     {
-                        foreignKeyName: "fk_financeiro_fluxo_tecnico"
+                        foreignKeyName: "historico_comissoes_tecnico_id_fkey"
                         columns: ["tecnico_id"]
                         isOneToOne: false
                         referencedRelation: "usuarios"
@@ -344,46 +364,33 @@ export type Database = {
             }
             notificacoes: {
                 Row: {
-                    created_at: string
-                    empresa_id: string | null
+                    created_at: string | null
                     id: string
                     lida: boolean | null
                     mensagem: string
-                    tipo: string | null
                     titulo: string
-                    usuario_id: string | null
+                    user_id: string | null
                 }
                 Insert: {
-                    created_at?: string
-                    empresa_id?: string | null
+                    created_at?: string | null
                     id?: string
                     lida?: boolean | null
                     mensagem: string
-                    tipo?: string | null
                     titulo: string
-                    usuario_id?: string | null
+                    user_id?: string | null
                 }
                 Update: {
-                    created_at?: string
-                    empresa_id?: string | null
+                    created_at?: string | null
                     id?: string
                     lida?: boolean | null
                     mensagem?: string
-                    tipo?: string | null
                     titulo?: string
-                    usuario_id?: string | null
+                    user_id?: string | null
                 }
                 Relationships: [
                     {
-                        foreignKeyName: "notificacoes_empresa_id_fkey"
-                        columns: ["empresa_id"]
-                        isOneToOne: false
-                        referencedRelation: "empresas"
-                        referencedColumns: ["id"]
-                    },
-                    {
-                        foreignKeyName: "notificacoes_usuario_id_fkey"
-                        columns: ["usuario_id"]
+                        foreignKeyName: "notificacoes_user_id_fkey"
+                        columns: ["user_id"]
                         isOneToOne: false
                         referencedRelation: "usuarios"
                         referencedColumns: ["id"]
@@ -393,56 +400,59 @@ export type Database = {
             ordens_servico: {
                 Row: {
                     cliente_id: string | null
-                    contrato_gerado: boolean | null
-                    created_at: string
+                    cliente_nome: string | null
+                    created_at: string | null
                     data_agendamento: string | null
-                    data_conclusao: string | null
-                    data_inicio: string | null
                     descricao: string | null
+                    deslocamento_iniciado_em: string | null
                     empresa_id: string | null
+                    endereco: string | null
+                    fotos_conclusao: string[] | null
                     id: string
-                    metodo_pagamento: string | null
-                    observacoes: string | null
-                    orcamento_gerado: boolean | null
-                    recibo_gerado: boolean | null
+                    itens: Json | null
+                    observacoes_internas: string | null
+                    previsao_chegada: string | null
                     status: string | null
                     tecnico_id: string | null
+                    updated_at: string | null
                     valor_total: number | null
                 }
                 Insert: {
                     cliente_id?: string | null
-                    contrato_gerado?: boolean | null
-                    created_at?: string
+                    cliente_nome?: string | null
+                    created_at?: string | null
                     data_agendamento?: string | null
-                    data_conclusao?: string | null
-                    data_inicio?: string | null
                     descricao?: string | null
+                    deslocamento_iniciado_em?: string | null
                     empresa_id?: string | null
+                    endereco?: string | null
+                    fotos_conclusao?: string[] | null
                     id?: string
-                    metodo_pagamento?: string | null
-                    observacoes?: string | null
-                    orcamento_gerado?: boolean | null
-                    recibo_gerado?: boolean | null
+                    itens?: Json | null
+                    observacoes_internas?: string | null
+                    previsao_chegada?: string | null
                     status?: string | null
                     tecnico_id?: string | null
+                    updated_at?: string | null
                     valor_total?: number | null
                 }
                 Update: {
                     cliente_id?: string | null
-                    contrato_gerado?: boolean | null
-                    created_at?: string
+                    cliente_nome?: string | null
+                    created_at?: string | null
                     data_agendamento?: string | null
-                    data_conclusao?: string | null
-                    data_inicio?: string | null
                     descricao?: string | null
+                    deslocamento_iniciado_em?: string | null
                     empresa_id?: string | null
+                    endereco?: string | null
+                    fotos_conclusao?: string[] | null
                     id?: string
-                    metodo_pagamento?: string | null
-                    observacoes?: string | null
-                    orcamento_gerado?: boolean | null
-                    recibo_gerado?: boolean | null
+                    itens?: Json | null
+                    observacoes_internas?: string | null
+                    previsao_chegada?: string | null
                     status?: string | null
                     tecnico_id?: string | null
+                    updated_at?: string | null
                     valor_total?: number | null
                 }
                 Relationships: [
@@ -471,28 +481,40 @@ export type Database = {
             }
             servicos: {
                 Row: {
-                    created_at: string
+                    ativo: boolean | null
+                    comissao_fixa: number | null
+                    comissao_percentual: number | null
+                    created_at: string | null
                     descricao: string | null
                     empresa_id: string | null
                     id: string
                     nome: string
-                    preco_sugerido: number | null
+                    preco_padrao: number
+                    tipo_comissao: string | null
                 }
                 Insert: {
-                    created_at?: string
+                    ativo?: boolean | null
+                    comissao_fixa?: number | null
+                    comissao_percentual?: number | null
+                    created_at?: string | null
                     descricao?: string | null
                     empresa_id?: string | null
                     id?: string
                     nome: string
-                    preco_sugerido?: number | null
+                    preco_padrao: number
+                    tipo_comissao?: string | null
                 }
                 Update: {
-                    created_at?: string
+                    ativo?: boolean | null
+                    comissao_fixa?: number | null
+                    comissao_percentual?: number | null
+                    created_at?: string | null
                     descricao?: string | null
                     empresa_id?: string | null
                     id?: string
                     nome?: string
-                    preco_sugerido?: number | null
+                    preco_padrao?: number
+                    tipo_comissao?: string | null
                 }
                 Relationships: [
                     {
@@ -506,40 +528,46 @@ export type Database = {
             }
             usuarios: {
                 Row: {
+                    active: boolean | null
                     avatar_url: string | null
-                    cargo: string | null
-                    created_at: string
-                    email: string | null
+                    cargo: string
+                    created_at: string | null
+                    email: string
                     empresa_id: string | null
                     id: string
-                    nome: string | null
+                    last_location: unknown | null
                     nome_completo: string | null
+                    pix_chave: string | null
+                    pix_tipo: string | null
                     telefone: string | null
-                    updated_at: string | null
                 }
                 Insert: {
+                    active?: boolean | null
                     avatar_url?: string | null
-                    cargo?: string | null
-                    created_at?: string
-                    email?: string | null
+                    cargo?: string
+                    created_at?: string | null
+                    email: string
                     empresa_id?: string | null
                     id: string
-                    nome?: string | null
+                    last_location?: unknown | null
                     nome_completo?: string | null
+                    pix_chave?: string | null
+                    pix_tipo?: string | null
                     telefone?: string | null
-                    updated_at?: string | null
                 }
                 Update: {
+                    active?: boolean | null
                     avatar_url?: string | null
-                    cargo?: string | null
-                    created_at?: string
-                    email?: string | null
+                    cargo?: string
+                    created_at?: string | null
+                    email?: string
                     empresa_id?: string | null
                     id?: string
-                    nome?: string | null
+                    last_location?: unknown | null
                     nome_completo?: string | null
+                    pix_chave?: string | null
+                    pix_tipo?: string | null
                     telefone?: string | null
-                    updated_at?: string | null
                 }
                 Relationships: [
                     {
@@ -554,30 +582,42 @@ export type Database = {
             veiculos: {
                 Row: {
                     ano: number | null
-                    created_at: string
-                    empresa_id: string | null
+                    ativo: boolean | null
+                    created_at: string | null
+                    empresa_id: string
                     id: string
-                    marca: string | null
-                    modelo: string | null
+                    km_atual: number | null
+                    marca: string
+                    modelo: string
                     placa: string
+                    prox_revisao_data: string | null
+                    prox_revisao_km: number | null
                 }
                 Insert: {
                     ano?: number | null
-                    created_at?: string
-                    empresa_id?: string | null
+                    ativo?: boolean | null
+                    created_at?: string | null
+                    empresa_id: string
                     id?: string
-                    marca?: string | null
-                    modelo?: string | null
+                    km_atual?: number | null
+                    marca: string
+                    modelo: string
                     placa: string
+                    prox_revisao_data?: string | null
+                    prox_revisao_km?: number | null
                 }
                 Update: {
                     ano?: number | null
-                    created_at?: string
-                    empresa_id?: string | null
+                    ativo?: boolean | null
+                    created_at?: string | null
+                    empresa_id?: string
                     id?: string
-                    marca?: string | null
-                    modelo?: string | null
+                    km_atual?: number | null
+                    marca?: string
+                    modelo?: string
                     placa?: string
+                    prox_revisao_data?: string | null
+                    prox_revisao_km?: number | null
                 }
                 Relationships: [
                     {
@@ -594,9 +634,51 @@ export type Database = {
             [_ in never]: never
         }
         Functions: {
-            ensure_complete_signup: {
-                Args: Record<PropertyKey, never>
+            create_company_and_user: {
+                Args: {
+                    p_company_name: string
+                    p_user_email: string
+                    p_user_id: string
+                    p_user_role: string
+                }
                 Returns: Json
+            }
+            create_technician_user: {
+                Args: {
+                    p_email: string
+                    p_password: string
+                    p_empresa_id: string
+                    p_nome_completo: string
+                    p_telefone: string
+                    p_cargo: string
+                }
+                Returns: string
+            }
+            get_dashboard_stats: {
+                Args: {
+                    p_empresa_id: string
+                    p_start_date?: string
+                    p_end_date?: string
+                }
+                Returns: {
+                    total_revenue: number
+                    period_revenue: number
+                    active_services: number
+                    total_clients: number
+                }[]
+            }
+            get_technician_balance: {
+                Args: {
+                    p_tecnico_id: string
+                    p_month: string
+                }
+                Returns: {
+                    saldo_final: number
+                    total_comissoes: number
+                    total_adiantamentos: number
+                    total_despesas: number
+                    bonus: number
+                }[]
             }
         }
         Enums: {
@@ -607,3 +689,100 @@ export type Database = {
         }
     }
 }
+
+type PublicSchema = Database[Extract<keyof Database, "public">]
+
+export type Tables<
+    PublicTableNameOrOptions extends
+    | keyof (PublicSchema["Tables"] & PublicSchema["Views"])
+    | { schema: keyof Database },
+    TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
+    ? keyof (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
+        Database[PublicTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+> = PublicTableNameOrOptions extends { schema: keyof Database }
+    ? (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
+        Database[PublicTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+            Row: infer R
+        }
+    ? R
+    : never
+    : PublicTableNameOrOptions extends keyof (PublicSchema["Tables"] &
+        PublicSchema["Views"])
+    ? (PublicSchema["Tables"] &
+        PublicSchema["Views"])[PublicTableNameOrOptions] extends {
+            Row: infer R
+        }
+    ? R
+    : never
+    : never
+
+export type TablesInsert<
+    PublicTableNameOrOptions extends
+    | keyof PublicSchema["Tables"]
+    | { schema: keyof Database },
+    TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
+    ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = PublicTableNameOrOptions extends { schema: keyof Database }
+    ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+        Insert: infer I
+    }
+    ? I
+    : never
+    : PublicTableNameOrOptions extends keyof PublicSchema["Tables"]
+    ? PublicSchema["Tables"][PublicTableNameOrOptions] extends {
+        Insert: infer I
+    }
+    ? I
+    : never
+    : never
+
+export type TablesUpdate<
+    PublicTableNameOrOptions extends
+    | keyof PublicSchema["Tables"]
+    | { schema: keyof Database },
+    TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
+    ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = PublicTableNameOrOptions extends { schema: keyof Database }
+    ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+        Update: infer U
+    }
+    ? U
+    : never
+    : PublicTableNameOrOptions extends keyof PublicSchema["Tables"]
+    ? PublicSchema["Tables"][PublicTableNameOrOptions] extends {
+        Update: infer U
+    }
+    ? U
+    : never
+    : never
+
+export type Enums<
+    PublicEnumNameOrOptions extends
+    | keyof PublicSchema["Enums"]
+    | { schema: keyof Database },
+    EnumName extends PublicEnumNameOrOptions extends { schema: keyof Database }
+    ? keyof Database[PublicEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = PublicEnumNameOrOptions extends { schema: keyof Database }
+    ? Database[PublicEnumNameOrOptions["schema"]]["Enums"][EnumName]
+    : PublicEnumNameOrOptions extends keyof PublicSchema["Enums"]
+    ? PublicSchema["Enums"][PublicEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+    PublicCompositeTypeNameOrOptions extends
+    | keyof PublicSchema["CompositeTypes"]
+    | { schema: keyof Database },
+    CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+        schema: keyof Database
+    }
+    ? keyof Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends { schema: keyof Database }
+    ? Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+    : PublicCompositeTypeNameOrOptions extends keyof PublicSchema["CompositeTypes"]
+    ? PublicSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never

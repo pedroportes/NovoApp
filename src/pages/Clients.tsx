@@ -33,6 +33,27 @@ export function Clients() {
     const navigate = useNavigate()
     const { clients, loading } = useOfflineClients()
     const [searchTerm, setSearchTerm] = useState('')
+    const [configs, setConfigs] = useState({
+        view_all_clients: true,
+        can_create_client: true,
+        can_import_clients: true,
+        can_delete_clients: true,
+        can_edit_clients: true
+    })
+
+    useEffect(() => {
+        if (userData?.empresa_id && userData.cargo === 'tecnico') {
+            supabase.from('empresas')
+                .select('configs')
+                .eq('id', userData.empresa_id)
+                .single()
+                .then(({ data }) => {
+                    if (data?.configs) {
+                        setConfigs(c => ({ ...c, ...data.configs as any }))
+                    }
+                })
+        }
+    }, [userData])
 
     // Form States
     const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -111,6 +132,10 @@ export function Clients() {
     }, [canAddClient, isTrialExpired, limits.clients, openNewClientDialog])
 
     const handleImportClick = () => {
+        if (userData?.cargo === 'tecnico' && !configs.can_import_clients) {
+            alert('Você não tem permissão para importar clientes.')
+            return
+        }
         if (!canAddClient) {
             if (isTrialExpired) {
                 setUpgradeMessage("Seu período de teste expirou.")
@@ -213,7 +238,19 @@ export function Clients() {
     // fetchClients removed
 
 
+
+    // Filter by permission (if technician and view_all_clients is false)
+    const availableClients = clients ? (
+        (userData?.cargo === 'tecnico' && !configs.view_all_clients)
+            ? clients.filter(c => c.criado_por === userData.id)
+            : clients
+    ) : []
+
     const handleEdit = (client: LocalClient) => {
+        if (userData?.cargo === 'tecnico' && !configs.can_edit_clients) {
+            alert('Você não tem permissão para editar clientes.')
+            return
+        }
         setEditingClientId(client.id)
 
         // LocalClient stores address fields separately, so we typically don't need to parse string
@@ -242,6 +279,10 @@ export function Clients() {
     }
 
     const handleDelete = async (id: string, name: string) => {
+        if (userData?.cargo === 'tecnico' && !configs.can_delete_clients) {
+            alert('Você não tem permissão para excluir clientes.')
+            return
+        }
         if (!confirm(`Tem certeza que deseja excluir o cliente ${name}?`)) return
 
         try {
@@ -331,7 +372,8 @@ export function Clients() {
                 ...formData,
                 avatar_url: avatarUrl,
                 signature_url: signatureUrl,
-                ativo: true
+                ativo: true,
+                criado_por: !editingClientId ? userData.id : undefined // Set creator for new clients
             })
 
             setIsDialogOpen(false)
@@ -356,7 +398,7 @@ export function Clients() {
         ].filter(Boolean).join(', ');
     }
 
-    const filteredClients = (clients || []).filter(client => {
+    const filteredClients = availableClients.filter(client => {
         const address = getClientAddress(client);
         return (
             client.nome_razao?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -416,410 +458,418 @@ export function Clients() {
             />
 
             <div className="flex justify-end mb-4 gap-2 items-center flex-wrap">
-                <Button
-                    variant="outline"
-                    className="h-9 text-sm px-3 bg-white hover:bg-slate-50 text-slate-700 border-slate-200 shadow-sm"
-                    onClick={handleDownloadExample}
-                >
-                    <Download className="mr-2 h-4 w-4" />
-                    Baixar Modelo
-                </Button>
+                {(userData?.cargo === 'admin' || configs.can_import_clients) && (
+                    <Button
+                        variant="outline"
+                        className="h-9 text-sm px-3 bg-white hover:bg-slate-50 text-slate-700 border-slate-200 shadow-sm"
+                        onClick={handleDownloadExample}
+                    >
+                        <Download className="mr-2 h-4 w-4" />
+                        <span className="hidden md:inline">Baixar Modelo</span>
+                        <span className="md:hidden">Modelo</span>
+                    </Button>
+                )}
 
-                <Button
-                    className="h-9 text-sm px-3 shadow-sm bg-blue-600 hover:bg-blue-700 text-white"
-                    onClick={handleImportClick}
-                >
-                    <Upload className="mr-2 h-4 w-4" />
-                    <span className="hidden md:inline">Importar CSV</span>
-                    <span className="md:hidden">Importar</span>
-                </Button>
+                {(userData?.cargo === 'admin' || configs.can_import_clients) && (
+                    <Button
+                        className="h-9 text-sm px-3 shadow-sm bg-blue-600 hover:bg-blue-700 text-white"
+                        onClick={handleImportClick}
+                    >
+                        <Upload className="mr-2 h-4 w-4" />
+                        <span className="hidden md:inline">Importar CSV</span>
+                        <span className="md:hidden">Importar</span>
+                    </Button>
+                )}
 
-                <Button className="h-9 text-sm px-3 shadow-sm" onClick={handleNewClientClick}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    <span className="hidden md:inline">Novo Cliente</span>
-                    <span className="md:hidden">Novo</span>
-                </Button>
+                {(userData?.cargo === 'admin' || configs.can_create_client) && (
+                    <Button className="h-9 text-sm px-3 shadow-sm" onClick={handleNewClientClick}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        <span className="hidden md:inline">Novo Cliente</span>
+                        <span className="md:hidden">Novo</span>
+                    </Button>
+                )}
+            </div>
 
-                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                    <DialogContent className="w-[95%] max-w-[600px] max-h-[85vh] overflow-y-auto rounded-xl">
-                        <DialogHeader>
-                            <DialogTitle>{editingClientId ? 'Editar Cliente' : 'Novo Cliente'}</DialogTitle>
-                            <DialogDescription>Preencha os dados do cliente.</DialogDescription>
-                        </DialogHeader>
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogContent className="w-[95%] max-w-[600px] max-h-[85vh] overflow-y-auto rounded-xl">
+                    <DialogHeader>
+                        <DialogTitle>{editingClientId ? 'Editar Cliente' : 'Novo Cliente'}</DialogTitle>
+                        <DialogDescription>Preencha os dados do cliente.</DialogDescription>
+                    </DialogHeader>
 
-                        <form onSubmit={handleSubmit} className="space-y-6 pt-4 pb-48 md:pb-4" autoComplete="off">
+                    <form onSubmit={handleSubmit} className="space-y-6 pt-4 pb-48 md:pb-4" autoComplete="off">
 
-                            {/* FOTO DA FACHADA / AVATAR */}
-                            <div className="border-2 border-dashed border-border rounded-lg p-6 flex flex-col items-center justify-center bg-muted/20 relative min-h-[160px]">
-                                {avatarPreview ? (
-                                    <>
-                                        <img src={avatarPreview} alt="Fachada" className="absolute inset-0 w-full h-full object-cover rounded-lg opacity-50" />
-                                        <div className="z-10 bg-background/80 p-2 rounded-full shadow-sm">
-                                            <Pencil className="h-6 w-6 text-foreground" />
-                                        </div>
-                                    </>
-                                ) : (
-                                    <div className="flex flex-col items-center text-muted-foreground">
-                                        <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-2">
-                                            <div className="h-6 w-6 border-2 border-current rounded-sm" /> {/* Icon placeholder like Image */}
-                                        </div>
-                                        <span className="font-semibold text-sm">ADICIONAR FOTO DA FACHADA / AVATAR</span>
-                                        <span className="text-xs">Toque para selecionar</span>
+                        {/* FOTO DA FACHADA / AVATAR */}
+                        <div className="border-2 border-dashed border-border rounded-lg p-6 flex flex-col items-center justify-center bg-muted/20 relative min-h-[160px]">
+                            {avatarPreview ? (
+                                <>
+                                    <img src={avatarPreview} alt="Fachada" className="absolute inset-0 w-full h-full object-cover rounded-lg opacity-50" />
+                                    <div className="z-10 bg-background/80 p-2 rounded-full shadow-sm">
+                                        <Pencil className="h-6 w-6 text-foreground" />
                                     </div>
-                                )}
+                                </>
+                            ) : (
+                                <div className="flex flex-col items-center text-muted-foreground">
+                                    <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-2">
+                                        <div className="h-6 w-6 border-2 border-current rounded-sm" /> {/* Icon placeholder like Image */}
+                                    </div>
+                                    <span className="font-semibold text-sm">ADICIONAR FOTO DA FACHADA / AVATAR</span>
+                                    <span className="text-xs">Toque para selecionar</span>
+                                </div>
+                            )}
+                            <input
+                                type="file"
+                                accept="image/*"
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-50"
+                                onChange={(e) => {
+                                    const file = e.target.files?.[0]
+                                    if (file) {
+                                        setAvatarFile(file)
+                                        setAvatarPreview(URL.createObjectURL(file))
+                                    }
+                                }}
+                            />
+                        </div>
+
+                        {/* OCR / Import via Photo */}
+                        {/* OCR / Import via Photo - Glassmorphism */}
+                        <div
+                            onClick={() => !processingOcr && ocrInputRef.current?.click()}
+                            className={`relative overflow-hidden rounded-2xl bg-white/40 backdrop-blur-xl border border-white/50 shadow-lg p-6 mb-8 group transition-all hover:shadow-xl hover:bg-white/50 cursor-pointer ${processingOcr ? 'opacity-70 pointer-events-none' : ''}`}
+                        >
+                            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-purple-500/5 to-blue-500/10 pointer-events-none" />
+
+                            <div className="relative flex items-center gap-6">
+                                <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20 group-hover:scale-110 transition-transform duration-300 shrink-0">
+                                    {processingOcr ? (
+                                        <div className="h-6 w-6 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                                    ) : (
+                                        <Camera className="h-6 w-6" />
+                                    )}
+                                </div>
+                                <div className="flex-1">
+                                    <h3 className="font-bold text-slate-800 text-lg leading-tight">Escanear Ficha Manual</h3>
+                                    <p className="text-sm text-slate-500">
+                                        {processingOcr ? 'Processando imagem...' : 'Toque aqui para usar a IA e preencher os dados automaticamente'}
+                                    </p>
+                                </div>
+
                                 <input
                                     type="file"
+                                    ref={ocrInputRef}
                                     accept="image/*"
-                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-50"
-                                    onChange={(e) => {
+                                    capture="environment"
+                                    className="hidden"
+                                    onChange={async (e) => {
                                         const file = e.target.files?.[0]
-                                        if (file) {
-                                            setAvatarFile(file)
-                                            setAvatarPreview(URL.createObjectURL(file))
+                                        if (!file) return
+
+                                        setProcessingOcr(true)
+                                        try {
+                                            const compressedFile = await compressImage(file, 1024, 0.7)
+                                            const data = await ocrService.processHandwriting(compressedFile)
+
+                                            if (data) {
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    nome_razao: data.nome || prev.nome_razao,
+                                                    whatsapp: data.telefone ? formatPhone(data.telefone) : prev.whatsapp,
+                                                    cep: data.cep?.replace(/(\d{5})(\d)/, '$1-$2') || prev.cep,
+                                                    logradouro: data.logradouro || prev.logradouro,
+                                                    numero: data.numero || prev.numero,
+                                                    complemento: data.complemento || prev.complemento,
+                                                    bairro: data.bairro || prev.bairro,
+                                                    cidade: data.cidade || prev.cidade,
+                                                    uf: data.uf || prev.uf,
+                                                }))
+
+                                                // Trigger CEP search if CEP is new and valid
+                                                if (data.cep && data.cep !== formData.cep) {
+                                                    const cepClean = data.cep.replace(/\D/g, '')
+                                                    if (cepClean.length === 8) {
+                                                        searchCep(cepClean) // Fire and forget update
+                                                    }
+                                                }
+
+                                                alert('Ficha processada com sucesso! Verifique os dados.')
+                                            }
+                                        } catch (error: any) {
+                                            console.error(error)
+                                            alert(`Erro ao processar imagem: ${error.message || error}`)
+                                        } finally {
+                                            setProcessingOcr(false)
+                                            if (ocrInputRef.current) ocrInputRef.current.value = ''
                                         }
                                     }}
                                 />
                             </div>
+                        </div>
 
-                            {/* OCR / Import via Photo */}
-                            {/* OCR / Import via Photo - Glassmorphism */}
-                            <div
-                                onClick={() => !processingOcr && ocrInputRef.current?.click()}
-                                className={`relative overflow-hidden rounded-2xl bg-white/40 backdrop-blur-xl border border-white/50 shadow-lg p-6 mb-8 group transition-all hover:shadow-xl hover:bg-white/50 cursor-pointer ${processingOcr ? 'opacity-70 pointer-events-none' : ''}`}
-                            >
-                                <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-purple-500/5 to-blue-500/10 pointer-events-none" />
+                        <div className="space-y-4">
+                            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Informações Básicas</h3>
 
-                                <div className="relative flex items-center gap-6">
-                                    <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20 group-hover:scale-110 transition-transform duration-300 shrink-0">
-                                        {processingOcr ? (
-                                            <div className="h-6 w-6 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                                        ) : (
-                                            <Camera className="h-6 w-6" />
-                                        )}
-                                    </div>
-                                    <div className="flex-1">
-                                        <h3 className="font-bold text-slate-800 text-lg leading-tight">Escanear Ficha Manual</h3>
-                                        <p className="text-sm text-slate-500">
-                                            {processingOcr ? 'Processando imagem...' : 'Toque aqui para usar a IA e preencher os dados automaticamente'}
-                                        </p>
-                                    </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="name">Nome Completo / Razão Social</Label>
+                                <Input
+                                    id="name"
+                                    required
+                                    className="h-12 text-lg"
+                                    placeholder="Ex: João da Silva"
+                                    value={formData.nome_razao}
+                                    onChange={e => setFormData({ ...formData, nome_razao: e.target.value })}
+                                />
+                            </div>
 
-                                    <input
-                                        type="file"
-                                        ref={ocrInputRef}
-                                        accept="image/*"
-                                        capture="environment"
-                                        className="hidden"
-                                        onChange={async (e) => {
-                                            const file = e.target.files?.[0]
-                                            if (!file) return
-
-                                            setProcessingOcr(true)
-                                            try {
-                                                const compressedFile = await compressImage(file, 1024, 0.7)
-                                                const data = await ocrService.processHandwriting(compressedFile)
-
-                                                if (data) {
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="document">CPF / CNPJ</Label>
+                                    <div className="flex gap-2">
+                                        <Input
+                                            id="document"
+                                            className="h-12 text-lg flex-1"
+                                            placeholder="000.000.000-00"
+                                            value={formData.cpf_cnpj}
+                                            onChange={e => setFormData({ ...formData, cpf_cnpj: e.target.value })}
+                                        />
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            className="h-12 px-4 text-emerald-600 border-emerald-200 hover:bg-emerald-50 whitespace-nowrap"
+                                            disabled={searchingCnpj || formData.cpf_cnpj.replace(/\D/g, '').length !== 14}
+                                            onClick={async () => {
+                                                setSearchingCnpj(true)
+                                                const result = await searchCnpj(formData.cpf_cnpj)
+                                                setSearchingCnpj(false)
+                                                if (result) {
                                                     setFormData(prev => ({
                                                         ...prev,
-                                                        nome_razao: data.nome || prev.nome_razao,
-                                                        whatsapp: data.telefone ? formatPhone(data.telefone) : prev.whatsapp,
-                                                        cep: data.cep?.replace(/(\d{5})(\d)/, '$1-$2') || prev.cep,
-                                                        logradouro: data.logradouro || prev.logradouro,
-                                                        numero: data.numero || prev.numero,
-                                                        complemento: data.complemento || prev.complemento,
-                                                        bairro: data.bairro || prev.bairro,
-                                                        cidade: data.cidade || prev.cidade,
-                                                        uf: data.uf || prev.uf,
+                                                        nome_razao: result.razao_social || prev.nome_razao,
+                                                        logradouro: formatLogradouro(result.descricao_tipo_de_logradouro, result.logradouro) || prev.logradouro,
+                                                        numero: result.numero || prev.numero,
+                                                        bairro: result.bairro || prev.bairro,
+                                                        cidade: result.municipio || prev.cidade,
+                                                        uf: result.uf || prev.uf,
+                                                        cep: result.cep?.replace(/(\d{5})(\d)/, '$1-$2') || prev.cep,
+                                                        whatsapp: formatPhone(result.ddd_telefone_1) || prev.whatsapp
                                                     }))
-
-                                                    // Trigger CEP search if CEP is new and valid
-                                                    if (data.cep && data.cep !== formData.cep) {
-                                                        const cepClean = data.cep.replace(/\D/g, '')
-                                                        if (cepClean.length === 8) {
-                                                            searchCep(cepClean) // Fire and forget update
-                                                        }
-                                                    }
-
-                                                    alert('Ficha processada com sucesso! Verifique os dados.')
+                                                    alert(`CNPJ encontrado! Dados de "${result.razao_social}" preenchidos.`)
+                                                } else {
+                                                    alert('CNPJ não encontrado ou inválido.')
                                                 }
-                                            } catch (error: any) {
-                                                console.error(error)
-                                                alert(`Erro ao processar imagem: ${error.message || error}`)
-                                            } finally {
-                                                setProcessingOcr(false)
-                                                if (ocrInputRef.current) ocrInputRef.current.value = ''
-                                            }
-                                        }}
+                                            }}
+                                        >
+                                            {searchingCnpj ? (
+                                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+                                            ) : (
+                                                <Search className="h-4 w-4" />
+                                            )}
+                                            <span className="ml-1">Buscar</span>
+                                        </Button>
+                                    </div>
+                                    <p className="text-xs text-slate-400">Para CNPJ, clique em "Buscar" para preencher automaticamente</p>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="phone">WhatsApp</Label>
+                                    <Input
+                                        id="phone"
+                                        className="h-12 text-lg"
+                                        placeholder="(11) 99999-9999"
+                                        value={formData.whatsapp}
+                                        onChange={e => setFormData({ ...formData, whatsapp: e.target.value })}
                                     />
                                 </div>
                             </div>
+                        </div>
 
-                            <div className="space-y-4">
-                                <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Informações Básicas</h3>
+                        <div className="space-y-4 pt-2">
+                            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Endereço de Atendimento</h3>
 
+                            <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label htmlFor="name">Nome Completo / Razão Social</Label>
-                                    <Input
-                                        id="name"
-                                        required
-                                        className="h-12 text-lg"
-                                        placeholder="Ex: João da Silva"
-                                        value={formData.nome_razao}
-                                        onChange={e => setFormData({ ...formData, nome_razao: e.target.value })}
-                                    />
-                                </div>
+                                    <Label htmlFor="cep">CEP</Label>
+                                    <div className="relative">
+                                        <Input
+                                            id="cep"
+                                            className="h-12 text-lg"
+                                            placeholder="00000-000"
+                                            maxLength={9}
+                                            value={formData.cep}
+                                            onChange={async (e) => {
+                                                const formatted = e.target.value.replace(/\D/g, '').replace(/(\d{5})(\d)/, '$1-$2').slice(0, 9)
+                                                setFormData({ ...formData, cep: formatted })
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="document">CPF / CNPJ</Label>
-                                        <div className="flex gap-2">
-                                            <Input
-                                                id="document"
-                                                className="h-12 text-lg flex-1"
-                                                placeholder="000.000.000-00"
-                                                value={formData.cpf_cnpj}
-                                                onChange={e => setFormData({ ...formData, cpf_cnpj: e.target.value })}
-                                            />
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                className="h-12 px-4 text-emerald-600 border-emerald-200 hover:bg-emerald-50 whitespace-nowrap"
-                                                disabled={searchingCnpj || formData.cpf_cnpj.replace(/\D/g, '').length !== 14}
-                                                onClick={async () => {
-                                                    setSearchingCnpj(true)
-                                                    const result = await searchCnpj(formData.cpf_cnpj)
-                                                    setSearchingCnpj(false)
+                                                // Busca automática quando CEP completo
+                                                if (formatted.replace(/\D/g, '').length === 8) {
+                                                    setSearchingCep(true)
+                                                    const result = await searchCep(formatted)
+                                                    setSearchingCep(false)
                                                     if (result) {
                                                         setFormData(prev => ({
                                                             ...prev,
-                                                            nome_razao: result.razao_social || prev.nome_razao,
-                                                            logradouro: formatLogradouro(result.descricao_tipo_de_logradouro, result.logradouro) || prev.logradouro,
-                                                            numero: result.numero || prev.numero,
-                                                            bairro: result.bairro || prev.bairro,
-                                                            cidade: result.municipio || prev.cidade,
-                                                            uf: result.uf || prev.uf,
-                                                            cep: result.cep?.replace(/(\d{5})(\d)/, '$1-$2') || prev.cep,
-                                                            whatsapp: formatPhone(result.ddd_telefone_1) || prev.whatsapp
+                                                            logradouro: result.street || prev.logradouro,
+                                                            bairro: result.neighborhood || prev.bairro,
+                                                            cidade: result.city || prev.cidade,
+                                                            uf: result.state || prev.uf
                                                         }))
-                                                        alert(`CNPJ encontrado! Dados de "${result.razao_social}" preenchidos.`)
-                                                    } else {
-                                                        alert('CNPJ não encontrado ou inválido.')
                                                     }
-                                                }}
+                                                }
+                                            }}
+                                        />
+                                        {searchingCep && (
+                                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                                <div className="h-5 w-5 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+                                            </div>
+                                        )}
+                                    </div>
+                                    <p className="text-xs text-slate-400">Digite o CEP ou preencha o endereço manualmente</p>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="numero">Número</Label>
+                                    <Input
+                                        id="numero"
+                                        className="h-12 text-lg"
+                                        placeholder="123"
+                                        value={formData.numero}
+                                        onChange={e => setFormData({ ...formData, numero: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Logradouro com autocomplete */}
+                            <div className="space-y-2 relative">
+                                <Label htmlFor="logradouro">Logradouro (Rua/Av.)</Label>
+                                <Input
+                                    id="logradouro"
+                                    className="h-12 text-lg"
+                                    placeholder="Digite a rua ou avenida..."
+                                    value={formData.logradouro || addressQuery}
+                                    onChange={(e) => {
+                                        const value = e.target.value
+                                        if (formData.logradouro) {
+                                            // Se já tem logradouro preenchido, permite edição direta
+                                            setFormData({ ...formData, logradouro: value })
+                                        } else {
+                                            // Se não tem, ativa autocomplete
+                                            handleAddressSearch(value)
+                                        }
+                                    }}
+                                    onFocus={() => {
+                                        if (!formData.logradouro) setShowSuggestions(true)
+                                    }}
+                                    onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                                />
+                                {searchingAddress && (
+                                    <div className="absolute right-3 top-[calc(50%+4px)] -translate-y-1/2">
+                                        <div className="h-5 w-5 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+                                    </div>
+                                )}
+
+                                {/* Dropdown de sugestões */}
+                                {showSuggestions && addressSuggestions.length > 0 && (
+                                    <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-60 overflow-y-auto">
+                                        {addressSuggestions.map((suggestion, index) => (
+                                            <button
+                                                key={index}
+                                                type="button"
+                                                className="w-full text-left px-4 py-3 hover:bg-emerald-50 transition-colors flex items-start gap-3 border-b border-slate-50 last:border-b-0"
+                                                onClick={() => handleSelectSuggestion(suggestion)}
                                             >
-                                                {searchingCnpj ? (
-                                                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
-                                                ) : (
-                                                    <Search className="h-4 w-4" />
-                                                )}
-                                                <span className="ml-1">Buscar</span>
-                                            </Button>
-                                        </div>
-                                        <p className="text-xs text-slate-400">Para CNPJ, clique em "Buscar" para preencher automaticamente</p>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="phone">WhatsApp</Label>
-                                        <Input
-                                            id="phone"
-                                            className="h-12 text-lg"
-                                            placeholder="(11) 99999-9999"
-                                            value={formData.whatsapp}
-                                            onChange={e => setFormData({ ...formData, whatsapp: e.target.value })}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="space-y-4 pt-2">
-                                <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Endereço de Atendimento</h3>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="cep">CEP</Label>
-                                        <div className="relative">
-                                            <Input
-                                                id="cep"
-                                                className="h-12 text-lg"
-                                                placeholder="00000-000"
-                                                maxLength={9}
-                                                value={formData.cep}
-                                                onChange={async (e) => {
-                                                    const formatted = e.target.value.replace(/\D/g, '').replace(/(\d{5})(\d)/, '$1-$2').slice(0, 9)
-                                                    setFormData({ ...formData, cep: formatted })
-
-                                                    // Busca automática quando CEP completo
-                                                    if (formatted.replace(/\D/g, '').length === 8) {
-                                                        setSearchingCep(true)
-                                                        const result = await searchCep(formatted)
-                                                        setSearchingCep(false)
-                                                        if (result) {
-                                                            setFormData(prev => ({
-                                                                ...prev,
-                                                                logradouro: result.street || prev.logradouro,
-                                                                bairro: result.neighborhood || prev.bairro,
-                                                                cidade: result.city || prev.cidade,
-                                                                uf: result.state || prev.uf
-                                                            }))
+                                                <MapPin className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="text-sm font-medium text-slate-700 truncate">
+                                                        {suggestion.street
+                                                            ? `${suggestion.street}${suggestion.housenumber ? `, ${suggestion.housenumber}` : ''}`
+                                                            : suggestion.formatted?.split(',')[0] || 'Endereço'
                                                         }
-                                                    }
-                                                }}
-                                            />
-                                            {searchingCep && (
-                                                <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                                                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+                                                    </p>
+                                                    <p className="text-xs text-slate-400 truncate">
+                                                        {suggestion.neighbourhood ? `${suggestion.neighbourhood}, ` : ''}{suggestion.city}/{suggestion.state_code}
+                                                    </p>
                                                 </div>
-                                            )}
-                                        </div>
-                                        <p className="text-xs text-slate-400">Digite o CEP ou preencha o endereço manualmente</p>
+                                            </button>
+                                        ))}
                                     </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="numero">Número</Label>
-                                        <Input
-                                            id="numero"
-                                            className="h-12 text-lg"
-                                            placeholder="123"
-                                            value={formData.numero}
-                                            onChange={e => setFormData({ ...formData, numero: e.target.value })}
-                                        />
-                                    </div>
-                                </div>
+                                )}
+                            </div>
 
-                                {/* Logradouro com autocomplete */}
-                                <div className="space-y-2 relative">
-                                    <Label htmlFor="logradouro">Logradouro (Rua/Av.)</Label>
-                                    <Input
-                                        id="logradouro"
-                                        className="h-12 text-lg"
-                                        placeholder="Digite a rua ou avenida..."
-                                        value={formData.logradouro || addressQuery}
-                                        onChange={(e) => {
-                                            const value = e.target.value
-                                            if (formData.logradouro) {
-                                                // Se já tem logradouro preenchido, permite edição direta
-                                                setFormData({ ...formData, logradouro: value })
-                                            } else {
-                                                // Se não tem, ativa autocomplete
-                                                handleAddressSearch(value)
-                                            }
-                                        }}
-                                        onFocus={() => {
-                                            if (!formData.logradouro) setShowSuggestions(true)
-                                        }}
-                                        onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                                    />
-                                    {searchingAddress && (
-                                        <div className="absolute right-3 top-[calc(50%+4px)] -translate-y-1/2">
-                                            <div className="h-5 w-5 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
-                                        </div>
-                                    )}
-
-                                    {/* Dropdown de sugestões */}
-                                    {showSuggestions && addressSuggestions.length > 0 && (
-                                        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-60 overflow-y-auto">
-                                            {addressSuggestions.map((suggestion, index) => (
-                                                <button
-                                                    key={index}
-                                                    type="button"
-                                                    className="w-full text-left px-4 py-3 hover:bg-emerald-50 transition-colors flex items-start gap-3 border-b border-slate-50 last:border-b-0"
-                                                    onClick={() => handleSelectSuggestion(suggestion)}
-                                                >
-                                                    <MapPin className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
-                                                    <div className="min-w-0 flex-1">
-                                                        <p className="text-sm font-medium text-slate-700 truncate">
-                                                            {suggestion.street
-                                                                ? `${suggestion.street}${suggestion.housenumber ? `, ${suggestion.housenumber}` : ''}`
-                                                                : suggestion.formatted?.split(',')[0] || 'Endereço'
-                                                            }
-                                                        </p>
-                                                        <p className="text-xs text-slate-400 truncate">
-                                                            {suggestion.neighbourhood ? `${suggestion.neighbourhood}, ` : ''}{suggestion.city}/{suggestion.state_code}
-                                                        </p>
-                                                    </div>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="bairro">Bairro</Label>
-                                        <Input
-                                            id="bairro"
-                                            className="h-12 text-lg"
-                                            placeholder="Bairro"
-                                            value={formData.bairro}
-                                            onChange={e => setFormData({ ...formData, bairro: e.target.value })}
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="cidade">Cidade</Label>
-                                        <Input
-                                            id="cidade"
-                                            className="h-12 text-lg"
-                                            placeholder="Cidade"
-                                            value={formData.cidade}
-                                            onChange={e => setFormData({ ...formData, cidade: e.target.value })}
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="uf">UF</Label>
-                                        <Input
-                                            id="uf"
-                                            className="h-12 text-lg"
-                                            placeholder="SP"
-                                            maxLength={2}
-                                            value={formData.uf}
-                                            onChange={e => setFormData({ ...formData, uf: e.target.value.toUpperCase() })}
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="complemento">Complemento</Label>
-                                        <Input
-                                            id="complemento"
-                                            className="h-12 text-lg"
-                                            placeholder="Ex: Apto 10"
-                                            value={formData.complemento}
-                                            onChange={e => setFormData({ ...formData, complemento: e.target.value })}
-                                        />
-                                    </div>
-                                </div>
-
+                            <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label htmlFor="reference">Ponto de Referência</Label>
+                                    <Label htmlFor="bairro">Bairro</Label>
                                     <Input
-                                        id="reference"
+                                        id="bairro"
                                         className="h-12 text-lg"
-                                        placeholder="Ex: Próximo à padaria..."
-                                        value={formData.referencia}
-                                        onChange={e => setFormData({ ...formData, referencia: e.target.value })}
+                                        placeholder="Bairro"
+                                        value={formData.bairro}
+                                        onChange={e => setFormData({ ...formData, bairro: e.target.value })}
                                     />
                                 </div>
-
                                 <div className="space-y-2">
-                                    <Label htmlFor="email">E-mail (Opcional)</Label>
+                                    <Label htmlFor="cidade">Cidade</Label>
                                     <Input
-                                        id="email"
-                                        type="email"
+                                        id="cidade"
                                         className="h-12 text-lg"
-                                        placeholder="cliente@email.com"
-                                        value={formData.email}
-                                        onChange={e => setFormData({ ...formData, email: e.target.value })}
+                                        placeholder="Cidade"
+                                        value={formData.cidade}
+                                        onChange={e => setFormData({ ...formData, cidade: e.target.value })}
                                     />
                                 </div>
                             </div>
 
-                            <Button type="submit" className="w-full h-14 text-lg font-semibold mt-4 shadow-md" disabled={isSubmitting}>
-                                {isSubmitting ? 'Salvando...' : (editingClientId ? 'Atualizar Cliente' : 'Cadastrar Cliente')}
-                            </Button>
-                        </form>
-                    </DialogContent>
-                </Dialog>
-            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="uf">UF</Label>
+                                    <Input
+                                        id="uf"
+                                        className="h-12 text-lg"
+                                        placeholder="SP"
+                                        maxLength={2}
+                                        value={formData.uf}
+                                        onChange={e => setFormData({ ...formData, uf: e.target.value.toUpperCase() })}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="complemento">Complemento</Label>
+                                    <Input
+                                        id="complemento"
+                                        className="h-12 text-lg"
+                                        placeholder="Ex: Apto 10"
+                                        value={formData.complemento}
+                                        onChange={e => setFormData({ ...formData, complemento: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="reference">Ponto de Referência</Label>
+                                <Input
+                                    id="reference"
+                                    className="h-12 text-lg"
+                                    placeholder="Ex: Próximo à padaria..."
+                                    value={formData.referencia}
+                                    onChange={e => setFormData({ ...formData, referencia: e.target.value })}
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="email">E-mail (Opcional)</Label>
+                                <Input
+                                    id="email"
+                                    type="email"
+                                    className="h-12 text-lg"
+                                    placeholder="cliente@email.com"
+                                    value={formData.email}
+                                    onChange={e => setFormData({ ...formData, email: e.target.value })}
+                                />
+                            </div>
+                        </div>
+
+                        <Button type="submit" className="w-full h-14 text-lg font-semibold mt-4 shadow-md" disabled={isSubmitting}>
+                            {isSubmitting ? 'Salvando...' : (editingClientId ? 'Atualizar Cliente' : 'Cadastrar Cliente')}
+                        </Button>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
 
             <div className="relative">
                 <Search className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
@@ -831,110 +881,112 @@ export function Clients() {
                 />
             </div>
 
-            {loading ? (
-                <div className="text-center py-10">Carregando clientes...</div>
-            ) : filteredClients.length === 0 ? (
-                <div className="text-center py-10 text-muted-foreground">
-                    Nenhum cliente encontrado.
-                </div>
-            ) : (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {filteredClients.map((client) => (
-                        <div key={client.id} className="group relative flex flex-col justify-between rounded-xl border border-border bg-card p-4 shadow-md hover:shadow-lg transition-all active:scale-[0.98] min-w-0">
-                            <div className="flex items-start gap-3 md:gap-4">
-                                <div className="h-12 w-12 md:h-14 md:w-14 rounded-lg bg-muted overflow-hidden flex-shrink-0 border border-border">
-                                    {client.avatar_url ? (
-                                        <img src={client.avatar_url} alt={client.nome_razao} className="h-full w-full object-cover" />
-                                    ) : (
-                                        <div className="h-full w-full flex items-center justify-center bg-primary/10">
-                                            <UserIcon className="h-5 w-5 md:h-6 md:w-6 text-primary" />
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <h3 className="font-bold text-base md:text-lg truncate">{client.nome_razao}</h3>
-                                    <div className="text-sm text-muted-foreground space-y-1">
-                                        <div className="flex items-center gap-2">
-                                            <Phone className="h-4 w-4 shrink-0 text-green-500" />
-                                            <span className="truncate">{client.whatsapp || 'Sem telefone'}</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <MapPin className="h-4 w-4 shrink-0 text-blue-500" />
-                                            <span className="truncate max-w-full">
-                                                {getClientAddress(client)}
-                                            </span>
+            {
+                loading ? (
+                    <div className="text-center py-10">Carregando clientes...</div>
+                ) : filteredClients.length === 0 ? (
+                    <div className="text-center py-10 text-muted-foreground">
+                        Nenhum cliente encontrado.
+                    </div>
+                ) : (
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        {filteredClients.map((client) => (
+                            <div key={client.id} className="group relative flex flex-col justify-between rounded-xl border border-border bg-card p-4 shadow-md hover:shadow-lg transition-all active:scale-[0.98] min-w-0">
+                                <div className="flex items-start gap-3 md:gap-4">
+                                    <div className="h-12 w-12 md:h-14 md:w-14 rounded-lg bg-muted overflow-hidden flex-shrink-0 border border-border">
+                                        {client.avatar_url ? (
+                                            <img src={client.avatar_url} alt={client.nome_razao} className="h-full w-full object-cover" />
+                                        ) : (
+                                            <div className="h-full w-full flex items-center justify-center bg-primary/10">
+                                                <UserIcon className="h-5 w-5 md:h-6 md:w-6 text-primary" />
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <h3 className="font-bold text-base md:text-lg truncate">{client.nome_razao}</h3>
+                                        <div className="text-sm text-muted-foreground space-y-1">
+                                            <div className="flex items-center gap-2">
+                                                <Phone className="h-4 w-4 shrink-0 text-green-500" />
+                                                <span className="truncate">{client.whatsapp || 'Sem telefone'}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <MapPin className="h-4 w-4 shrink-0 text-blue-500" />
+                                                <span className="truncate max-w-full">
+                                                    {getClientAddress(client)}
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
 
-                                <div className="flex flex-wrap items-center gap-2 mt-4 absolute right-4 top-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    {/* Actions moved or kept here? The original code had them in a separate div below or floating? 
+                                    <div className="flex flex-wrap items-center gap-2 mt-4 absolute right-4 top-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        {/* Actions moved or kept here? The original code had them in a separate div below or floating? 
                                         Original code had them in a div `flex flex-wrap items-center gap-2 mt-4` inside the card flex flow.
                                         Let's stick to the original structure I viewed.
                                     */}
+                                    </div>
                                 </div>
-                            </div>
 
-                            {/* Actions Row */}
-                            <div className="flex items-center gap-2 mt-4 ml-1">
-                                {client.whatsapp && (
-                                    <>
+                                {/* Actions Row */}
+                                <div className="flex items-center gap-2 mt-4 ml-1">
+                                    {client.whatsapp && (
+                                        <>
+                                            <Button
+                                                variant="outline"
+                                                size="icon"
+                                                className="h-10 w-10 rounded-full border-blue-200 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                                                onClick={() => window.open(`tel:${client.whatsapp?.replace(/\D/g, '')}`, '_self')}
+                                                title="Ligar"
+                                            >
+                                                <Phone className="h-4 w-4" />
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                size="icon"
+                                                className="h-10 w-10 rounded-full border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
+                                                onClick={() => window.open(`https://wa.me/55${client.whatsapp?.replace(/\D/g, '')}`, '_blank')}
+                                                title="WhatsApp"
+                                            >
+                                                <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" xmlns="http://www.w3.org/2000/svg"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" /></svg>
+                                            </Button>
+                                        </>
+                                    )}
+                                    {getClientAddress(client) && (
                                         <Button
                                             variant="outline"
                                             size="icon"
-                                            className="h-10 w-10 rounded-full border-blue-200 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
-                                            onClick={() => window.open(`tel:${client.whatsapp?.replace(/\D/g, '')}`, '_self')}
-                                            title="Ligar"
+                                            className="h-10 w-10 rounded-full border-orange-200 text-orange-600 hover:bg-orange-50 hover:text-orange-700"
+                                            onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(getClientAddress(client))}`, '_blank')}
+                                            title="Navegar"
                                         >
-                                            <Phone className="h-4 w-4" />
+                                            <MapPin className="h-4 w-4" />
                                         </Button>
-                                        <Button
-                                            variant="outline"
-                                            size="icon"
-                                            className="h-10 w-10 rounded-full border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
-                                            onClick={() => window.open(`https://wa.me/55${client.whatsapp?.replace(/\D/g, '')}`, '_blank')}
-                                            title="WhatsApp"
-                                        >
-                                            <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" xmlns="http://www.w3.org/2000/svg"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" /></svg>
-                                        </Button>
-                                    </>
-                                )}
-                                {getClientAddress(client) && (
+                                    )}
                                     <Button
                                         variant="outline"
                                         size="icon"
-                                        className="h-10 w-10 rounded-full border-orange-200 text-orange-600 hover:bg-orange-50 hover:text-orange-700"
-                                        onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(getClientAddress(client))}`, '_blank')}
-                                        title="Navegar"
+                                        className="h-10 w-10 rounded-full border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700"
+                                        onClick={() => navigate(`/service-orders/new?client_id=${client.id}`)}
+                                        title="Nova OS"
                                     >
-                                        <MapPin className="h-4 w-4" />
+                                        <FileText className="h-4 w-4" />
                                     </Button>
-                                )}
-                                <Button
-                                    variant="outline"
-                                    size="icon"
-                                    className="h-10 w-10 rounded-full border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700"
-                                    onClick={() => navigate(`/service-orders/new?client_id=${client.id}`)}
-                                    title="Nova OS"
-                                >
-                                    <FileText className="h-4 w-4" />
-                                </Button>
-                            </div>
+                                </div>
 
-                            <div className="mt-4 flex items-center gap-2 pt-4 border-t border-border">
-                                <Button variant="outline" className="flex-1 h-9 text-xs font-medium" onClick={() => handleEdit(client)}>
-                                    <Pencil className="mr-2 h-3.5 w-3.5" />
-                                    Editar
-                                </Button>
-                                <Button variant="destructive" className="flex-1 h-9 text-xs font-medium" onClick={() => handleDelete(client.id, client.nome_razao)}>
-                                    <Trash2 className="mr-2 h-3.5 w-3.5" />
-                                    Excluir
-                                </Button>
+                                <div className="mt-4 flex items-center gap-2 pt-4 border-t border-border">
+                                    <Button variant="outline" className="flex-1 h-9 text-xs font-medium" onClick={() => handleEdit(client)}>
+                                        <Pencil className="mr-2 h-3.5 w-3.5" />
+                                        Editar
+                                    </Button>
+                                    <Button variant="destructive" className="flex-1 h-9 text-xs font-medium" onClick={() => handleDelete(client.id, client.nome_razao)}>
+                                        <Trash2 className="mr-2 h-3.5 w-3.5" />
+                                        Excluir
+                                    </Button>
+                                </div>
                             </div>
-                        </div>
-                    ))}
-                </div>
-            )}
-        </div>
+                        ))}
+                    </div>
+                )
+            }
+        </div >
     )
 }

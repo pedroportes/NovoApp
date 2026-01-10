@@ -21,6 +21,7 @@ export interface LocalClient {
     avatar_url?: string;
     signature_url?: string;
     ativo?: boolean;
+    criado_por?: string | null;
     created_at?: string;
 
     // Sync metadata

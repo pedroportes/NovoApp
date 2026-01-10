@@ -12,3 +12,4 @@ ALTER COLUMN tipo_despesa TYPE TEXT;
 -- Opcional: Definir padrão
 ALTER TABLE public.despesas_tecnicos 
 ALTER COLUMN tipo_despesa SET DEFAULT 'outros';
+npm run dev

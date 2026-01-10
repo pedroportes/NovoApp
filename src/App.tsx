@@ -25,6 +25,7 @@ import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { Toaster } from 'sonner'
 
 import { OfflineSyncProvider } from '@/components/OfflineSyncProvider'
+import { ChatAssistant } from '@/components/ChatAssistant'
 
 function App() {
     return (
@@ -32,6 +33,7 @@ function App() {
             <AuthProvider>
                 <OfflineSyncProvider>
                     <Toaster richColors position="top-right" />
+                    <ChatAssistant />
                     <BrowserRouter>
                         <Routes>
                             {/* Public Routes */}

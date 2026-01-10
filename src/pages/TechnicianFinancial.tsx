@@ -5,7 +5,9 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, TrendingUp, Receipt, Wallet, Clock, CheckCircle, Loader2, FileText, Plus } from 'lucide-react'
+
 import { cn } from '@/lib/utils'
+import { TechnicianCharts } from './TechnicianCharts'
 
 export function TechnicianFinancial() {
     const { userData } = useAuth()
@@ -14,6 +16,7 @@ export function TechnicianFinancial() {
     const [balance, setBalance] = useState<TechnicianBalance | null>(null)
     const [pendingExpensesCount, setPendingExpensesCount] = useState(0)
     const [approvedExpensesCount, setApprovedExpensesCount] = useState(0)
+    const [historyData, setHistoryData] = useState<{ monthlyEarnings: any[], topServices: any[] }>({ monthlyEarnings: [], topServices: [] })
 
     useEffect(() => {
         if (userData?.id) {
@@ -24,14 +27,16 @@ export function TechnicianFinancial() {
     const loadData = async () => {
         setLoading(true)
         try {
-            const [balanceData, pendingData, approvedData] = await Promise.all([
+            const [balanceData, pendingData, approvedData, history] = await Promise.all([
                 financialService.getTechnicianBalance(userData!.id),
                 financialService.getPendingExpenses(userData!.id),
-                financialService.getApprovedExpenses(userData!.id)
+                financialService.getApprovedExpenses(userData!.id),
+                financialService.getTechnicianHistory(userData!.id)
             ])
             setBalance(balanceData)
             setPendingExpensesCount(pendingData.length)
             setApprovedExpensesCount(approvedData.length)
+            setHistoryData(history)
         } catch (error) {
             console.error('Erro ao carregar dados financeiros:', error)
         } finally {
@@ -201,6 +206,9 @@ export function TechnicianFinancial() {
                     </CardContent>
                 </Card>
             </div>
+
+            {/* CHARTS (NOVO) */}
+            <TechnicianCharts monthlyEarnings={historyData.monthlyEarnings} topServices={historyData.topServices} />
 
             {/* LISTA DE ADIANTAMENTOS (NOVO) */}
             {balance && balance.advancesDetails && balance.advancesDetails.length > 0 && (

@@ -310,5 +310,83 @@ export const financialService = {
 
         if (error) throw error
         return true
+    },
+
+    /**
+     * Fetches historical data for technician charts.
+     */
+    getTechnicianHistory: async (technicianId: string) => {
+        const historyData: any = {
+            monthlyEarnings: [], // { month: 'Jan', value: 1000 }
+            topServices: [] // { name: 'Manutenção', count: 5 }
+        }
+
+        try {
+            // 1. Monthly Earnings (Last 6 months)
+            const sixMonthsAgo = new Date()
+            sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5)
+            sixMonthsAgo.setDate(1) // First day of 6 months ago
+
+            const { data: earnings } = await (supabase
+                .from('historico_comissoes') as any)
+                .select('created_at, valor_comissao')
+                .eq('tecnico_id', technicianId)
+                .gte('created_at', sixMonthsAgo.toISOString())
+                .order('created_at', { ascending: true })
+
+            if (earnings) {
+                // Group by month
+                const monthlyMap = new Map<string, number>()
+                // Init last 6 months
+                for (let i = 0; i < 6; i++) {
+                    const d = new Date()
+                    d.setMonth(d.getMonth() - i)
+                    const key = d.toLocaleString('pt-BR', { month: 'short' }).toUpperCase()
+                    monthlyMap.set(key, 0)
+                }
+
+                earnings.forEach((e: any) => {
+                    const month = new Date(e.created_at).toLocaleString('pt-BR', { month: 'short' }).toUpperCase()
+                    const prev = monthlyMap.get(month) || 0
+                    monthlyMap.set(month, prev + Number(e.valor_comissao))
+                })
+
+                // Convert to array and reverse to chronological order
+                historyData.monthlyEarnings = Array.from(monthlyMap.entries())
+                    .map(([month, value]) => ({ month, value }))
+                    .reverse()
+            }
+
+            // 2. Top Services (All time or last year)
+            // Need to join with ordens_servico to get service description
+            // Since we can't easily join in client-side query without proper foreign key relation setup in Supabase types or view,
+            // we'll fetch OS descriptions directly if we have many, or rely on commission descriptions if available.
+            // Let's try fetching distributions from historico_comissoes if it has metadata, OR fetch OS
+            // Easier: Fetch all OS for this tech and group by descriptions
+            const { data: osData } = await (supabase
+                .from('ordens_servico') as any)
+                .select('descricao_servico')
+                .eq('tecnico_id', technicianId)
+                .eq('status', 'CONCLUIDO')
+                .limit(200) // Safety limit
+
+            if (osData) {
+                const serviceMap = new Map<string, number>()
+                osData.forEach((os: any) => {
+                    const name = os.descricao_servico || 'Outros'
+                    serviceMap.set(name, (serviceMap.get(name) || 0) + 1)
+                })
+
+                historyData.topServices = Array.from(serviceMap.entries())
+                    .map(([name, count]) => ({ name, count }))
+                    .sort((a, b) => b.count - a.count)
+                    .slice(0, 5) // Top 5
+            }
+
+        } catch (error) {
+            console.error('Error fetching technician history:', error)
+        }
+
+        return historyData
     }
 }

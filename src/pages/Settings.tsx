@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { Building2, Save, Upload, Loader2, Palette, Download, Smartphone } from 'lucide-react'
 import { compressImage } from '@/lib/utils'
 import { useOutletContext } from 'react-router-dom'
@@ -19,6 +20,14 @@ export function Settings() {
 
     // PWA Install hook
     const { isInstallable, isInstalled, isLocalhost, install } = usePWAInstall()
+
+    const [configs, setConfigs] = useState({
+        view_all_clients: true,
+        can_create_client: true,
+        can_import_clients: true,
+        can_delete_clients: true,
+        can_edit_clients: true
+    })
 
     const [formData, setFormData] = useState({
         nome: '',
@@ -65,6 +74,7 @@ export function Settings() {
                 .from('empresas') as any)
                 .update({
                     ...formData,
+                    configs: configs, // Save configs
                     logo_url: logoUrl
                 })
                 .eq('id', userData!.empresa_id)
@@ -103,7 +113,12 @@ export function Settings() {
             if (error) throw error
 
             if (data) {
-                const company = data as any // Casting since types are not yet generated
+                const company = data as any
+                // Load configs if they exist, otherwise keep defaults
+                if (company.configs) {
+                    setConfigs(prev => ({ ...prev, ...company.configs }))
+                }
+
                 setFormData({
                     nome: company.nome || '',
                     razao_social: company.razao_social || '',
@@ -325,8 +340,82 @@ export function Settings() {
                     </div>
                 </div>
 
+
+                {/* Technician Permissions Section */}
+                <div className="space-y-6 bg-card p-6 rounded-xl border border-border shadow-sm h-fit md:col-span-2">
+                    <h2 className="text-lg font-semibold flex items-center gap-2">
+                        <Smartphone className="h-5 w-5 text-primary" />
+                        Permissões dos Técnicos (App)
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                        Defina o que os técnicos podem ver e fazer no aplicativo.
+                    </p>
+
+                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                        <div className="flex items-center justify-between space-x-2 border p-4 rounded-lg">
+                            <Label htmlFor="view-all" className="flex flex-col space-y-1">
+                                <span>Ver Todos os Clientes</span>
+                                <span className="font-normal text-xs text-muted-foreground">Se desligado, vê apenas os que ele cadastrou</span>
+                            </Label>
+                            <Switch
+                                id="view-all"
+                                checked={configs.view_all_clients}
+                                onCheckedChange={(c) => setConfigs(prev => ({ ...prev, view_all_clients: c }))}
+                            />
+                        </div>
+
+                        <div className="flex items-center justify-between space-x-2 border p-4 rounded-lg">
+                            <Label htmlFor="create-client" className="flex flex-col space-y-1">
+                                <span>Cadastrar Clientes</span>
+                                <span className="font-normal text-xs text-muted-foreground">Botão "Novo Cliente"</span>
+                            </Label>
+                            <Switch
+                                id="create-client"
+                                checked={configs.can_create_client}
+                                onCheckedChange={(c) => setConfigs(prev => ({ ...prev, can_create_client: c }))}
+                            />
+                        </div>
+
+                        <div className="flex items-center justify-between space-x-2 border p-4 rounded-lg">
+                            <Label htmlFor="import-csv" className="flex flex-col space-y-1">
+                                <span>Importar CSV</span>
+                                <span className="font-normal text-xs text-muted-foreground">Botão "Importar CSV"</span>
+                            </Label>
+                            <Switch
+                                id="import-csv"
+                                checked={configs.can_import_clients}
+                                onCheckedChange={(c) => setConfigs(prev => ({ ...prev, can_import_clients: c }))}
+                            />
+                        </div>
+
+                        <div className="flex items-center justify-between space-x-2 border p-4 rounded-lg">
+                            <Label htmlFor="edit-client" className="flex flex-col space-y-1">
+                                <span>Editar Clientes</span>
+                                <span className="font-normal text-xs text-muted-foreground">Botão "Editar"</span>
+                            </Label>
+                            <Switch
+                                id="edit-client"
+                                checked={configs.can_edit_clients}
+                                onCheckedChange={(c) => setConfigs(prev => ({ ...prev, can_edit_clients: c }))}
+                            />
+                        </div>
+
+                        <div className="flex items-center justify-between space-x-2 border p-4 rounded-lg">
+                            <Label htmlFor="delete-client" className="flex flex-col space-y-1">
+                                <span>Excluir Clientes</span>
+                                <span className="font-normal text-xs text-muted-foreground">Botão "Excluir"</span>
+                            </Label>
+                            <Switch
+                                id="delete-client"
+                                checked={configs.can_delete_clients}
+                                onCheckedChange={(c) => setConfigs(prev => ({ ...prev, can_delete_clients: c }))}
+                            />
+                        </div>
+                    </div>
+                </div >
+
                 {/* Appearance Section */}
-                <div className="space-y-6 bg-card p-6 rounded-xl border border-border shadow-sm h-fit md:col-span-2 lg:col-span-1">
+                < div className="space-y-6 bg-card p-6 rounded-xl border border-border shadow-sm h-fit md:col-span-2 lg:col-span-1" >
                     <h2 className="text-lg font-semibold flex items-center gap-2">
                         <Palette className="h-5 w-5 text-primary" />
                         Aparência
@@ -342,10 +431,10 @@ export function Settings() {
                             </div>
                         </div>
                     </div>
-                </div>
+                </div >
 
                 {/* Install App Section */}
-                <div className="space-y-6 bg-card p-6 rounded-xl border border-border shadow-sm h-fit md:col-span-2 lg:col-span-1">
+                < div className="space-y-6 bg-card p-6 rounded-xl border border-border shadow-sm h-fit md:col-span-2 lg:col-span-1" >
                     <h2 className="text-lg font-semibold flex items-center gap-2">
                         <Smartphone className="h-5 w-5 text-primary" />
                         Instalar App
@@ -377,8 +466,8 @@ export function Settings() {
                             </Button>
                         )}
                     </div>
-                </div>
-            </div>
+                </div >
+            </div >
 
             <div className="md:hidden">
                 <Button onClick={handleSubmit} disabled={saving} className="w-full h-12 text-lg">
@@ -386,6 +475,6 @@ export function Settings() {
                     Salvar Alterações
                 </Button>
             </div>
-        </div>
+        </div >
     )
 }

@@ -10,6 +10,7 @@ export function TechnicianFinancialPrint() {
     const navigate = useNavigate()
     const [loading, setLoading] = useState(true)
     const [balance, setBalance] = useState<TechnicianBalance | null>(null)
+    const [history, setHistory] = useState<{ monthlyEarnings: any[], topServices: any[] } | null>(null)
 
     useEffect(() => {
         if (userData?.id) {
@@ -20,8 +21,12 @@ export function TechnicianFinancialPrint() {
     const loadData = async () => {
         setLoading(true)
         try {
-            const balanceData = await financialService.getTechnicianBalance(userData!.id)
+            const [balanceData, historyData] = await Promise.all([
+                financialService.getTechnicianBalance(userData!.id),
+                financialService.getTechnicianHistory(userData!.id)
+            ])
             setBalance(balanceData)
+            setHistory(historyData)
         } catch (error) {
             console.error('Erro ao carregar dados:', error)
         } finally {
@@ -150,6 +155,65 @@ export function TechnicianFinancialPrint() {
                                 ))}
                             </tbody>
                         </table>
+                    </div>
+                )}
+
+                {/* Histórico Recente e Top Serviços */}
+                {history && (
+                    <div className="grid grid-cols-2 gap-8 mb-6 break-inside-avoid">
+                        {/* Rendimentos Mensais */}
+                        <div>
+                            <h3 className="text-lg font-bold text-slate-800 mb-3 border-b pb-2">📅 Últimos 6 Meses</h3>
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="bg-slate-50 print:bg-gray-200">
+                                        <th className="py-2 px-2 text-left">Mês</th>
+                                        <th className="py-2 px-2 text-right">Valor</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {history.monthlyEarnings.length > 0 ? (
+                                        history.monthlyEarnings.map((item, idx) => (
+                                            <tr key={idx} className="border-b last:border-0">
+                                                <td className="py-2 px-2">{item.month}</td>
+                                                <td className="py-2 px-2 text-right font-medium text-emerald-600">
+                                                    {formatCurrency(item.value)}
+                                                </td>
+                                            </tr>
+                                        ))
+                                    ) : (
+                                        <tr><td colSpan={2} className="py-2 text-center text-slate-400">Sem dados</td></tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Top Serviços */}
+                        <div>
+                            <h3 className="text-lg font-bold text-slate-800 mb-3 border-b pb-2">⭐ Mais Realizados</h3>
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="bg-slate-50 print:bg-gray-200">
+                                        <th className="py-2 px-2 text-left">Serviço</th>
+                                        <th className="py-2 px-2 text-right">Qtd</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {history.topServices.length > 0 ? (
+                                        history.topServices.map((item, idx) => (
+                                            <tr key={idx} className="border-b last:border-0">
+                                                <td className="py-2 px-2 truncate max-w-[120px]">{item.name}</td>
+                                                <td className="py-2 px-2 text-right font-medium text-slate-700">
+                                                    {item.count}x
+                                                </td>
+                                            </tr>
+                                        ))
+                                    ) : (
+                                        <tr><td colSpan={2} className="py-2 text-center text-slate-400">Sem dados</td></tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 )}
 
