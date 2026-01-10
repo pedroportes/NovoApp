@@ -53,7 +53,8 @@ export function Dashboard() {
         payables: 0,
         averageTicket: 0,
         activeServices: 0,
-        newClients: 0
+        newClients: 0,
+        commissions: 0
     })
     const [chartData, setChartData] = useState<any[]>([])
     const [serviceDistribution, setServiceDistribution] = useState<any[]>([])
@@ -79,124 +80,192 @@ export function Dashboard() {
 
         setLoading(true)
         try {
-            // 1. Stats from RPC
-            const { data: statsData, error: statsError } = await supabase
-                .rpc('get_dashboard_stats', {
+            const sixMonthsAgo = new Date()
+            sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5)
+
+            // Parallel Requests
+            const [
+                statsRes,
+                completedRes,
+                commissionRes,
+                expenseRes,
+                openOSRes,
+                flowRes,
+                recentOSRes,
+                allOSRes,
+                clientDataRes,
+                pendingExpensesRes
+            ] = await Promise.all([
+                // 1. Stats RPC
+                supabase.rpc('get_dashboard_stats', {
                     p_empresa_id: userData.empresa_id,
                     p_start_date: dateRange.start.toISOString(),
                     p_end_date: dateRange.end.toISOString()
-                })
+                }),
+                // 2. Completed Count
+                supabase
+                    .from('ordens_servico')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('empresa_id', userData.empresa_id)
+                    .eq('status', 'CONCLUIDO')
+                    .gte('created_at', dateRange.start.toISOString())
+                    .lte('created_at', dateRange.end.toISOString()),
+                // 3. Commissions
+                supabase
+                    .from('historico_comissoes')
+                    .select(`
+                        valor_comissao,
+                        status_pagamento,
+                        tecnico:tecnico_id (nome_completo)
+                    `)
+                    .eq('empresa_id', userData.empresa_id)
+                    .gte('created_at', dateRange.start.toISOString())
+                    .lte('created_at', dateRange.end.toISOString()),
+                // 4. Expenses (Approved)
+                supabase
+                    .from('despesas_tecnicos')
+                    .select('valor')
+                    .eq('empresa_id', userData.empresa_id)
+                    .eq('status', 'aprovado')
+                    .gte('created_at', dateRange.start.toISOString())
+                    .lte('created_at', dateRange.end.toISOString()),
+                // 5. Open OS (Receivables)
+                supabase
+                    .from('ordens_servico')
+                    .select('valor_total')
+                    .eq('empresa_id', userData.empresa_id)
+                    .in('status', ['PENDENTE', 'EM_ANDAMENTO', 'AGENDADO'])
+                    .gte('created_at', dateRange.start.toISOString())
+                    .lte('created_at', dateRange.end.toISOString()),
+                // 6. Flow (Chart)
+                supabase
+                    .from('financeiro_fluxo')
+                    .select('valor, data_lancamento, tipo')
+                    .eq('empresa_id', userData.empresa_id)
+                    .eq('tipo', 'RECEITA')
+                    .gte('data_lancamento', new Date(new Date().setMonth(new Date().getMonth() - 5)).toISOString()),
+                // 7. Recent Activity
+                supabase
+                    .from('ordens_servico')
+                    .select(`
+                        id, 
+                        cliente_nome, 
+                        status, 
+                        valor_total, 
+                        created_at,
+                        deslocamento_iniciado_em,
+                        previsao_chegada,
+                        tecnico:tecnico_id (nome_completo)
+                    `)
+                    .eq('empresa_id', userData.empresa_id)
+                    .gte('created_at', dateRange.start.toISOString())
+                    .lte('created_at', dateRange.end.toISOString())
+                    .order('updated_at', { ascending: false })
+                    .limit(5),
+                // 8. Service Distribution
+                supabase
+                    .from('ordens_servico')
+                    .select('itens')
+                    .eq('empresa_id', userData.empresa_id)
+                    .neq('status', 'CANCELADO')
+                    .gte('created_at', dateRange.start.toISOString())
+                    .lte('created_at', dateRange.end.toISOString()),
+                // 9. Client Growth
+                supabase
+                    .from('clientes')
+                    .select('created_at')
+                    .eq('empresa_id', userData.empresa_id)
+                    .gte('created_at', sixMonthsAgo.toISOString()),
+                // 10. Pending Expenses (Admin)
+                userData.cargo === 'admin' ?
+                    supabase
+                        .from('despesas_tecnicos')
+                        .select(`
+                        id, 
+                        valor, 
+                        descricao, 
+                        created_at, 
+                        status,
+                        tecnico:tecnico_id (nome_completo),
+                        comprovante_url
+                    `)
+                        .eq('empresa_id', userData.empresa_id)
+                        .eq('status', 'pendente')
+                        .gte('created_at', dateRange.start.toISOString())
+                        .lte('created_at', dateRange.end.toISOString())
+                        .order('created_at', { ascending: false })
+                        .limit(5)
+                    : Promise.resolve({ data: [] })
+            ])
 
-            if (statsError) console.error('Error fetching stats:', statsError)
+            // Process Data
+            const statsData = statsRes.data
+            const completedCount = completedRes.count
+            const commissionData = commissionRes.data
+            const expenseData = expenseRes.data
+            const openOS = openOSRes.data
+            const flowData = flowRes.data
+            const recentOS = recentOSRes.data
+            const allOS = allOSRes.data
+            const clientData = clientDataRes.data
+            const expenses = pendingExpensesRes.data
 
-            // 1b. Count Completed Services for Ticket Calculation
-            const { count: completedCount } = await supabase
-                .from('ordens_servico')
-                .select('*', { count: 'exact', head: true })
-                .eq('empresa_id', userData.empresa_id)
-                .eq('status', 'CONCLUIDO')
-                .gte('created_at', dateRange.start.toISOString())
-                .lte('created_at', dateRange.end.toISOString())
-
-            // Calculate Receivables (Pending Commissions + Pending OS) - Estimative
-
-            // Calculate Payables (Commissions 'a_pagar' + Expenses 'aprovado')
+            // ... Calculations ...
             let receivables = 0;
             let payables = 0;
+            let totalCommissions = 0;
 
-            // Fetch Payables & Technician Stats Aggregation
-            const { data: commissionData } = await supabase
-                .from('historico_comissoes')
-                .select(`
-                    valor_comissao,
-                    status_pagamento,
-                    tecnico:tecnico_id (nome_completo)
-                `)
-                .eq('empresa_id', userData.empresa_id)
-                .gte('created_at', dateRange.start.toISOString())
-                .lte('created_at', dateRange.end.toISOString())
-
-            // Process Commission Data
+            // Process Commissions & Technician Map
             const techMap = new Map<string, { name: string, totalCommissions: number, servicesCount: number }>();
 
             if (commissionData) {
-                commissionData.forEach(comm => {
-                    // Calc Payables
+                commissionData.forEach((comm: any) => {
+                    const val = Number(comm.valor_comissao) || 0
+                    totalCommissions += val
+
                     if (comm.status_pagamento === 'a_pagar') {
-                        payables += (Number(comm.valor_comissao) || 0)
+                        payables += val
                     }
 
-                    // Aggregate for Report
-                    const techName = (comm.tecnico as any)?.nome_completo || 'Desconhecido';
+                    const techName = comm.tecnico?.nome_completo || 'Desconhecido';
                     if (!techMap.has(techName)) {
                         techMap.set(techName, { name: techName, totalCommissions: 0, servicesCount: 0 });
                     }
                     const current = techMap.get(techName)!;
-                    current.totalCommissions += (Number(comm.valor_comissao) || 0);
+                    current.totalCommissions += val;
                     current.servicesCount += 1;
                 });
             }
             setTechnicianStats(Array.from(techMap.values()));
 
-            const { data: expenseData } = await supabase
-                .from('despesas_tecnicos')
-                .select('valor')
-                .eq('empresa_id', userData.empresa_id)
-                .eq('status', 'aprovado') // Approved but not yet paid (reimbursed)
-                .gte('created_at', dateRange.start.toISOString())
-                .lte('created_at', dateRange.end.toISOString())
-
+            // Expenses
             if (expenseData) payables += expenseData.reduce((acc, curr) => acc + (Number(curr.valor) || 0), 0)
 
-            // Fetch Receivables (Total of completed OS not paid? Or pending OS value?)
-            // Let's assume Receivables = Value of Pending/Open OS
-            const { data: openOS } = await supabase
-                .from('ordens_servico')
-                .select('valor_total')
-                .eq('empresa_id', userData.empresa_id)
-                .in('status', ['PENDENTE', 'EM_ANDAMENTO', 'AGENDADO'])
-                .gte('created_at', dateRange.start.toISOString())
-                .lte('created_at', dateRange.end.toISOString())
-
+            // Receivables
             if (openOS) receivables = openOS.reduce((acc, curr) => acc + (Number(curr.valor_total) || 0), 0)
 
-
-            // Chart Data (Mocking for now as we don't have historical aggregation ready in RPC yet)
-            // We can fetch from financeiro_fluxo for improved accuracy if needed
-            // For now, let's create a placeholder based on current month + random previous
+            // Chart Data
             const monthNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
             const currentMonth = new Date().getMonth();
             const historical = [];
 
-            // Try to get real data from financeiro_fluxo groupings
-            const { data: flowData } = await supabase
-                .from('financeiro_fluxo')
-                .select('valor, data_lancamento, tipo')
-                .eq('empresa_id', userData.empresa_id)
-                .eq('tipo', 'RECEITA') // Assuming we log revenue here
-                .gte('data_lancamento', new Date(new Date().setMonth(currentMonth - 5)).toISOString()) // Last 6 months
-
-            // If no flow data, use stats.monthly_revenue for current and simulate past
             if (statsData) {
-                // Simple projection for demo if no real history
                 for (let i = 5; i >= 0; i--) {
                     const d = new Date();
                     d.setMonth(currentMonth - i);
                     const name = monthNames[d.getMonth()];
-                    // If current month, use real value
                     let val = i === 0 ? (statsData[0]?.period_revenue || 0) : Math.max(0, (statsData[0]?.period_revenue || 0) * (0.8 + Math.random() * 0.4));
 
-                    // If we have flowData, use it
                     if (flowData && flowData.length > 0) {
-                        const monthFlow = flowData.filter(f => new Date(f.data_lancamento).getMonth() === d.getMonth()).reduce((acc, curr) => acc + curr.valor, 0);
-                        if (monthFlow > 0) val = monthFlow; // Use real if exists
+                        const monthFlow = flowData.filter((f: any) => new Date(f.data_lancamento).getMonth() === d.getMonth()).reduce((acc: number, curr: any) => acc + curr.valor, 0);
+                        if (monthFlow > 0) val = monthFlow;
                     }
-
                     historical.push({ name, faturamento: val });
                 }
             }
             setChartData(historical);
 
+            // Set Stats
             if (statsData && statsData[0]) {
                 const revenue = statsData[0].period_revenue || 0
                 const count = completedCount || 0
@@ -209,42 +278,16 @@ export function Dashboard() {
                     payables: payables,
                     averageTicket: avgTicket,
                     activeServices: statsData[0].active_services || 0,
-                    newClients: statsData[0].total_clients || 0
+                    newClients: statsData[0].total_clients || 0,
+                    commissions: totalCommissions
                 })
             }
 
-            // 4. Recent Activities (Latest 5 OS updates)
-            const { data: recentOS } = await supabase
-                .from('ordens_servico')
-                .select(`
-                    id, 
-                    cliente_nome, 
-                    status, 
-                    valor_total, 
-                    created_at,
-                    deslocamento_iniciado_em,
-                    previsao_chegada,
-                    tecnico:tecnico_id (nome_completo)
-                `)
-                .eq('empresa_id', userData.empresa_id)
-                .gte('created_at', dateRange.start.toISOString())
-                .lte('created_at', dateRange.end.toISOString())
-                .order('updated_at', { ascending: false })
-                .limit(5)
-
             setRecentActivities(recentOS || [])
 
-            // 5. Service Distribution (Pie Chart)
-            const { data: allOS } = await supabase
-                .from('ordens_servico')
-                .select('itens')
-                .eq('empresa_id', userData.empresa_id)
-                .neq('status', 'CANCELADO')
-                .gte('created_at', dateRange.start.toISOString())
-                .lte('created_at', dateRange.end.toISOString())
-
+            // Service Distribution
             const serviceMap: Record<string, number> = {}
-            allOS?.forEach(os => {
+            allOS?.forEach((os: any) => {
                 if (Array.isArray(os.itens)) {
                     os.itens.forEach((item: any) => {
                         const name = item.descricao || 'Outros'
@@ -255,26 +298,15 @@ export function Dashboard() {
                     })
                 }
             })
-            const serviceChartData = Object.entries(serviceMap).map(([name, value]) => ({ name, value }))
-            setServiceDistribution(serviceChartData)
+            setServiceDistribution(Object.entries(serviceMap).map(([name, value]) => ({ name, value })))
 
-            // 6. Client Growth (Last 6 Months)
-            const sixMonthsAgo = new Date()
-            sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5)
-
-            const { data: clientData } = await supabase
-                .from('clientes')
-                .select('created_at')
-                .eq('empresa_id', userData.empresa_id)
-                .gte('created_at', sixMonthsAgo.toISOString())
-
+            // Client Growth
             const clientGroups: Record<string, number> = {}
-            clientData?.forEach(c => {
+            clientData?.forEach((c: any) => {
                 const month = new Date(c.created_at).toLocaleString('pt-BR', { month: 'short' })
                 clientGroups[month] = (clientGroups[month] || 0) + 1
             })
 
-            // Fill missing months for better chart
             const growthData = []
             for (let i = 5; i >= 0; i--) {
                 const d = new Date()
@@ -284,26 +316,7 @@ export function Dashboard() {
             }
             setClientGrowthData(growthData)
 
-            // 7. Pending Expenses (For Admin Dashboard)
             if (userData.cargo === 'admin') {
-                const { data: expenses } = await supabase
-                    .from('despesas_tecnicos')
-                    .select(`
-                        id, 
-                        valor, 
-                        descricao, 
-                        created_at, 
-                        status,
-                        tecnico:tecnico_id (nome_completo),
-                        comprovante_url
-                    `)
-                    .eq('empresa_id', userData.empresa_id)
-                    .eq('status', 'pendente')
-                    .gte('created_at', dateRange.start.toISOString())
-                    .lte('created_at', dateRange.end.toISOString())
-                    .order('created_at', { ascending: false })
-                    .limit(5)
-
                 setPendingExpenses(expenses || [])
             }
 
@@ -417,6 +430,7 @@ export function Dashboard() {
     };
 
     const handleExportCSV = async () => {
+        if (!userData?.empresa_id) return;
         const toastId = toast.loading('Gerando CSV...');
         try {
             const { data: osData } = await supabase
@@ -437,7 +451,7 @@ export function Dashboard() {
 
             // Rows
             osData.forEach(row => {
-                const date = new Date(row.created_at).toLocaleDateString();
+                const date = row.created_at ? new Date(row.created_at).toLocaleDateString() : '-';
                 const tech = (row.tecnico as any)?.nome_completo || 'N/A';
                 const val = row.valor_total || 0;
                 csvContent += `${row.id},${date},"${row.cliente_nome}",${tech},${row.status},${val}\n`;

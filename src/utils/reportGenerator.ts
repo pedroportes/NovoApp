@@ -12,6 +12,7 @@ interface ReportData {
         activeServices: number
         newClients: number
         averageTicket: number
+        commissions: number
     }
     clientGrowth: { month: string; newClients: number }[]
     technicianStats: {
@@ -56,7 +57,8 @@ export const generateDashboardReport = (data: ReportData) => {
         ['Faturamento no Período', formatCurrency(data.stats.monthlyRevenue)],
         ['Ticket Médio', formatCurrency(data.stats.averageTicket)],
         ['A Receber (Previsto)', formatCurrency(data.stats.receivables)],
-        ['A Pagar (Previsto)', formatCurrency(data.stats.payables)],
+        ['Comissões (Total)', formatCurrency(data.stats.commissions)],
+        ['A Pagar (Geral)', formatCurrency(data.stats.payables)],
     ]
 
     autoTable(doc, {
