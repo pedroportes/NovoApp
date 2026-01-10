@@ -21,10 +21,29 @@ export const SyncService = {
             if (clients) {
                 // Bulk put (create or update)
                 // We add 'synced: 1' to indicate these match the server
-                const localClients: LocalClient[] = clients.map(c => ({
-                    ...c,
+                const localClients: LocalClient[] = (clients as any[]).map(c => ({
+                    id: c.id,
+                    empresa_id: c.empresa_id || '',
+                    nome_razao: c.nome_razao || 'Sem Nome',
+                    cpf_cnpj: c.cpf_cnpj || undefined,
+                    whatsapp: c.whatsapp || undefined,
+                    email: c.email || undefined,
+                    endereco: c.endereco || undefined,
+                    cep: c.cep || undefined,
+                    logradouro: c.logradouro || undefined,
+                    numero: c.numero || undefined,
+                    complemento: c.complemento || undefined,
+                    bairro: c.bairro || undefined,
+                    cidade: c.cidade || undefined,
+                    uf: c.uf || undefined,
+                    referencia: c.referencia || undefined,
+                    avatar_url: c.avatar_url || undefined,
+                    signature_url: c.signature_url || undefined,
+                    ativo: c.ativo ?? true,
+                    criado_por: c.criado_por || null,
+                    created_at: c.created_at || new Date().toISOString(),
                     synced: 1,
-                    updated_at: new Date().toISOString() // Local timestamp of sync
+                    updated_at: new Date().toISOString()
                 }))
                 await db.clientes.bulkPut(localClients)
             }
@@ -39,7 +58,12 @@ export const SyncService = {
 
             if (services) {
                 const localServices: LocalService[] = services.map(s => ({
-                    ...s,
+                    id: s.id,
+                    nome: s.nome,
+                    descricao: s.descricao || undefined,
+                    preco_padrao: s.preco_padrao || 0,
+                    empresa_id: s.empresa_id || '',
+                    ativo: s.ativo ?? true
                 }))
                 await db.servicos.bulkPut(localServices)
             }
@@ -56,10 +80,30 @@ export const SyncService = {
             if (errOss) throw errOss;
 
             if (oss) {
-                const localOss: LocalServiceOrder[] = oss.map(o => ({
-                    ...o,
+                const localOss: LocalServiceOrder[] = (oss as any[]).map(o => ({
+                    id: o.id,
+                    empresa_id: o.empresa_id || '',
+                    cliente_id: o.cliente_id || '',
+                    cliente_nome: o.cliente_nome || undefined,
+                    tecnico_id: o.tecnico_id || '',
+                    status: o.status || 'PENDENTE',
+                    tipo: o.tipo || 'comum',
+                    data_agendamento: o.data_agendamento || new Date().toISOString(),
+                    descricao_servico: o.descricao_servico || undefined,
+                    observacoes: o.observacoes || undefined,
+                    valor_total: o.valor_total || 0,
+                    desconto: o.desconto || 0,
+                    itens: o.itens || [],
+                    fotos: o.fotos || [],
+                    assinatura_cliente_url: o.assinatura_cliente_url || undefined,
+                    deslocamento_iniciado_em: o.deslocamento_iniciado_em || undefined,
+                    previsao_chegada: o.previsao_chegada || undefined,
+                    orcamento_gerado: o.orcamento_gerado ?? false,
+                    recibo_gerado: o.recibo_gerado ?? false,
+                    contrato_gerado: o.contrato_gerado ?? false,
+                    created_at: o.created_at || new Date().toISOString(),
                     synced: 1,
-                    action: undefined, // It's from server, no pending local action
+                    action: undefined,
                     updated_at: new Date().toISOString()
                 }))
                 // Be careful not to overwrite LOCAL pending changes. 

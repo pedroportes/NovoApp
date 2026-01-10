@@ -4,6 +4,7 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recha
 interface ServiceData {
     name: string;
     value: number;
+    [key: string]: any;
 }
 
 interface ServiceDistributionChartProps {
@@ -61,8 +62,8 @@ export function ServiceDistributionChart({ data }: ServiceDistributionChartProps
                             ))}
                         </Pie>
                         <Tooltip
-                            formatter={(value: number) =>
-                                new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
+                            formatter={(value: number | undefined) =>
+                                new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0)
                             }
                             itemStyle={{ color: '#374151' }}
                             contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' }}

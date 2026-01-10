@@ -19,6 +19,9 @@ export default defineConfig({
         react(),
         VitePWA({
             registerType: 'autoUpdate',
+            workbox: {
+                maximumFileSizeToCacheInBytes: 6 * 1024 * 1024, // 6MB
+            },
             includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
             manifest: {
                 name: 'FlowDrain SaaS',
@@ -57,4 +60,19 @@ export default defineConfig({
     optimizeDeps: {
         include: ['xlsx-js-style'],
     },
+    build: {
+        chunkSizeWarningLimit: 3000,
+        rollupOptions: {
+            output: {
+                manualChunks: {
+                    vendor: ['react', 'react-dom', 'react-router-dom'],
+                    ui: ['@radix-ui/react-checkbox', '@radix-ui/react-scroll-area', '@radix-ui/react-select', '@radix-ui/react-slot', '@radix-ui/react-switch', 'class-variance-authority', 'clsx', 'tailwind-merge', 'lucide-react', 'sonner'],
+                    charts: ['recharts'],
+                    maps: ['leaflet', 'react-leaflet'],
+                    utils: ['date-fns', 'xlsx-js-style', 'html2canvas', 'jspdf', 'jspdf-autotable'],
+                    db: ['dexie', 'dexie-react-hooks', '@supabase/supabase-js']
+                }
+            }
+        }
+    }
 })

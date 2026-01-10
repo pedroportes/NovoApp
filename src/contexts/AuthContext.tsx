@@ -58,9 +58,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 .eq('id', userId)
                 .maybeSingle()
 
+
             if (!data) {
                 console.warn('Usuário logado mas sem perfil na tabela usuarios. Tentando recuperação...')
-                const { data: recovery, error: recoveryError } = await supabase.rpc('ensure_complete_signup')
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const { data: recovery, error: recoveryError } = await (supabase.rpc as any)('ensure_complete_signup')
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const recoveryData = recovery as any
 
                 if (recoveryData?.success) {
@@ -93,7 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     id: row.id,
                     empresa_id: row.empresa_id || null,
                     cargo: row.cargo || 'tecnico',
-                    nome: (row as any).nome_completo || row.nome || '',
+                    nome: row.nome_completo || '',
                     email: row.email || '',
                     nome_fantasia: companyName
                 }
@@ -101,6 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 setEmpresaId(row.empresa_id)
                 authStorage.setUserData(userData)
             }
+
         } catch (error) {
             console.error('Error loading user data:', error)
         } finally {
@@ -147,7 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         id: userRow.id,
                         empresa_id: userRow.empresa_id || null,
                         cargo: userRow.cargo || 'tecnico',
-                        nome: (userRow as any).nome_completo || userRow.nome || '',
+                        nome: userRow.nome_completo || '',
                         email: userRow.email || '',
                     }
                     setUserData(userDataObj)

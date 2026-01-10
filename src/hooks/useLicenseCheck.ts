@@ -46,6 +46,7 @@ export function useLicenseCheck() {
     }, [user, empresaId])
 
     const checkLicense = async () => {
+        if (!empresaId) return
         try {
             // 1. Get Company Details (Created At & Subscription)
             const { data: companyData, error: companyError } = await supabase
@@ -74,7 +75,7 @@ export function useLicenseCheck() {
             }
 
             // 3. Calculate Trial Days
-            const createdAt = new Date(companyData.created_at)
+            const createdAt = new Date(companyData.created_at || new Date())
             const now = new Date()
             const diffTime = Math.abs(now.getTime() - createdAt.getTime())
             const daysUsed = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
@@ -84,10 +85,11 @@ export function useLicenseCheck() {
 
             // 4. Get Usage Counts
             const [clientsCount, osCount, teamCount] = await Promise.all([
-                supabase.from('clientes').select('*', { count: 'exact', head: true }).eq('empresa_id', empresaId),
-                supabase.from('ordens_servico').select('*', { count: 'exact', head: true }).eq('empresa_id', empresaId),
-                supabase.from('usuarios').select('*', { count: 'exact', head: true }).eq('empresa_id', empresaId).eq('cargo', 'tecnico') // Assuming only techs count for quota
+                supabase.from('clientes').select('*', { count: 'exact', head: true }).eq('empresa_id', empresaId!),
+                supabase.from('ordens_servico').select('*', { count: 'exact', head: true }).eq('empresa_id', empresaId!),
+                supabase.from('usuarios').select('*', { count: 'exact', head: true }).eq('empresa_id', empresaId!).eq('cargo', 'tecnico') // Assuming only techs count for quota
             ])
+
 
             const usage = {
                 clients: clientsCount.count || 0,

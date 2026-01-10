@@ -8,7 +8,7 @@ import { MapPin, User } from 'lucide-react';
 
 interface TechnicianLocation {
     id: string;
-    nome: string;
+    nome_completo: string;
     latitude: number;
     longitude: number;
     ultimo_update: string;
@@ -46,11 +46,9 @@ export const LiveMap = () => {
 
             const { data, error } = await supabase
                 .from('usuarios')
-                .select('id, nome, latitude, longitude, ultimo_update')
+                .select('id, nome_completo, last_location, ultimo_update')
                 .eq('empresa_id', empresaId)
                 .eq('cargo', 'tecnico')
-                .not('latitude', 'is', null)
-                .not('longitude', 'is', null)
                 .gte('ultimo_update', thirtyMinutesAgo);
 
             if (error) {
@@ -58,8 +56,17 @@ export const LiveMap = () => {
                 throw error;
             }
 
-            console.log('[LiveMap] Técnicos encontrados:', data?.length || 0, data);
-            setTechnicians(data || []);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const validTechs = (data || []).filter((t: any) => t.last_location?.latitude && t.last_location?.longitude).map((t: any) => ({
+                id: t.id,
+                nome_completo: t.nome_completo,
+                latitude: t.last_location.latitude,
+                longitude: t.last_location.longitude,
+                ultimo_update: t.ultimo_update // or t.last_location.updated_at
+            })) as TechnicianLocation[];
+
+            console.log('[LiveMap] Técnicos encontrados:', validTechs.length, validTechs);
+            setTechnicians(validTechs);
         } catch (err) {
             console.error('Erro ao buscar técnicos:', err);
         } finally {
@@ -82,14 +89,16 @@ export const LiveMap = () => {
                 },
                 (payload: any) => {
                     const updated = payload.new;
-                    if (updated.cargo === 'tecnico' && updated.latitude && updated.longitude) {
+                    // Check if last_location exists and has coords
+                    const loc = updated.last_location;
+                    if (updated.cargo === 'tecnico' && loc?.latitude && loc?.longitude) {
                         setTechnicians((prev) => {
                             const index = prev.findIndex((t) => t.id === updated.id);
-                            const newTech = {
+                            const newTech: TechnicianLocation = {
                                 id: updated.id,
-                                nome: updated.nome,
-                                latitude: updated.latitude,
-                                longitude: updated.longitude,
+                                nome_completo: updated.nome_completo,
+                                latitude: loc.latitude,
+                                longitude: loc.longitude,
                                 ultimo_update: updated.ultimo_update,
                             };
 
@@ -154,7 +163,7 @@ export const LiveMap = () => {
                         >
                             <Popup>
                                 <div style={{ textAlign: 'center' }}>
-                                    <strong>{tech.nome}</strong><br />
+                                    <strong>{tech.nome_completo}</strong><br />
                                     <small>{new Date(tech.ultimo_update).toLocaleTimeString()}</small>
                                 </div>
                             </Popup>

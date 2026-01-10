@@ -71,16 +71,16 @@ export function Login() {
                 // Check role to redirect and validate correct login type
                 let { data: userProfile, error: profileError } = await supabase
                     .from('usuarios')
-                    .select('cargo, empresa_id, empresas(nome)')
+                    .select('id, cargo, empresa_id, empresas(nome)')
                     .eq('id', authUser.id)
-                    .single()
+                    .single() as unknown as { data: { id: string; cargo: string; empresa_id: string | null; empresas: { nome: string } | null } | null; error: any }
 
                 if (profileError || !userProfile) {
                     // TENTATIVA DE AUTO-RECUPERAÇÃO (Self-Healing)
                     console.warn('Perfil não encontrado. Tentando recuperação automática...')
 
-                    const { data: recoveryResult, error: recoveryError } = await supabase
-                        .rpc('ensure_complete_signup')
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const { data: recoveryResult, error: recoveryError } = await (supabase.rpc as any)('ensure_complete_signup')
 
                     if (recoveryError || !recoveryResult?.success) {
                         console.error('Falha na recuperação:', recoveryError || recoveryResult)
@@ -93,7 +93,7 @@ export function Login() {
                     // Se recuperou, tenta buscar o perfil novamente
                     const { data: retryProfile, error: retryError } = await supabase
                         .from('usuarios')
-                        .select('cargo, empresa_id, empresas(nome)')
+                        .select('id, cargo, empresa_id, empresas(nome)')
                         .eq('id', authUser.id)
                         .single()
 

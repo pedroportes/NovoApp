@@ -63,7 +63,7 @@ export interface LocalService {
     empresa_id: string;
     nome: string;
     descricao?: string;
-    valor_padrao: number;
+    preco_padrao: number;
     ativo: boolean;
 }
 

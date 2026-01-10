@@ -65,12 +65,12 @@ export function Financial() {
                 supabase
                     .from('financeiro_fluxo')
                     .select('*')
-                    .eq('empresa_id', userData!.empresa_id)
+                    .eq('empresa_id', userData!.empresa_id!)
                     .order('data_lancamento', { ascending: false }),
                 supabase
                     .from('despesas_tecnicos')
                     .select('*, tecnico:tecnico_id(nome_completo)')
-                    .eq('empresa_id', userData!.empresa_id)
+                    .eq('empresa_id', userData!.empresa_id!)
                     .eq('status_aprovacao', 'aprovado')
                     .neq('status', 'pago'), // Don't double count paid expenses (already in FECHAMENTO)
                 supabase
@@ -85,7 +85,7 @@ export function Financial() {
                         previsao_chegada,
                         tecnico:tecnico_id (nome_completo)
                     `)
-                    .eq('empresa_id', userData!.empresa_id)
+                    .eq('empresa_id', userData!.empresa_id!)
                     .order('updated_at', { ascending: false })
                     .limit(5)
             ])
@@ -113,7 +113,7 @@ export function Financial() {
                 new Date(b.data_lancamento).getTime() - new Date(a.data_lancamento).getTime()
             )
 
-            setFluxo(combined)
+            setFluxo(combined as FluxoItem[])
         } catch (error) {
             console.error('Erro ao buscar fluxo:', error)
         } finally {
@@ -197,6 +197,7 @@ export function Financial() {
                 empresa_id: userData.empresa_id,
                 placa: newExpense.novo_veiculo_placa.toUpperCase(),
                 modelo: newExpense.novo_veiculo_modelo,
+                marca: 'Genérica',
                 ano: new Date().getFullYear() // Default to current year
             })
 
