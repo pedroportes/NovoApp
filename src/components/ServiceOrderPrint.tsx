@@ -22,9 +22,23 @@ const ReceiptLayout = ({ os, company, title }: { os: any, company: any, title: s
 
     const calculateTotal = () => {
         if (os.itens && Array.isArray(os.itens)) {
-            return os.itens.reduce((acc: number, item: any) => acc + (item.total || 0), 0)
+            return os.itens.reduce((acc: number, item: any) => acc + (Number(item.total) || 0), 0)
         }
         return 0
+    }
+
+    const formatAddress = (obj: any) => {
+        if (obj?.endereco) return obj.endereco;
+        if (!obj) return '';
+        const parts = [
+            obj.logradouro,
+            obj.numero ? `Nº ${obj.numero}` : '',
+            obj.bairro,
+            obj.cidade,
+            obj.uf,
+            obj.cep
+        ].filter(Boolean);
+        return parts.join(', ');
     }
 
     const subtotal = calculateTotal()
@@ -65,7 +79,7 @@ const ReceiptLayout = ({ os, company, title }: { os: any, company: any, title: s
                 {/* Sub-Header: Address & Contact */}
                 <div className="border-b-2 border-black flex text-sm">
                     <div className="w-1/2 p-2 px-4 border-r-2 border-black">
-                        {company?.endereco || 'Endereço da Empresa aqui'}
+                        {formatAddress(company) || 'Endereço da Empresa aqui'}
                     </div>
                     <div className="w-1/2 p-2 px-4">
                         <div><span className="font-bold">CNPJ:</span> {company?.cnpj || '00.000.000/0000-00'}</div>
@@ -90,7 +104,7 @@ const ReceiptLayout = ({ os, company, title }: { os: any, company: any, title: s
                     </div>
                     <div className="flex border-b border-black">
                         <div className="w-32 bg-gray-100 p-1 px-2 font-bold border-r border-black flex items-center">Endereço</div>
-                        <div className="flex-1 p-1 px-2 uppercase">{os.clientes?.endereco || ''}</div>
+                        <div className="flex-1 p-1 px-2 uppercase">{formatAddress(os.clientes) || ''}</div>
                     </div>
                     <div className="flex">
                         <div className="w-32 bg-gray-100 p-1 px-2 font-bold border-r border-black flex items-center">Telefone</div>
@@ -149,16 +163,22 @@ const ReceiptLayout = ({ os, company, title }: { os: any, company: any, title: s
                     </div>
                 )}
 
-                {/* Signature Section */}
+                {/* Signature Section - Receipt Layout */}
                 <div className="mt-4 border-2 border-black flex h-32 md:h-48 mx-2 md:mx-4 mb-4">
-                    <div className="w-1/3 flex items-center justify-center border-r-2 border-black p-2 md:p-4 font-bold text-[10px] md:text-sm text-center">
-                        Assinatura do responsável
+                    {/* LEFT SIDE: CLIENT SIGNATURE */}
+                    <div className="w-1/3 flex flex-col items-center justify-center border-r-2 border-black p-2 md:p-4 font-bold text-[10px] md:text-sm text-center relative">
+                        {os.assinatura_cliente_url ? (
+                            <img src={os.assinatura_cliente_url} alt="Assinatura Cliente" className="absolute inset-0 w-full h-full object-contain p-2 opacity-80" />
+                        ) : null}
+                        <span className="relative z-10 mt-auto">Assinatura do Cliente</span>
                     </div>
+
+                    {/* RIGHT SIDE: COMPANY SIGNATURE */}
                     <div className="w-2/3 flex flex-col items-center justify-center relative p-2">
-                        {os.assinatura_cliente_url && (
-                            <img src={os.assinatura_cliente_url} alt="Assinatura" className="max-h-20 md:max-h-32 object-contain" />
+                        {company?.assinatura_url && (
+                            <img src={company.assinatura_url} alt="Assinatura Empresa" className="max-h-20 md:max-h-32 object-contain" />
                         )}
-                        <div className="mt-auto text-[10px] md:text-xs font-bold uppercase pt-2">
+                        <div className="mt-auto text-[10px] md:text-xs font-bold uppercase pt-2 border-t border-black w-full text-center">
                             {company?.nome || 'Desentupidora'}
                         </div>
                     </div>
@@ -191,9 +211,23 @@ const ContractLayout = ({ os, company }: { os: any, company: any }) => {
         return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
     }
 
-    const subtotal = os.itens ? os.itens.reduce((acc: number, item: any) => acc + (item.total || 0), 0) : 0
+    const subtotal = os.itens ? os.itens.reduce((acc: number, item: any) => acc + (Number(item.total) || 0), 0) : 0
     const discountValue = os.desconto ? (subtotal * os.desconto) / 100 : 0
     const totalValue = os.valor_total || (subtotal - discountValue)
+
+    const formatAddress = (obj: any) => {
+        if (obj?.endereco) return obj.endereco;
+        if (!obj) return '';
+        const parts = [
+            obj.logradouro,
+            obj.numero ? `Nº ${obj.numero}` : '',
+            obj.bairro,
+            obj.cidade,
+            obj.uf,
+            obj.cep
+        ].filter(Boolean);
+        return parts.join(', ');
+    }
 
     return (
         <div className="p-12 bg-white text-black font-serif max-w-[210mm] mx-auto print:p-8 leading-relaxed text-justify text-sm">
@@ -204,13 +238,13 @@ const ContractLayout = ({ os, company }: { os: any, company: any }) => {
             <p className="mb-4">
                 Pelo presente instrumento particular, de um lado <strong>{company?.nome || 'CONTRATADA'}</strong>,
                 inscrita no CNPJ sob o nº <strong>{company?.cnpj || '______________'}</strong>,
-                situada em {company?.endereco || '_________________________'}, doravante denominada <strong>CONTRATADA</strong>.
+                situada em {formatAddress(company) || '_________________________'}, doravante denominada <strong>CONTRATADA</strong>.
             </p>
 
             <p className="mb-6">
                 E de outro lado <strong>{os.cliente_nome || os.clientes?.nome_razao || 'CLIENTE'}</strong>,
                 CPF/CNPJ nº <strong>{os.clientes?.cpf_cnpj || '__________________'}</strong>,
-                residente/sediado em {os.clientes?.endereco || '___________________________'},
+                residente/sediado em {formatAddress(os.clientes) || '___________________________'},
                 doravante denominado <strong>CONTRATANTE</strong>.
             </p>
 
@@ -259,7 +293,10 @@ const ContractLayout = ({ os, company }: { os: any, company: any }) => {
                 </p>
 
                 <div className="flex justify-between gap-8 mt-12">
-                    <div className="flex-1 border-t border-black pt-2">
+                    <div className="flex-1 border-t border-black pt-2 flex flex-col items-center">
+                        {company?.assinatura_url && (
+                            <img src={company.assinatura_url} alt="Assinatura Contratada" className="h-12 -mt-16 mb-2 object-contain" />
+                        )}
                         <p className="font-bold">{company?.nome || 'CONTRATADA'}</p>
                         <p className="text-xs text-gray-500">Assinatura da Contratada</p>
                     </div>

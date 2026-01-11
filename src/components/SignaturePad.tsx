@@ -13,6 +13,13 @@ export function SignaturePad({ onSave, initialUrl }: SignaturePadProps) {
     const [hasSignature, setHasSignature] = useState(false)
     const [isLocked, setIsLocked] = useState(false)
 
+    // Sync external state
+    useEffect(() => {
+        if (initialUrl) {
+            // We'll let the canvas load handled by the other effect
+        }
+    }, [initialUrl])
+
     useEffect(() => {
         if (initialUrl && canvasRef.current) {
             const canvas = canvasRef.current
@@ -112,6 +119,12 @@ export function SignaturePad({ onSave, initialUrl }: SignaturePadProps) {
         saveSignature()
     }
 
+    const handleUnlock = (e: React.MouseEvent) => {
+        e.preventDefault()
+        setIsLocked(false)
+        // Optionally clear specific locked state, but keeps the drawing
+    }
+
     const saveSignature = () => {
         const canvas = canvasRef.current
         if (!canvas) return
@@ -148,28 +161,41 @@ export function SignaturePad({ onSave, initialUrl }: SignaturePadProps) {
             </div>
 
             <div className="flex justify-between items-center bg-muted/30 p-2 rounded-lg">
-                <p className="text-xs text-muted-foreground pl-1">
-                    {isLocked ? 'Clique em Limpar para corrigir' : 'Faça sua assinatura acima'}
+                <p className="text-xs text-muted-foreground pl-1 font-medium">
+                    {isLocked ? 'Assinatura Travada (Segura)' : 'Faça sua assinatura acima'}
                 </p>
                 <div className="flex gap-2">
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={clear}
-                        type="button"
-                        className="text-muted-foreground hover:text-destructive"
-                    >
-                        <Eraser className="w-4 h-4 mr-2" />
-                        Limpar
-                    </Button>
                     {!isLocked && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={clear}
+                            type="button"
+                            className="text-muted-foreground hover:text-destructive"
+                        >
+                            <Eraser className="w-4 h-4 mr-2" />
+                            Limpar
+                        </Button>
+                    )}
+
+                    {isLocked ? (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleUnlock}
+                            type="button"
+                            className="border-slate-300 text-slate-600 hover:bg-slate-100"
+                        >
+                            Destravar / Editar
+                        </Button>
+                    ) : (
                         <Button
                             variant="secondary"
                             size="sm"
                             onClick={handleLock}
                             disabled={!hasSignature}
                             type="button"
-                            className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-emerald-200"
+                            className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border border-emerald-200 font-semibold"
                         >
                             Travar Assinatura
                         </Button>

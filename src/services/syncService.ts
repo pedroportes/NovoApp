@@ -61,7 +61,7 @@ export const SyncService = {
                     id: s.id,
                     nome: s.nome,
                     descricao: s.descricao || undefined,
-                    preco_padrao: s.preco_padrao || 0,
+                    valor_padrao: s.valor_padrao || 0,
                     empresa_id: s.empresa_id || '',
                     ativo: s.ativo ?? true
                 }))
@@ -306,7 +306,7 @@ export const SyncService = {
         });
 
         // 4. Try to Sync immediately (background)
-        this.pushQueue();
+        await this.pushQueue();
 
         return id;
     },

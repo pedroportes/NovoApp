@@ -456,42 +456,38 @@ export function Financial() {
                                     </div>
                                 </CardHeader>
                                 <CardContent className="p-4 md:p-6">
-                                    <div className="rounded-md border overflow-hidden">
-                                        <table className="w-full text-xs md:text-sm text-left table-fixed">
-                                            <thead className="bg-slate-50 text-slate-500 font-medium">
-                                                <tr>
-                                                    <th className="p-2 md:p-3 w-[65%] md:w-[70%]">Descrição</th>
-                                                    <th className="p-2 md:p-3 text-right w-[35%] md:w-[30%]">Valor</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-slate-100">
-                                                {loading ? (
-                                                    <tr><td colSpan={2} className="p-4 text-center text-slate-500">Carregando...</td></tr>
-                                                ) : filteredFluxo.length === 0 ? (
-                                                    <tr><td colSpan={2} className="p-4 text-center text-slate-500">Nenhuma transação.</td></tr>
-                                                ) : (
-                                                    filteredFluxo.slice(0, 5).map((item) => (
-                                                        <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
-                                                            <td className="p-2 md:p-3 font-medium text-slate-700 min-w-0">
-                                                                <div className="line-clamp-1 text-xs md:text-sm">{item.descricao}</div>
-                                                                <div className="text-[9px] md:text-[10px] text-slate-400 font-normal flex items-center gap-1">
-                                                                    <span>{new Date(item.data_lancamento).toLocaleDateString()}</span>
-                                                                    {item.responsavel && (
-                                                                        <>
-                                                                            <span>•</span>
-                                                                            <span className="text-emerald-600 font-medium truncate max-w-[60px] md:max-w-[100px]">{item.responsavel.split(' ')[0]}</span>
-                                                                        </>
-                                                                    )}
-                                                                </div>
-                                                            </td>
-                                                            <td className={cn("p-2 md:p-3 text-right font-bold whitespace-nowrap text-xs md:text-sm", item.tipo === 'ENTRADA' ? "text-emerald-700" : "text-red-700")}>
-                                                                {item.tipo === 'ENTRADA' ? '+' : '-'} {formatCurrency(item.valor)}
-                                                            </td>
-                                                        </tr>
-                                                    ))
-                                                )}
-                                            </tbody>
-                                        </table>
+                                    <div className="space-y-4">
+                                        <div className="grid grid-cols-[1fr_auto] gap-4 px-2 text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">
+                                            <div>Descrição</div>
+                                            <div className="text-right">Valor</div>
+                                        </div>
+                                        <div className="divide-y divide-slate-100">
+                                            {loading ? (
+                                                <div className="p-4 text-center text-slate-500">Carregando...</div>
+                                            ) : filteredFluxo.length === 0 ? (
+                                                <div className="p-4 text-center text-slate-500">Nenhuma transação.</div>
+                                            ) : (
+                                                filteredFluxo.slice(0, 5).map((item) => (
+                                                    <div key={item.id} className="py-3 px-2 hover:bg-slate-50 rounded-lg transition-colors flex items-center justify-between gap-3 group">
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="font-medium text-slate-700 text-sm truncate pr-2">{item.descricao}</div>
+                                                            <div className="text-[10px] text-slate-400 font-normal flex items-center gap-1.5 mt-0.5">
+                                                                <span>{new Date(item.data_lancamento).toLocaleDateString()}</span>
+                                                                {item.responsavel && (
+                                                                    <>
+                                                                        <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                                                                        <span className="text-emerald-600 font-medium truncate max-w-[100px]">{item.responsavel.split(' ')[0]}</span>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <div className={cn("text-right font-bold text-sm shrink-0", item.tipo === 'ENTRADA' ? "text-emerald-700" : "text-red-700")}>
+                                                            {item.tipo === 'ENTRADA' ? '+' : '-'} {formatCurrency(item.valor)}
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
                                     </div>
                                 </CardContent>
                             </Card>

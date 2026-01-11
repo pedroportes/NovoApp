@@ -11,7 +11,7 @@ interface Service {
     id: string
     nome: string
     descricao: string | null
-    preco_padrao: number
+    valor_padrao: number
     ativo: boolean
 }
 
@@ -27,7 +27,7 @@ export function Services() {
     const [formData, setFormData] = useState({
         nome: '',
         descricao: '',
-        preco_padrao: ''
+        valor_padrao: ''
     })
     const [saving, setSaving] = useState(false)
 
@@ -60,7 +60,7 @@ export function Services() {
                 id: s.id,
                 nome: s.nome,
                 descricao: s.descricao,
-                preco_padrao: s.preco_padrao,
+                valor_padrao: s.valor_padrao,
                 ativo: s.ativo ?? true // Default to true if null
             }))
 
@@ -81,7 +81,7 @@ export function Services() {
                 empresa_id: userData!.empresa_id,
                 nome: formData.nome,
                 descricao: formData.descricao,
-                preco_padrao: parseFloat(formData.preco_padrao.replace(',', '.')) || 0
+                valor_padrao: parseFloat(formData.valor_padrao.replace(',', '.')) || 0
             }
 
             if (editingService) {
@@ -130,11 +130,11 @@ export function Services() {
             setFormData({
                 nome: service.nome,
                 descricao: service.descricao || '',
-                preco_padrao: service.preco_padrao.toString()
+                valor_padrao: service.valor_padrao.toString()
             })
         } else {
             setEditingService(null)
-            setFormData({ nome: '', descricao: '', preco_padrao: '' })
+            setFormData({ nome: '', descricao: '', valor_padrao: '' })
         }
         setIsModalOpen(true)
     }
@@ -200,7 +200,7 @@ export function Services() {
                             <div className="mt-4 pt-4 border-t border-border flex justify-between items-center">
                                 <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Valor Padrão</span>
                                 <span className="font-bold text-primary text-lg">
-                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(service.preco_padrao)}
+                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(service.valor_padrao || 0)}
                                 </span>
                             </div>
                         </div>
@@ -241,8 +241,8 @@ export function Services() {
                                     step="0.01"
                                     min="0"
                                     placeholder="0,00"
-                                    value={formData.preco_padrao}
-                                    onChange={e => setFormData({ ...formData, preco_padrao: e.target.value })}
+                                    value={formData.valor_padrao}
+                                    onChange={e => setFormData({ ...formData, valor_padrao: e.target.value })}
                                 />
                             </div>
 

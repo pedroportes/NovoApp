@@ -37,6 +37,8 @@ export function Settings() {
     const [techAvatarFile, setTechAvatarFile] = useState<File | null>(null)
     const [signatureBlob, setSignatureBlob] = useState<Blob | null>(null)
     const [signatureUrl, setSignatureUrl] = useState<string | null>(null)
+    const [companySignatureBlob, setCompanySignatureBlob] = useState<Blob | null>(null)
+    const [companySignaturePreview, setCompanySignaturePreview] = useState<string | null>(null)
 
     // Admin Config States
     const [configs, setConfigs] = useState({
@@ -142,6 +144,9 @@ export function Settings() {
                 if (company.logo_url) {
                     setLogoPreview(company.logo_url)
                 }
+                if (company.assinatura_url) {
+                    setCompanySignaturePreview(company.assinatura_url)
+                }
             }
         } catch (error) {
             console.error('Erro ao buscar dados:', error)
@@ -185,12 +190,34 @@ export function Settings() {
                 logoUrl = urlData.publicUrl
             }
 
+            let signatureUrlToSave = companySignaturePreview
+
+            if (companySignatureBlob) {
+                // Upload Blob directly
+                const fileName = `company_signature_${userData!.empresa_id}_${Date.now()}.png`
+
+                const { error: uploadError } = await supabase.storage
+                    .from('avatars')
+                    .upload(fileName, companySignatureBlob, {
+                        contentType: 'image/png'
+                    })
+
+                if (uploadError) throw uploadError
+
+                const { data: urlData } = supabase.storage
+                    .from('avatars')
+                    .getPublicUrl(fileName)
+
+                signatureUrlToSave = urlData.publicUrl
+            }
+
             const { error } = await (supabase
                 .from('empresas') as any)
                 .update({
                     ...formData,
                     configs: configs,
-                    logo_url: logoUrl
+                    logo_url: logoUrl,
+                    assinatura_url: signatureUrlToSave
                 })
                 .eq('id', userData!.empresa_id)
 
@@ -203,7 +230,7 @@ export function Settings() {
         } finally {
             setSaving(false)
         }
-    }, [formData, configs, logoFile, logoPreview, userData])
+    }, [formData, configs, logoFile, logoPreview, userData, companySignatureBlob, companySignaturePreview])
 
     // Technician Submit
     const handleTechSubmit = useCallback(async () => {
@@ -276,7 +303,7 @@ export function Settings() {
         } finally {
             setSaving(false)
         }
-    }, [techAvatar, techAvatarFile, techFormData, userData, signatureBlob, signatureUrl])
+    }, [techFormData, techAvatar, techAvatarFile, signatureUrl, userData, signatureBlob])
 
     // Set FAB Action
     useEffect(() => {
@@ -471,6 +498,21 @@ export function Settings() {
                                     />
                                 </div>
                                 <p className="text-xs text-muted-foreground">Clique para alterar o logo</p>
+                            </div>
+
+                            {/* Assinatura da Empresa */}
+                            <div className="flex flex-col items-center gap-4 border-t pt-4 w-full">
+                                <Label className="text-lg font-semibold">Assinatura Digital da Empresa</Label>
+                                <div className="w-full max-w-lg">
+                                    <SignaturePad
+                                        onSave={setCompanySignatureBlob}
+                                        initialUrl={companySignaturePreview}
+                                    />
+                                </div>
+                                <p className="text-xs text-muted-foreground text-center">
+                                    Assine na caixa acima. Para salvar, clique em "Travar Assinatura" <br />
+                                    e depois no botão "Salvar Alterações" no final da página.
+                                </p>
                             </div>
 
                             <div className="space-y-4">

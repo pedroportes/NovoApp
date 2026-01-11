@@ -57,7 +57,7 @@ export function OfflineSyncProvider({ children }: { children: React.ReactNode })
             {/* Visual Indicator of Connection Status */}
             <div
                 title={isSyncing ? "Sincronizando..." : isOnline ? "Online" : "Offline / Local"}
-                className={`fixed bottom-[88px] left-[70px] md:bottom-6 md:right-6 z-[60] flex items-center justify-center w-8 h-8 rounded-full shadow-lg transition-all ${isOnline
+                className={`fixed bottom-[88px] left-[70px] md:bottom-6 md:right-6 z-[60] flex items-center justify-center w-8 h-8 rounded-full shadow-lg transition-all print:hidden ${isOnline
                     ? 'bg-emerald-500 text-white border-2 border-white'
                     : 'bg-amber-500 text-white border-2 border-white'
                     }`}>

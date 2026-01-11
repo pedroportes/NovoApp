@@ -47,7 +47,7 @@ export function NewServiceOrder() {
     const [initialSignatureUrl, setInitialSignatureUrl] = useState<string | null>(null)
 
     // Derived Discount State (for UI sync)
-    const subtotal = items.reduce((acc, item) => acc + item.total, 0)
+    const subtotal = items.length > 0 ? items.reduce((acc, item) => acc + (Number(item.total) || 0), 0) : 0
 
     // We use a local state for the currency input to "buffer" the user's typing
     // preventing the circular calculation from messing up the input while typing.
@@ -75,7 +75,7 @@ export function NewServiceOrder() {
     // Calculate final totals for display/save
     const discountPercent = parseFloat(formData.desconto) || 0
     const discountValue = (subtotal * discountPercent) / 100
-    const total = subtotal - discountValue
+    const total = Math.max(0, subtotal - discountValue)
 
     const handleSignatureChange = (blob: Blob | null) => {
         setSignatureBlob(blob)
@@ -141,7 +141,7 @@ export function NewServiceOrder() {
 
         // Update currency input display based on new %
         const cVal = (subtotal * p) / 100
-        setCurrencyInput(cVal.toFixed(2))
+        setCurrencyInput(cVal > 0 ? cVal.toFixed(2) : '')
 
         // Update main form data
         setFormData(prev => ({ ...prev, desconto: val }))
@@ -347,53 +347,93 @@ export function NewServiceOrder() {
     }
 
     const addItem = () => {
-        setItems([...items, { descricao: '', qtd: 1, valor_unitario: 0, total: 0 }])
+        setItems(prev => [...prev, { descricao: '', qtd: 1, valor_unitario: 0, total: 0 }])
     }
 
     const handleAddServiceItem = (serviceId: string) => {
-        const service = services.find(s => s.id === serviceId)
+        const service = services.find(s => s.id === serviceId) as any
         if (service) {
-            setItems([...items, {
-                descricao: service.nome,
+            // DB field is valor_padrao
+            const val = Number(service.valor_padrao) || 0
+            setItems(prev => [...prev, {
+                descricao: service.descricao ? `${service.nome} - ${service.descricao}` : service.nome,
                 qtd: 1,
-                valor_unitario: service.valor_padrao,
-                total: service.valor_padrao
+                valor_unitario: val,
+                total: val
             }])
             setSelectedServiceId('') // Reset selection
         }
     }
 
     const handleAddCalculatedItem = () => {
-        if (!calculatedVolume || calculatedVolume.total <= 0) return
+        // Recalculate on the fly to ensure no stale state usage
+        const { largura, comprimento, profundidade, diametro, preco_litro } = calcDimensions
+        let volumeLitros = 0
+        let currentTotal = 0
+
+        if (calcType === 'rectangular') {
+            const l = parseFloat(largura.replace(',', '.')) || 0
+            const c = parseFloat(comprimento.replace(',', '.')) || 0
+            const p = parseFloat(profundidade.replace(',', '.')) || 0
+            if (l && c && p) {
+                volumeLitros = (l * c * p) / 1000
+            }
+        } else {
+            const d = parseFloat(diametro.replace(',', '.')) || 0
+            const p = parseFloat(profundidade.replace(',', '.')) || 0
+            if (d && p) {
+                const r = d / 2
+                volumeLitros = (Math.PI * (r * r) * p) / 1000
+            }
+        }
+
+        const preco = parseFloat(preco_litro.replace(',', '.')) || 0
+        currentTotal = volumeLitros * preco
+
+        // Round to 2 decimals for currency
+        currentTotal = Math.round(currentTotal * 100) / 100
+        volumeLitros = Math.round(volumeLitros * 100) / 100
+
+        if (currentTotal <= 0) return
 
         const desc = calcType === 'rectangular'
-            ? `Limpeza Fossa Retangular (${calcDimensions.largura}x${calcDimensions.comprimento}x${calcDimensions.profundidade}cm) - ${calculatedVolume.litros}L`
-            : `Limpeza Fossa Cilíndrica (Ø${calcDimensions.diametro}x${calcDimensions.profundidade}cm) - ${calculatedVolume.litros}L`
+            ? `Limpeza Fossa Retangular (${largura}x${comprimento}x${profundidade}cm) - ${volumeLitros}L`
+            : `Limpeza Fossa Cilíndrica (Ø${diametro}x${profundidade}cm) - ${volumeLitros}L`
 
-        setItems([...items, {
+        setItems(prev => [...prev, {
             descricao: desc,
             qtd: 1,
-            valor_unitario: calculatedVolume.total,
-            total: calculatedVolume.total
+            valor_unitario: currentTotal,
+            total: currentTotal
         }])
+        setIsCalculatorOpen(false)
     }
 
     const updateItem = (index: number, field: keyof ServiceItem, value: any) => {
-        const newItems = [...items]
-        const item = newItems[index]
+        setItems(prev => {
+            const newItems = [...prev]
+            const item = { ...newItems[index] }
 
-        if (field === 'qtd' || field === 'valor_unitario') {
-            item[field] = Number(value)
-            item.total = item.qtd * item.valor_unitario
-        } else if (field === 'descricao') {
-            item.descricao = value
-        }
+            if (field === 'qtd') {
+                item.qtd = Number(value)
+                item.total = Number((item.qtd * item.valor_unitario).toFixed(2))
+            } else if (field === 'valor_unitario') {
+                // Handle text input that might have commas if browser allows it
+                const valStr = String(value).replace(',', '.')
+                const valNum = parseFloat(valStr) || 0
+                item.valor_unitario = valNum
+                item.total = Number((item.qtd * valNum).toFixed(2))
+            } else if (field === 'descricao') {
+                item.descricao = value
+            }
 
-        setItems(newItems)
+            newItems[index] = item
+            return newItems
+        })
     }
 
     const removeItem = (index: number) => {
-        setItems(items.filter((_, i) => i !== index))
+        setItems(prev => prev.filter((_, i) => i !== index))
     }
 
     // ...
@@ -669,8 +709,8 @@ export function NewServiceOrder() {
                             }}
                         >
                             <option value="">+ Adicionar serviço do catálogo...</option>
-                            {services.map(s => (
-                                <option key={s.id} value={s.id}>{s.nome} - {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(s.valor_padrao)}</option>
+                            {services.map((s: any) => (
+                                <option key={s.id} value={s.id}>{s.nome} - {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(s.valor_padrao) || 0)}</option>
                             ))}
                         </select>
                     </div>
@@ -761,7 +801,7 @@ export function NewServiceOrder() {
                     <div className="relative z-10 space-y-4">
                         <div className="flex justify-between text-sm text-slate-400">
                             <span>Subtotal</span>
-                            <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(subtotal)}</span>
+                            <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(subtotal || 0)}</span>
                         </div>
 
                         {/* Discount Inputs */}
@@ -793,7 +833,7 @@ export function NewServiceOrder() {
 
                         <div className="flex justify-between items-end">
                             <span className="text-lg font-medium text-slate-300">Total Final</span>
-                            <span className="text-3xl font-bold text-emerald-400">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total)}</span>
+                            <span className="text-3xl font-bold text-emerald-400">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total || 0)}</span>
                         </div>
                     </div>
                 </div>
@@ -824,7 +864,7 @@ export function NewServiceOrder() {
                     </div>
                     <h2 className="text-xl font-bold text-slate-800">Assinatura</h2>
                 </div>
-                <div className="border-0 rounded-2xl overflow-hidden bg-slate-50"><SignaturePad onSignatureChange={handleSignatureChange} initialImage={initialSignatureUrl} /></div>
+                <div className="border-0 rounded-2xl overflow-hidden bg-slate-50"><SignaturePad onSave={handleSignatureChange} initialUrl={initialSignatureUrl} /></div>
             </div>
 
             <div className="bg-white rounded-3xl p-8 shadow-xl shadow-slate-200/50 space-y-6">

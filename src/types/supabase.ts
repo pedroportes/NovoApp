@@ -19,6 +19,7 @@ export type Database = {
                     ativo: boolean | null
                     bairro: string | null
                     cep: string | null
+                    assinatura_url: string | null
                     cidade: string | null
                     complemento: string | null
                     cpf_cnpj: string | null
@@ -139,6 +140,7 @@ export type Database = {
                     stripe_subscription_id: string | null
                     subscription_price_id: string | null
                     subscription_status: string | null
+                    assinatura_url: string | null
                 }
                 Insert: {
                     cnpj?: string | null
@@ -515,7 +517,7 @@ export type Database = {
                     empresa_id?: string | null
                     id?: string
                     nome?: string
-                    preco_padrao?: number
+                    valor_padrao?: number
                     tipo_comissao?: string | null
                 }
                 Relationships: [
