@@ -576,7 +576,7 @@ export function Dashboard() {
             {/* LISTAS INFERIORES */}
             <div className="grid gap-6 md:grid-cols-2">
                 {/* LISTA RECENTE */}
-                <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6">
+                <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-4 md:p-6">
                     <div className="flex items-center justify-between mb-6">
                         <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                             <FileChartColumn className="h-5 w-5 text-emerald-500" />
@@ -611,7 +611,7 @@ export function Dashboard() {
 
                 {/* DESPESAS PENDENTES (Somente Admin) */}
                 {userData?.cargo === 'admin' && pendingExpenses.length > 0 && (
-                    <div className="bg-white rounded-3xl shadow-lg shadow-amber-100/50 p-6 border-l-4 border-amber-400">
+                    <div className="bg-white rounded-3xl shadow-lg shadow-amber-100/50 p-4 md:p-6 border-l-4 border-amber-400">
                         <div className="flex items-center justify-between mb-6">
                             <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                                 <AlertTriangle className="h-5 w-5 text-amber-500" />

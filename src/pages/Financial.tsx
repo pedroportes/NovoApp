@@ -455,13 +455,13 @@ export function Financial() {
                                         </div>
                                     </div>
                                 </CardHeader>
-                                <CardContent>
+                                <CardContent className="p-4 md:p-6">
                                     <div className="rounded-md border overflow-hidden">
-                                        <table className="w-full text-sm text-left table-fixed">
+                                        <table className="w-full text-xs md:text-sm text-left table-fixed">
                                             <thead className="bg-slate-50 text-slate-500 font-medium">
                                                 <tr>
-                                                    <th className="p-2 md:p-3 w-[70%]">Descrição</th>
-                                                    <th className="p-2 md:p-3 text-right w-[30%]">Valor</th>
+                                                    <th className="p-2 md:p-3 w-[65%] md:w-[70%]">Descrição</th>
+                                                    <th className="p-2 md:p-3 text-right w-[35%] md:w-[30%]">Valor</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-100">

@@ -1,7 +1,10 @@
 node_modules
 dist
 .env
-.env*
+.env.local
+.env.development
+.env.test
+.env.production
 test_gemini.js
 *_test.js
 .DS_Store
