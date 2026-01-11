@@ -45,7 +45,7 @@ export function ServiceDistributionChart({ data }: ServiceDistributionChartProps
                 Serviços Mais Vendidos
             </h3>
             <div className="h-64 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="99%" height="100%">
                     <PieChart>
                         <Pie
                             data={processedData}

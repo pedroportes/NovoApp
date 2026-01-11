@@ -194,8 +194,34 @@
     @apply border-border;
   }
 
+  html,
   body {
     @apply bg-background text-foreground tracking-wide antialiased font-sans transition-colors duration-300;
+    overflow-x: hidden;
+    /* Prevent horizontal scrolling on iOS */
+  }
+
+  /* iOS Safe Area Support */
+  :root {
+    --sat: env(safe-area-inset-top);
+    --sab: env(safe-area-inset-bottom);
+    --sal: env(safe-area-inset-left);
+    --sar: env(safe-area-inset-right);
+  }
+
+  /* Fix for random 100vh issues on mobile */
+  .min-h-screen {
+    min-height: 100vh;
+    /* Fallback */
+    min-height: 100dvh;
+    /* iOS friendly */
+  }
+
+  .h-screen {
+    height: 100vh;
+    /* Fallback */
+    height: 100dvh;
+    /* iOS friendly */
   }
 }
 

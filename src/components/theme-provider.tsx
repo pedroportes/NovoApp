@@ -59,6 +59,29 @@ export function ThemeProvider({
         if (theme === "dark-ops") {
             root.classList.add("dark")
         }
+
+        // --- PWA Theme Color Update ---
+        const metaThemeColor = document.querySelector("meta[name='theme-color']")
+        if (metaThemeColor) {
+            let color = "#ffffff" // default
+
+            // Resolve color based on theme
+            const activeTheme = theme === 'system'
+                ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? 'dark-ops' : 'enterprise')
+                : theme
+
+            switch (activeTheme) {
+                case 'dark-ops': color = '#0f172a'; break; // Slate 900
+                case 'midnight': color = '#020617'; break; // Slate 950
+                case 'bento': color = '#F5F5F7'; break;
+                case 'amethyst': color = '#faf5ff'; break; // Purple 50
+                case 'enterprise':
+                default:
+                    color = '#f8fafc'; // Slate 50
+                    break;
+            }
+            metaThemeColor.setAttribute("content", color)
+        }
     }, [theme])
 
     const value = {

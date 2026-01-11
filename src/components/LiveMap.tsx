@@ -46,7 +46,7 @@ export const LiveMap = () => {
 
             const { data, error } = await supabase
                 .from('usuarios')
-                .select('id, nome_completo, last_location, ultimo_update')
+                .select('id, nome_completo, latitude, longitude, ultimo_update')
                 .eq('empresa_id', empresaId)
                 .eq('cargo', 'tecnico')
                 .gte('ultimo_update', thirtyMinutesAgo);
@@ -57,12 +57,12 @@ export const LiveMap = () => {
             }
 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const validTechs = (data || []).filter((t: any) => t.last_location?.latitude && t.last_location?.longitude).map((t: any) => ({
+            const validTechs = (data || []).filter((t: any) => t.latitude && t.longitude).map((t: any) => ({
                 id: t.id,
                 nome_completo: t.nome_completo,
-                latitude: t.last_location.latitude,
-                longitude: t.last_location.longitude,
-                ultimo_update: t.ultimo_update // or t.last_location.updated_at
+                latitude: t.latitude,
+                longitude: t.longitude,
+                ultimo_update: t.ultimo_update
             })) as TechnicianLocation[];
 
             console.log('[LiveMap] Técnicos encontrados:', validTechs.length, validTechs);
@@ -89,16 +89,15 @@ export const LiveMap = () => {
                 },
                 (payload: any) => {
                     const updated = payload.new;
-                    // Check if last_location exists and has coords
-                    const loc = updated.last_location;
-                    if (updated.cargo === 'tecnico' && loc?.latitude && loc?.longitude) {
+                    // Check if loc exists and has coords
+                    if (updated.cargo === 'tecnico' && updated.latitude && updated.longitude) {
                         setTechnicians((prev) => {
                             const index = prev.findIndex((t) => t.id === updated.id);
                             const newTech: TechnicianLocation = {
                                 id: updated.id,
                                 nome_completo: updated.nome_completo,
-                                latitude: loc.latitude,
-                                longitude: loc.longitude,
+                                latitude: updated.latitude,
+                                longitude: updated.longitude,
                                 ultimo_update: updated.ultimo_update,
                             };
 

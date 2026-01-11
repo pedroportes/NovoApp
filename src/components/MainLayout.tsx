@@ -116,7 +116,8 @@ export function MainLayout() {
             <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
 
                 {/* Mobile Header Gradient */}
-                <header className="md:hidden min-h-[140px] banking-gradient rounded-b-[30px] px-6 pt-12 pb-8 flex flex-col justify-between shadow-2xl relative z-0 shrink-0">
+                {/* Mobile Header Gradient */}
+                <header className="md:hidden min-h-[140px] banking-gradient rounded-b-[30px] px-6 pt-[calc(3rem+env(safe-area-inset-top))] pb-8 flex flex-col justify-between shadow-2xl relative z-0 shrink-0">
                     <div className="flex items-center justify-between text-white">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border border-white/30">
@@ -245,7 +246,8 @@ export function MainLayout() {
                 </main>
 
                 {/* Mobile Bottom Navigation with FAB */}
-                <nav className="md:hidden fixed bottom-0 left-0 right-0 h-20 bg-white border-t border-gray-100 rounded-t-[30px] shadow-[0_-5px_20px_-5px_rgba(0,0,0,0.1)] flex items-center justify-around px-4 z-50">
+                {/* Mobile Bottom Navigation with FAB */}
+                <nav className="md:hidden fixed bottom-0 left-0 right-0 min-h-[5rem] pb-[env(safe-area-inset-bottom)] bg-white border-t border-gray-100 rounded-t-[30px] shadow-[0_-5px_20px_-5px_rgba(0,0,0,0.1)] flex items-center justify-around px-4 z-50 transition-all duration-300">
                     {navItems.slice(0, 2).map((item) => (
                         <Link
                             key={item.path}

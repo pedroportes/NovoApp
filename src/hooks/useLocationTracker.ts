@@ -46,11 +46,9 @@ export const useLocationTracker = () => {
                 const { error } = await supabase
                     .from('usuarios')
                     .update({
-                        last_location: {
-                            latitude,
-                            longitude,
-                            updated_at: new Date().toISOString()
-                        }
+                        latitude,
+                        longitude,
+                        ultimo_update: new Date().toISOString()
                     })
                     .eq('id', user.id);
 

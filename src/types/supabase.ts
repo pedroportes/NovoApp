@@ -535,11 +535,13 @@ export type Database = {
                     email: string
                     empresa_id: string | null
                     id: string
-                    last_location: unknown | null
+                    latitude: number | null
+                    longitude: number | null
                     nome_completo: string | null
                     pix_chave: string | null
                     pix_tipo: string | null
                     telefone: string | null
+                    ultimo_update: string | null
                 }
                 Insert: {
                     active?: boolean | null
@@ -549,11 +551,13 @@ export type Database = {
                     email: string
                     empresa_id?: string | null
                     id: string
-                    last_location?: unknown | null
+                    latitude?: number | null
+                    longitude?: number | null
                     nome_completo?: string | null
                     pix_chave?: string | null
                     pix_tipo?: string | null
                     telefone?: string | null
+                    ultimo_update?: string | null
                 }
                 Update: {
                     active?: boolean | null
@@ -563,11 +567,13 @@ export type Database = {
                     email?: string
                     empresa_id?: string | null
                     id?: string
-                    last_location?: unknown | null
+                    latitude?: number | null
+                    longitude?: number | null
                     nome_completo?: string | null
                     pix_chave?: string | null
                     pix_tipo?: string | null
                     telefone?: string | null
+                    ultimo_update?: string | null
                 }
                 Relationships: [
                     {

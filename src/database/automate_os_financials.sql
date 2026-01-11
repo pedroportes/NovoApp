@@ -58,7 +58,7 @@ BEGIN
             NEW.empresa_id,
             'ENTRADA',
             NEW.valor_total,
-            'Receita de OS #' || SUBSTRING(NEW.id::text, 1, 8),
+            'Receita de OS - ' || COALESCE(NEW.cliente_nome, 'Cliente Balcão'),
             'Serviços',
             'PENDENTE', -- Financial entry starts as pending until actual payment confirmation
             NOW(),

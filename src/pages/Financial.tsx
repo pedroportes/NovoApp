@@ -87,14 +87,23 @@ export function Financial() {
                     `)
                     .eq('empresa_id', userData!.empresa_id!)
                     .order('updated_at', { ascending: false })
-                    .limit(5)
+                    .limit(50)
             ])
 
             if (fluxoResponse.error) throw fluxoResponse.error
             if (expensesResponse.error) throw expensesResponse.error
             if (recentOSResponse.error) console.error('Erro fetching OS', recentOSResponse.error)
 
-            setRecentActivities(recentOSResponse.data || [])
+            const allRecentOS = recentOSResponse.data || []
+            setRecentActivities(allRecentOS.slice(0, 5))
+
+            // Create OS Lookup Map (Prefix -> Client Name)
+            const osLookup = new Map<string, string>()
+            allRecentOS.forEach(os => {
+                if (os.id && os.cliente_nome) {
+                    osLookup.set(os.id.substring(0, 8), os.cliente_nome)
+                }
+            })
 
             // Format expenses to match FluxoItem
             const expensesAsFluxo: FluxoItem[] = (expensesResponse.data || []).map((exp: any) => ({
@@ -108,8 +117,23 @@ export function Financial() {
                 responsavel: exp.tecnico?.nome_completo || 'Admin'
             }))
 
+            // Process Fluxo Items to enrich description
+            const processedFluxo = (fluxoResponse.data || []).map((item: any) => {
+                let description = item.descricao;
+                // Check if it matches "Receita de OS #..." pattern
+                const match = description.match(/Receita de OS #([a-f0-9]{8})/);
+                if (match && match[1]) {
+                    const osPrefix = match[1];
+                    const clientName = osLookup.get(osPrefix);
+                    if (clientName) {
+                        description = `Receita - ${clientName}`;
+                    }
+                }
+                return { ...item, descricao: description };
+            });
+
             // Merge and sort
-            const combined = [...(fluxoResponse.data || []), ...expensesAsFluxo].sort((a, b) =>
+            const combined = [...processedFluxo, ...expensesAsFluxo].sort((a, b) =>
                 new Date(b.data_lancamento).getTime() - new Date(a.data_lancamento).getTime()
             )
 
