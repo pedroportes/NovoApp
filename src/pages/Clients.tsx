@@ -102,15 +102,33 @@ export function Clients() {
     // Signature State
     const [signatureBlob, setSignatureBlob] = useState<Blob | null>(null)
     const [currentSignatureUrl, setCurrentSignatureUrl] = useState<string | null>(null)
+    const [servicedClientIds, setServicedClientIds] = useState<string[]>([])
 
-    // Removed useEffect for fetching, hook handles it
-    /*
+    // Fetch clients serviced by the technician
     useEffect(() => {
-        if (userData?.empresa_id) {
-            fetchClients()
+        if (userData?.id && userData.cargo === 'tecnico') {
+            supabase.from('ordens_servico')
+                .select('cliente_id')
+                .eq('tecnico_id', userData.id)
+                .not('cliente_id', 'is', null)
+                .then(({ data }) => {
+                    if (data) {
+                        const ids = data.map(os => os.cliente_id).filter(Boolean) as string[]
+                        setServicedClientIds([...new Set(ids)])
+                    }
+                })
         }
-    }, [userData?.empresa_id])
-    */
+    }, [userData])
+
+    const resetForm = () => {
+        setFormData(initialFormState)
+        setAvatarFile(null)
+        setAvatarPreview(null)
+        setSignatureBlob(null)
+        setCurrentSignatureUrl(null)
+        setAddressQuery('')
+        setAddressSuggestions([])
+    }
 
     const openNewClientDialog = useCallback(() => {
         setEditingClientId(null)
@@ -151,7 +169,6 @@ export function Clients() {
     const { setFabAction } = useOutletContext<{ setFabAction: (action: (() => void) | null) => void }>() ?? { setFabAction: () => { } }
 
     useEffect(() => {
-        // Wrap the handler to ensure it matches the expected signature if needed, but it takes no args so it's fine
         setFabAction(() => handleNewClientClick)
         return () => setFabAction(null)
     }, [handleNewClientClick, setFabAction])
@@ -161,16 +178,6 @@ export function Clients() {
             resetForm()
         }
     }, [isDialogOpen, editingClientId])
-
-    const resetForm = () => {
-        setFormData(initialFormState)
-        setAvatarFile(null)
-        setAvatarPreview(null)
-        setSignatureBlob(null)
-        setCurrentSignatureUrl(null)
-        setAddressQuery('')
-        setAddressSuggestions([])
-    }
 
     // Função de busca de endereço com debounce
     const handleAddressSearch = (query: string) => {
@@ -235,14 +242,10 @@ export function Clients() {
         setAddressSuggestions([])
     }
 
-    // fetchClients removed
-
-
-
     // Filter by permission (if technician and view_all_clients is false)
     const availableClients = clients ? (
         (userData?.cargo === 'tecnico' && !configs.view_all_clients)
-            ? clients.filter(c => c.criado_por === userData.id)
+            ? clients.filter(c => c.criado_por === userData.id || servicedClientIds.includes(c.id))
             : clients
     ) : []
 
@@ -907,7 +910,7 @@ export function Clients() {
                                         <div className="text-sm text-muted-foreground space-y-1">
                                             <div className="flex items-center gap-2">
                                                 <Phone className="h-4 w-4 shrink-0 text-green-500" />
-                                                <span className="truncate">{client.whatsapp || 'Sem telefone'}</span>
+                                                <span className="truncate">{formatPhone(client.whatsapp) || 'Sem telefone'}</span>
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <MapPin className="h-4 w-4 shrink-0 text-blue-500" />

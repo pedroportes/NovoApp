@@ -87,7 +87,7 @@ export function ServiceOrders() {
     const { setFabAction } = useOutletContext<{ setFabAction: (action: (() => void) | null) => void }>() ?? { setFabAction: () => { } }
 
     useEffect(() => {
-        setFabAction(() => handleNewOSClick)
+        setFabAction(handleNewOSClick)
         return () => setFabAction(null)
     }, [setFabAction, handleNewOSClick])
 

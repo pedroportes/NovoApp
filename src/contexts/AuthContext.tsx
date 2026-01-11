@@ -98,7 +98,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     cargo: row.cargo || 'tecnico',
                     nome: row.nome_completo || '',
                     email: row.email || '',
-                    nome_fantasia: companyName
+                    nome_fantasia: companyName,
+                    telefone: row.telefone,
+                    avatar: row.avatar, // Was avatar_url
+                    placa_carro: row.placa_carro, // Was placa
+                    signature_url: row.signature_url // Was assinatura_url
                 }
                 setUserData(userData)
                 setEmpresaId(row.empresa_id)
@@ -153,6 +157,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         cargo: userRow.cargo || 'tecnico',
                         nome: userRow.nome_completo || '',
                         email: userRow.email || '',
+                        telefone: userRow.telefone,
+                        avatar: userRow.avatar,
+                        placa_carro: userRow.placa_carro,
+                        signature_url: userRow.signature_url
                     }
                     setUserData(userDataObj)
                     setEmpresaId(userRow.empresa_id)

@@ -12,7 +12,12 @@ export interface UserData {
     cargo: string | null // Relaxed to string to avoid mismatch with DB string type
     nome: string
     email: string
+    nome_completo?: string // Add this as optional alias if needed, or rely on nome
     nome_fantasia?: string
+    telefone?: string | null
+    avatar?: string | null
+    placa_carro?: string | null
+    signature_url?: string | null
 }
 
 export const authStorage = {

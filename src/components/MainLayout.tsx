@@ -28,6 +28,7 @@ export function MainLayout() {
             { icon: ClipboardList, label: 'OS', path: '/service-orders' },
             { icon: Wallet, label: 'Financeiro', path: '/tecnico/financeiro' },
             { icon: Users, label: 'Clientes', path: '/clients' },
+            { icon: Settings, label: 'Configurações', path: '/settings' },
         ]
         : [
             { icon: LayoutDashboard, label: 'Início', path: '/' },
@@ -83,8 +84,14 @@ export function MainLayout() {
                 <nav className="flex-1 p-6 space-y-3">
                     {[
                         ...navItems,
-                        // Só mostra Configurações para admin
-                        ...(isTecnico ? [] : [{ icon: Settings, label: 'Configurações', path: '/settings' }])
+                        // Mostra Configurações para todos (adaptado na tela)
+                        // ...(isTecnico ? [] : [{ icon: Settings, label: 'Configurações', path: '/settings' }])
+                        // Agora faz parte do navItems principal para tecnicos também, OU se não estiver no navItems principal (caso do admin), adicionamos aqui se precisasse.
+                        // Mas como adicionei no array do tecnico, preciso ver como está a lógica do admin.
+                        // O array do admin NÃO tem settings no navItems original (linha 39), ele era adicionado aqui.
+                        // O array do tecnico AGORA TEM settings.
+                        // Então a lógica precisa ser: Se não estiver no navItems, adiciona.
+                        ...(navItems.some(i => i.path === '/settings') ? [] : [{ icon: Settings, label: 'Configurações', path: '/settings' }])
                     ].map((item) => (
                         <Link
                             key={item.path}
@@ -186,19 +193,7 @@ export function MainLayout() {
                                 {/* Items extras para admin */}
                                 {!isTecnico && (
                                     <>
-                                        <Link
-                                            to="/settings"
-                                            onClick={() => setSidebarOpen(false)}
-                                            className={cn(
-                                                "flex items-center gap-4 px-5 py-4 rounded-2xl text-base font-medium transition-all",
-                                                location.pathname === '/settings'
-                                                    ? "bg-slate-900 text-white shadow-lg"
-                                                    : "text-slate-500 hover:bg-slate-100"
-                                            )}
-                                        >
-                                            <Settings className="h-5 w-5" />
-                                            Configurações
-                                        </Link>
+                                        {/* Fallback para itens extras se necessário */}
                                     </>
                                 )}
                             </nav>

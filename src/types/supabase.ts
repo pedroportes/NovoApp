@@ -31,6 +31,7 @@ export type Database = {
                     numero: string | null
                     uf: string | null
                     whatsapp: string | null
+                    criado_por: string | null
                 }
                 Insert: {
                     ativo?: boolean | null
@@ -127,6 +128,7 @@ export type Database = {
             empresas: {
                 Row: {
                     cnpj: string | null
+                    configs: Json | null
                     created_at: string | null
                     current_period_end: string | null
                     dono_id: string | null
@@ -542,6 +544,11 @@ export type Database = {
                     pix_tipo: string | null
                     telefone: string | null
                     ultimo_update: string | null
+                    placa: string | null
+                    assinatura_url: string | null
+                    placa_carro?: string | null
+                    avatar?: string | null
+                    signature_url?: string | null
                 }
                 Insert: {
                     active?: boolean | null
@@ -558,6 +565,11 @@ export type Database = {
                     pix_tipo?: string | null
                     telefone?: string | null
                     ultimo_update?: string | null
+                    placa?: string | null
+                    assinatura_url?: string | null
+                    placa_carro?: string | null
+                    avatar?: string | null
+                    signature_url?: string | null
                 }
                 Update: {
                     active?: boolean | null
@@ -574,6 +586,11 @@ export type Database = {
                     pix_tipo?: string | null
                     telefone?: string | null
                     ultimo_update?: string | null
+                    placa?: string | null
+                    assinatura_url?: string | null
+                    placa_carro?: string | null
+                    avatar?: string | null
+                    signature_url?: string | null
                 }
                 Relationships: [
                     {

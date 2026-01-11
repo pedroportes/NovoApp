@@ -109,7 +109,7 @@ export function Technicians() {
     const { setFabAction } = useOutletContext<{ setFabAction: (action: (() => void) | null) => void }>() ?? { setFabAction: () => { } }
 
     useEffect(() => {
-        setFabAction(() => handleNewTechClick)
+        setFabAction(handleNewTechClick)
         return () => setFabAction(null)
     }, [handleNewTechClick, setFabAction])
 
