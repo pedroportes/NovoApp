@@ -37,6 +37,7 @@ export function MainLayout() {
             { icon: Wrench, label: 'Serviços', path: '/services' },
             { icon: Users, label: 'Equipe', path: '/technicians' },
             { icon: Wallet, label: 'Financeiro', path: '/financial' },
+            { icon: Settings, label: 'Configurações', path: '/settings' },
         ]
 
     // Determine Page Title
@@ -82,17 +83,7 @@ export function MainLayout() {
                     </span>
                 </div>
                 <nav className="flex-1 p-6 space-y-3">
-                    {[
-                        ...navItems,
-                        // Mostra Configurações para todos (adaptado na tela)
-                        // ...(isTecnico ? [] : [{ icon: Settings, label: 'Configurações', path: '/settings' }])
-                        // Agora faz parte do navItems principal para tecnicos também, OU se não estiver no navItems principal (caso do admin), adicionamos aqui se precisasse.
-                        // Mas como adicionei no array do tecnico, preciso ver como está a lógica do admin.
-                        // O array do admin NÃO tem settings no navItems original (linha 39), ele era adicionado aqui.
-                        // O array do tecnico AGORA TEM settings.
-                        // Então a lógica precisa ser: Se não estiver no navItems, adiciona.
-                        ...(navItems.some(i => i.path === '/settings') ? [] : [{ icon: Settings, label: 'Configurações', path: '/settings' }])
-                    ].map((item) => (
+                    {navItems.map((item) => (
                         <Link
                             key={item.path}
                             to={item.path}

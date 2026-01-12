@@ -328,6 +328,40 @@ export function Clients() {
         }
 
         try {
+            // Check for duplicates before expensive uploads
+            if (!editingClientId) {
+                const cleanPhone = formData.whatsapp.replace(/\D/g, '')
+                const cleanLogradouro = formData.logradouro.trim().toLowerCase()
+                const cleanNumero = formData.numero.trim()
+
+                const duplicateAddressAndPhone = (clients || []).find(c => {
+                    const cPhone = (c.whatsapp || '').replace(/\D/g, '')
+                    const cLogradouro = (c.logradouro || '').trim().toLowerCase()
+                    const cNumero = (c.numero || '').trim()
+                    return cPhone === cleanPhone && cLogradouro === cleanLogradouro && cNumero === cleanNumero
+                })
+
+                if (duplicateAddressAndPhone) {
+                    alert(`Este cliente já está cadastrado: ${duplicateAddressAndPhone.nome_razao}\n(Mesmo endereço e WhatsApp)`)
+                    setIsSubmitting(false)
+                    return
+                }
+
+                const duplicateAddressOnly = (clients || []).find(c => {
+                    const cLogradouro = (c.logradouro || '').trim().toLowerCase()
+                    const cNumero = (c.numero || '').trim()
+                    return cLogradouro === cleanLogradouro && cNumero === cleanNumero
+                })
+
+                if (duplicateAddressOnly) {
+                    const confirmSave = confirm(`Já existe um cliente cadastrado neste endereço (${duplicateAddressOnly.nome_razao}).\nDeseja cadastrar mesmo assim?`)
+                    if (!confirmSave) {
+                        setIsSubmitting(false)
+                        return
+                    }
+                }
+            }
+
             // Uploads
             let avatarUrl = formData.avatar_url
             let signatureUrl = formData.signature_url

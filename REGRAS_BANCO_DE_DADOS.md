@@ -44,3 +44,26 @@ Sempre que o Antigravity for criar ou alterar algo, ele deve seguir este checkli
 | **clientes** | `empresa_id` | Base de clientes da desentupidora. |
 | **ordens_servico** | `cliente_id` + `tecnico_id` | Onde o cálculo de 27L e o valor total ocorrem. |
 | **despesas_tecnicos** | `tecnico_id` + `empresa_id` | Combustível e alimentação com foto do recibo. |
+
+## ⚠️ Campos Legados e Redundantes (NÃO UTILIZAR)
+Para evitar confusão e erros de dados, **nunca** utilize as colunas abaixo em novos seletores ou inserts. Elas estão mantidas apenas por compatibilidade temporária:
+
+### 1. Tabela `clientes`
+*   **Nome**: Use `nome_razao` (Oficial). **Evite**: `nome`.
+*   **Contato**: Use `whatsapp` (Oficial). **Evite**: `telefone`.
+*   **Documento**: Use `cpf_cnpj` (Oficial). **Evite**: `documento`.
+*   **Endereço**: Use `logradouro`, `numero`, `bairro`, `cidade`, `uf`. **Evite**: `address` e `endereco`.
+*   **Referência**: Use `referencia` (Oficial). **Evite**: `reference`.
+*   **Fotos**: Use `avatar_url` (Oficial). **Evite**: `photo_url`, `photo`.
+
+### 2. Tabela `usuarios`
+*   **Avatar**: Use `avatar` (Oficial - local onde as fotos estão). **Evite**: `avatar_url`.
+*   **Assinatura**: Use `signature_url` (Oficial). **Evite**: `assinatura_url`.
+*   **Veículo**: Use `placa_carro` (Oficial). **Evite**: `placa`.
+
+### 3. Tabela `servicos`
+*   **Preço**: Use `valor_padrao` (Oficial). **Evite**: `preco_padrao`.
+
+### 4. Tabelas Mortas/Vazias (IGNORAR)
+*   `documentos_conhecimento` (Vazia).
+*   `empresa_settings` (Existe no código mas não no banco).
