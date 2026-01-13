@@ -170,7 +170,7 @@ export function Clients() {
     const { setFabAction } = useOutletContext<{ setFabAction: (action: (() => void) | null) => void }>() ?? { setFabAction: () => { } }
 
     useEffect(() => {
-        setFabAction(() => handleNewClientClick)
+        setFabAction(handleNewClientClick)
         return () => setFabAction(null)
     }, [handleNewClientClick, setFabAction])
 

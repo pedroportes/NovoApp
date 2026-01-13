@@ -252,7 +252,7 @@ export function MainLayout() {
                         <button
                             onClick={handleFabClick}
                             className={cn(
-                                "w-16 h-16 bg-gradient-to-tr from-emerald-500 to-sky-500 rounded-full flex items-center justify-center text-white shadow-lg shadow-emerald-500/40 hover:scale-110 active:scale-95 transition-all duration-300 border-4 border-[#f3f4f6]",
+                                "w-16 h-16 bg-gradient-to-tr from-emerald-500 to-sky-500 rounded-full flex items-center justify-center text-white shadow-lg shadow-emerald-500/40 hover:scale-110 active:scale-95 transition-all duration-300 border-4 border-[#f3f4f6] z-[60]",
                                 !fabAction && "opacity-0 scale-50 pointer-events-none"
                             )}
                         >

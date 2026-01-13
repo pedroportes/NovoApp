@@ -377,13 +377,13 @@ export function Financial() {
                                             <p className="text-center text-slate-400 py-4">Nenhuma atividade recente.</p>
                                         ) : (
                                             recentActivities.map((os) => (
-                                                <div key={os.id} className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-2xl transition-colors border border-transparent hover:border-slate-100 gap-3">
-                                                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                                                        <div className="w-10 h-10 shrink-0 rounded-xl bg-sky-100 text-sky-600 flex items-center justify-center">
-                                                            <ClipboardList className="h-5 w-5" />
+                                                <div key={os.id} className="flex items-center justify-between p-2 md:p-3 hover:bg-slate-50 rounded-2xl transition-colors border border-transparent hover:border-slate-100 gap-2 md:gap-3 max-w-full overflow-hidden">
+                                                    <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
+                                                        <div className="w-8 h-8 md:w-10 md:h-10 shrink-0 rounded-xl bg-sky-100 text-sky-600 flex items-center justify-center">
+                                                            <ClipboardList className="h-4 w-4 md:h-5 md:w-5" />
                                                         </div>
                                                         <div className="min-w-0 flex-1">
-                                                            <p className="text-sm font-bold text-slate-800 truncate">{os.cliente_nome || 'Cliente sem nome'}</p>
+                                                            <p className="text-sm font-bold text-slate-800 truncate pr-1">{os.cliente_nome || 'Cliente sem nome'}</p>
                                                             <div className="flex items-center gap-1 text-[10px] text-slate-500 whitespace-nowrap overflow-hidden">
                                                                 <span className="shrink-0">OS #{os.id.slice(0, 6)}</span>
                                                                 {os.tecnico?.nome_completo && (
@@ -397,7 +397,7 @@ export function Financial() {
                                                     </div>
                                                     <div className="text-right shrink-0">
                                                         <p className="text-sm font-bold text-slate-800 whitespace-nowrap">{formatCurrency(os.valor_total || 0)}</p>
-                                                        <span className={`text-[9px] px-2 py-0.5 rounded-full font-medium uppercase whitespace-nowrap ${os.status?.toLowerCase() === 'concluido' ? 'bg-emerald-100 text-emerald-600' :
+                                                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium uppercase whitespace-nowrap ${os.status?.toLowerCase() === 'concluido' ? 'bg-emerald-100 text-emerald-600' :
                                                             os.deslocamento_iniciado_em ? 'bg-blue-100 text-blue-600' :
                                                                 'bg-slate-100 text-slate-500'
                                                             }`}>
