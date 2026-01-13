@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useNavigate, useParams, useOutletContext, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Plus, Trash2, Camera, ChevronDown, ChevronRight, Printer, User, ClipboardList, PenTool, FileText } from 'lucide-react'
+import { ArrowLeft, Camera, FileText, Printer, Trash2, PenTool, Eraser, Calendar, Upload, Cloud, Wifi, CheckCircle2, AlertTriangle, Eye, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { SyncService } from '@/services/syncService'
 import { LocalServiceOrder, db } from '@/lib/db'
 import { useOfflineClients, useOfflineTechnicians, useOfflineServices } from '@/hooks/useOfflineData'
+import { compressImage } from '@/lib/utils'
 
 interface ServiceItem {
     descricao: string
@@ -22,7 +23,8 @@ export function NewServiceOrder() {
     const navigate = useNavigate()
     const { id } = useParams()
     const { userData } = useAuth()
-    const [submitting, setSubmitting] = useState(false)
+    const [savingSignature, setSavingSignature] = useState(false)
+    const [viewingPhoto, setViewingPhoto] = useState<string | null>(null)
     const [loading, setLoading] = useState(false)
 
 
@@ -356,7 +358,7 @@ export function NewServiceOrder() {
             // DB field is valor_padrao
             const val = Number(service.valor_padrao) || 0
             setItems(prev => [...prev, {
-                descricao: service.descricao ? `${service.nome} - ${service.descricao}` : service.nome,
+                descricao: service.descricao ? `${service.nome} - ${service.descricao} ` : service.nome,
                 qtd: 1,
                 valor_unitario: val,
                 total: val
@@ -397,8 +399,8 @@ export function NewServiceOrder() {
         if (currentTotal <= 0) return
 
         const desc = calcType === 'rectangular'
-            ? `Limpeza Fossa Retangular (${largura}x${comprimento}x${profundidade}cm) - ${volumeLitros}L`
-            : `Limpeza Fossa Cilíndrica (Ø${diametro}x${profundidade}cm) - ${volumeLitros}L`
+            ? `Limpeza Fossa Retangular(${largura}x${comprimento}x${profundidade}cm) - ${volumeLitros} L`
+            : `Limpeza Fossa Cilíndrica(Ø${diametro}x${profundidade}cm) - ${volumeLitros} L`
 
         setItems(prev => [...prev, {
             descricao: desc,
@@ -440,10 +442,14 @@ export function NewServiceOrder() {
 
     const handlePhotoUpload = async (file: File, type: 'antes' | 'depois') => {
         try {
-            const fileName = `os-evidence-${Date.now()}-${type}-${Math.random().toString(36).substring(7)}`
+            // Compress image before upload
+            const compressedBlob = await compressImage(file)
+            const compressedFile = new File([compressedBlob], file.name, { type: 'image/jpeg' })
+
+            const fileName = `os-evidence-${Date.now()}-${type}-${Math.random().toString(36).substring(7)}.jpg`
             const { error: uploadError } = await supabase.storage
                 .from('avatars')
-                .upload(fileName, file)
+                .upload(fileName, compressedFile)
 
             if (uploadError) throw uploadError
 
@@ -457,6 +463,7 @@ export function NewServiceOrder() {
             }))
 
         } catch (error) {
+            console.error('Upload failed', error)
             alert('Erro ao enviar foto: ' + error)
         }
     }
@@ -480,7 +487,7 @@ export function NewServiceOrder() {
             let signatureUrl = initialSignatureUrl
 
             if (signatureBlob) {
-                const fileName = `os-sig-${Date.now()}`
+                const fileName = `os - sig - ${Date.now()} `
                 await supabase.storage.from('avatars').upload(fileName, signatureBlob)
                 const { data } = supabase.storage.from('avatars').getPublicUrl(fileName)
                 signatureUrl = data.publicUrl
@@ -535,7 +542,7 @@ export function NewServiceOrder() {
 
             if (options?.print && savedId) {
                 // Open PDF in new tab
-                window.open(`/print/service-orders/${savedId}?type=${finalType}`, '_blank')
+                window.open(`/ print / service - orders / ${savedId}?type = ${finalType} `, '_blank')
             }
 
             alert(id ? 'OS atualizada com sucesso!' : 'OS criada com sucesso!')
@@ -572,7 +579,7 @@ export function NewServiceOrder() {
                     <Button
                         variant="outline"
                         className="gap-2"
-                        onClick={() => window.open(`/print/service-orders/${id}?type=${formData.tipo}`, '_blank')}
+                        onClick={() => window.open(`/ print / service - orders / ${id}?type = ${formData.tipo} `, '_blank')}
                     >
                         <Printer className="h-4 w-4" />
                         Gerar PDF
@@ -628,10 +635,10 @@ export function NewServiceOrder() {
                                     key={type}
                                     type="button"
                                     onClick={() => setFormData({ ...formData, tipo: type })}
-                                    className={`flex-1 py-3 text-xs font-bold rounded-full transition-all duration-300 ${formData.tipo === type
-                                        ? 'bg-white text-emerald-600 shadow-md transform scale-100'
-                                        : 'text-slate-400 hover:text-slate-600'
-                                        }`}
+                                    className={`flex - 1 py - 3 text - xs font - bold rounded - full transition - all duration - 300 ${formData.tipo === type
+                                            ? 'bg-white text-emerald-600 shadow-md transform scale-100'
+                                            : 'text-slate-400 hover:text-slate-600'
+                                        } `}
                                 >
                                     {type}
                                 </button>
@@ -737,8 +744,8 @@ export function NewServiceOrder() {
                     {isCalculatorOpen && (
                         <div className="p-6 bg-white space-y-6">
                             <div className="flex bg-slate-100 p-1 rounded-xl">
-                                <button type="button" onClick={() => setCalcType('rectangular')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${calcType === 'rectangular' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-400'}`}>RETANGULAR</button>
-                                <button type="button" onClick={() => setCalcType('cilindrico')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${calcType === 'cilindrico' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-400'}`}>CILÍNDRICO</button>
+                                <button type="button" onClick={() => setCalcType('rectangular')} className={`flex - 1 py - 2 text - xs font - bold rounded - lg transition - all ${calcType === 'rectangular' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-400'} `}>RETANGULAR</button>
+                                <button type="button" onClick={() => setCalcType('cilindrico')} className={`flex - 1 py - 2 text - xs font - bold rounded - lg transition - all ${calcType === 'cilindrico' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-400'} `}>CILÍNDRICO</button>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 {calcType === 'rectangular' ? (<>
@@ -848,7 +855,7 @@ export function NewServiceOrder() {
                         onInput={(e: React.FormEvent<HTMLTextAreaElement>) => {
                             const target = e.target as HTMLTextAreaElement;
                             target.style.height = 'auto';
-                            target.style.height = `${target.scrollHeight}px`;
+                            target.style.height = `${target.scrollHeight} px`;
                         }}
                         className="w-full bg-slate-50 min-h-[60px] resize-none border-0 rounded-2xl p-4 focus:ring-2 focus:ring-slate-200 transition-all text-slate-600 outline-none"
                         rows={2}
@@ -883,9 +890,22 @@ export function NewServiceOrder() {
                             {photos.antes.map((url, idx) => (
                                 <div key={idx} className="relative aspect-square rounded-2xl overflow-hidden group shadow-sm">
                                     <img src={url} className="w-full h-full object-cover" />
-                                    <button onClick={() => removePhoto('antes', idx)} className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <Trash2 className="h-3 w-3" />
-                                    </button>
+                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                        <button
+                                            onClick={() => setViewingPhoto(url)}
+                                            className="bg-white/20 hover:bg-white/40 backdrop-blur-sm p-2 rounded-full text-white transition-colors"
+                                            title="Visualizar"
+                                        >
+                                            <Eye className="h-5 w-5" />
+                                        </button>
+                                        <button
+                                            onClick={() => removePhoto('antes', idx)}
+                                            className="bg-red-500/80 hover:bg-red-600 backdrop-blur-sm p-2 rounded-full text-white transition-colors"
+                                            title="Remover"
+                                        >
+                                            <Trash2 className="h-5 w-5" />
+                                        </button>
+                                    </div>
                                 </div>
                             ))}
                             <div className="border-2 border-dashed border-slate-200 hover:border-emerald-400 rounded-2xl bg-slate-50 aspect-square relative flex flex-col items-center justify-center overflow-hidden transition-colors cursor-pointer">
@@ -903,9 +923,22 @@ export function NewServiceOrder() {
                             {photos.depois.map((url, idx) => (
                                 <div key={idx} className="relative aspect-square rounded-2xl overflow-hidden group shadow-sm">
                                     <img src={url} className="w-full h-full object-cover" />
-                                    <button onClick={() => removePhoto('depois', idx)} className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <Trash2 className="h-3 w-3" />
-                                    </button>
+                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                        <button
+                                            onClick={() => setViewingPhoto(url)}
+                                            className="bg-white/20 hover:bg-white/40 backdrop-blur-sm p-2 rounded-full text-white transition-colors"
+                                            title="Visualizar"
+                                        >
+                                            <Eye className="h-5 w-5" />
+                                        </button>
+                                        <button
+                                            onClick={() => removePhoto('depois', idx)}
+                                            className="bg-red-500/80 hover:bg-red-600 backdrop-blur-sm p-2 rounded-full text-white transition-colors"
+                                            title="Remover"
+                                        >
+                                            <Trash2 className="h-5 w-5" />
+                                        </button>
+                                    </div>
                                 </div>
                             ))}
                             <div className="border-2 border-dashed border-slate-200 hover:border-emerald-400 rounded-2xl bg-slate-50 aspect-square relative flex flex-col items-center justify-center overflow-hidden transition-colors cursor-pointer">
@@ -934,6 +967,28 @@ export function NewServiceOrder() {
                     {submitting ? 'Salvando...' : 'Salvar OS'}
                 </Button>
             </div>
+
+            {/* Image Viewer Dialog */}
+            <Dialog open={!!viewingPhoto} onOpenChange={(open) => !open && setViewingPhoto(null)}>
+                <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden bg-transparent border-none shadow-none flex items-center justify-center">
+                    {viewingPhoto && (
+                        <div className="relative">
+                            <img
+                                src={viewingPhoto}
+                                alt="Visualização"
+                                className="max-w-full max-h-[85vh] rounded-lg shadow-2xl"
+                            />
+                            <button
+                                onClick={() => setViewingPhoto(null)}
+                                className="absolute -top-4 -right-4 bg-white rounded-full p-2 shadow-lg hover:bg-gray-100"
+                            >
+                                <Plus className="h-6 w-6 rotate-45 text-black" />
+                            </button>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
+
         </div >
     )
 }

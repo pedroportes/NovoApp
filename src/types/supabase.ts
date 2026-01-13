@@ -141,6 +141,11 @@ export type Database = {
                     subscription_price_id: string | null
                     subscription_status: string | null
                     assinatura_url: string | null
+                    focus_nfe_token: string | null
+                    focus_nfe_ambiente: 'homologacao' | 'producao' | null
+                    inscricao_estadual: string | null
+                    inscricao_municipal: string | null
+                    regime_tributario: string | null
                 }
                 Insert: {
                     cnpj?: string | null
@@ -154,6 +159,12 @@ export type Database = {
                     stripe_subscription_id?: string | null
                     subscription_price_id?: string | null
                     subscription_status?: string | null
+                    assinatura_url?: string | null
+                    focus_nfe_token?: string | null
+                    focus_nfe_ambiente?: 'homologacao' | 'producao' | null
+                    inscricao_estadual?: string | null
+                    inscricao_municipal?: string | null
+                    regime_tributario?: string | null
                 }
                 Update: {
                     cnpj?: string | null
@@ -167,6 +178,12 @@ export type Database = {
                     stripe_subscription_id?: string | null
                     subscription_price_id?: string | null
                     subscription_status?: string | null
+                    assinatura_url?: string | null
+                    focus_nfe_token?: string | null
+                    focus_nfe_ambiente?: 'homologacao' | 'producao' | null
+                    inscricao_estadual?: string | null
+                    inscricao_municipal?: string | null
+                    regime_tributario?: string | null
                 }
                 Relationships: [
                     {

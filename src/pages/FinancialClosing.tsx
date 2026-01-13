@@ -254,7 +254,7 @@ export function FinancialClosing() {
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
 
                     {/* Main Balance Card - Glassmorphism Premium */}
-                    <div className="relative overflow-hidden rounded-3xl bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl shadow-emerald-100/50 p-6 md:p-10">
+                    <div className="relative overflow-hidden rounded-3xl bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl shadow-emerald-100/50 p-4 md:p-10">
                         <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-400/20 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
                         <div className="absolute bottom-0 left-0 w-64 h-64 bg-teal-400/20 rounded-full blur-3xl -ml-16 -mb-16 pointer-events-none" />
 
@@ -263,7 +263,7 @@ export function FinancialClosing() {
                             <div className="md:col-span-1 space-y-2">
                                 <span className="text-sm font-bold uppercase tracking-wider text-emerald-800/60">Saldo a Pagar</span>
                                 <div className="flex items-baseline gap-1">
-                                    <h2 className="text-5xl md:text-6xl font-black text-emerald-900 drop-shadow-sm">
+                                    <h2 className="text-4xl md:text-6xl font-black text-emerald-900 drop-shadow-sm">
                                         {formatCurrency(balance.finalBalance)}
                                     </h2>
                                 </div>
@@ -314,11 +314,11 @@ export function FinancialClosing() {
                             <p className="text-sm text-slate-500 italic">
                                 * Ao zerar o mês, todas as OSs listadas serão marcadas como pagas.
                             </p>
-                            <div className="flex gap-3">
+                            <div className="grid grid-cols-1 md:flex md:flex-row gap-3 w-full md:w-auto">
                                 <Button
                                     onClick={() => setIsAdvanceDialogOpen(true)}
                                     variant="outline"
-                                    className="h-14 px-6 rounded-xl font-bold border-amber-300 text-amber-700 hover:bg-amber-50 hover:border-amber-400 transition-all"
+                                    className="h-14 px-6 rounded-xl font-bold border-amber-300 text-amber-700 hover:bg-amber-50 hover:border-amber-400 transition-all w-full md:w-auto"
                                 >
                                     <Banknote className="mr-2 h-5 w-5" />
                                     Dar Adiantamento
@@ -327,7 +327,7 @@ export function FinancialClosing() {
                                     onClick={handleCloseMonth}
                                     disabled={submitting || balance.finalBalance <= 0}
                                     className={cn(
-                                        "h-14 px-8 rounded-xl text-lg font-bold shadow-xl shadow-emerald-300/30 transition-all",
+                                        "h-14 px-8 rounded-xl text-lg font-bold shadow-xl shadow-emerald-300/30 transition-all w-full md:w-auto",
                                         balance.finalBalance > 0
                                             ? "bg-gradient-to-r from-emerald-600 to-teal-500 hover:scale-105"
                                             : "bg-slate-200 text-slate-400 cursor-not-allowed"
@@ -544,7 +544,35 @@ export function FinancialClosing() {
                                 <Receipt className="h-5 w-5" />
                                 Detalhamento de Serviços
                             </h3>
-                            <div className="bg-white/40 backdrop-blur-md rounded-2xl border border-white/60 shadow-sm overflow-hidden">
+
+                            {/* Mobile View: Cards */}
+                            <div className="md:hidden space-y-3">
+                                {balance.osDetails && balance.osDetails.length > 0 ? (
+                                    balance.osDetails.map((os) => (
+                                        <div key={os.id} className="bg-white/60 backdrop-blur-sm p-4 rounded-xl border border-emerald-100 shadow-sm flex flex-col gap-2">
+                                            <div className="flex justify-between items-start">
+                                                <span className="font-bold text-emerald-900 text-sm">{os.cliente_nome || 'Cliente não identificado'}</span>
+                                                <span className="text-xs text-slate-500 font-medium">{new Date(os.created_at || new Date()).toLocaleDateString('pt-BR')}</span>
+                                            </div>
+                                            <div className="text-sm text-slate-600 border-l-2 border-emerald-200 pl-2 my-1">
+                                                {os.descricao_servico || 'Serviço padrão'}
+                                            </div>
+                                            <div className="flex justify-between items-center pt-2 border-t border-emerald-50">
+                                                <div className="text-xs text-slate-400">Total: {formatCurrency(os.valor_total)}</div>
+                                                <div className="flex flex-col items-end">
+                                                    <span className="text-[10px] uppercase text-emerald-600 font-bold tracking-wider">Comissão</span>
+                                                    <span className="text-base font-black text-emerald-600">{formatCurrency(os.commissionValue)}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="text-center py-8 text-slate-400 text-sm">Nenhum serviço este mês.</div>
+                                )}
+                            </div>
+
+                            {/* Desktop View: Table */}
+                            <div className="hidden md:block bg-white/40 backdrop-blur-md rounded-2xl border border-white/60 shadow-sm overflow-hidden">
                                 <div className="max-h-96 overflow-y-auto">
                                     <table className="w-full text-left text-sm">
                                         <thead className="bg-emerald-900/5 text-emerald-900 sticky top-0 backdrop-blur-sm">
@@ -590,7 +618,29 @@ export function FinancialClosing() {
                                 <TrendingDown className="h-5 w-5 text-red-500" />
                                 Detalhamento de Despesas (Reembolso)
                             </h3>
-                            <div className="bg-white/40 backdrop-blur-md rounded-2xl border border-white/60 shadow-sm overflow-hidden">
+
+                            {/* Mobile View: Cards */}
+                            <div className="md:hidden space-y-3">
+                                {balance.expenseDetails.map((exp) => (
+                                    <div key={exp.id} className="bg-white/60 backdrop-blur-sm p-4 rounded-xl border border-red-100 shadow-sm flex flex-col gap-2">
+                                        <div className="flex justify-between items-start">
+                                            <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-wide">
+                                                {exp.categoria || 'Geral'}
+                                            </span>
+                                            <span className="text-xs text-slate-500 font-medium ml-2">{new Date(exp.created_at || new Date()).toLocaleDateString('pt-BR')}</span>
+                                        </div>
+                                        <div className="font-medium text-slate-800 text-sm">
+                                            {exp.descricao || 'Sem descrição'}
+                                        </div>
+                                        <div className="border-t border-red-50 pt-2 flex justify-end">
+                                            <span className="text-base font-bold text-red-600">{formatCurrency(Number(exp.valor))}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Desktop View: Table */}
+                            <div className="hidden md:block bg-white/40 backdrop-blur-md rounded-2xl border border-white/60 shadow-sm overflow-hidden">
                                 <div className="max-h-96 overflow-y-auto">
                                     <table className="w-full text-left text-sm">
                                         <thead className="bg-red-900/5 text-red-900 sticky top-0 backdrop-blur-sm">

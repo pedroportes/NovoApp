@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import XLSX from 'xlsx-js-style'
 import { useOutletContext, useNavigate } from 'react-router-dom'
-import { Plus, Search, Pencil, Trash2, Phone, Mail, User as UserIcon, MapPin, FileText, Camera, Upload, Download } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Phone, Mail, User as UserIcon, MapPin, FileText, Camera, Upload, Download, Eye, Image as ImageIcon } from 'lucide-react'
 import { useLicenseCheck } from '@/hooks/useLicenseCheck'
 import { UpgradeModal } from '@/components/subscription/UpgradeModal'
 import { ocrService } from '@/services/ocrService'
@@ -98,6 +98,7 @@ export function Clients() {
     // Upload States
     const [avatarFile, setAvatarFile] = useState<File | null>(null)
     const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+    const [viewingImage, setViewingImage] = useState<string | null>(null)
 
     // Signature State
     const [signatureBlob, setSignatureBlob] = useState<Blob | null>(null)
@@ -369,18 +370,30 @@ export function Clients() {
             // Avatar Upload
             if (avatarFile) {
                 if (navigator.onLine) {
-                    const fileExt = avatarFile.name.split('.').pop()
-                    const fileName = `${Math.random()}.${fileExt}`
-                    const { error: uploadError } = await supabase.storage
-                        .from('avatars')
-                        .upload(fileName, avatarFile)
+                    try {
+                        // Compress image to ensure it fits limits and is standard JPEG
+                        const compressedBlob = await compressImage(avatarFile)
+                        const fileName = `${Math.random()}.jpg` // Always JPG after compression
 
-                    if (uploadError) throw uploadError
+                        const { error: uploadError } = await supabase.storage
+                            .from('avatars')
+                            .upload(fileName, compressedBlob, {
+                                contentType: 'image/jpeg',
+                                upsert: false
+                            })
 
-                    const { data: { publicUrl } } = supabase.storage
-                        .from('avatars')
-                        .getPublicUrl(fileName)
-                    avatarUrl = publicUrl
+                        if (uploadError) throw uploadError
+
+                        const { data: { publicUrl } } = supabase.storage
+                            .from('avatars')
+                            .getPublicUrl(fileName)
+                        avatarUrl = publicUrl
+                    } catch (err: any) {
+                        console.error('Erro no upload de imagem:', err)
+                        // Fallback: try uploading original if compression fails, or just throw
+                        alert(`Erro ao processar imagem: ${err.message}. Tente uma imagem menor.`)
+                        throw err
+                    }
                 } else {
                     console.warn("Offline image upload not supported yet.")
                 }
@@ -541,23 +554,46 @@ export function Clients() {
                             {avatarPreview ? (
                                 <>
                                     <img src={avatarPreview} alt="Fachada" className="absolute inset-0 w-full h-full object-cover rounded-lg opacity-50" />
-                                    <div className="z-10 bg-background/80 p-2 rounded-full shadow-sm">
-                                        <Pencil className="h-6 w-6 text-foreground" />
+                                    <div className="z-10 flex gap-4">
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                setViewingImage(avatarPreview)
+                                            }}
+                                            className="bg-background/80 p-3 rounded-full shadow-sm hover:bg-background transition-colors"
+                                            title="Visualizar Imagem"
+                                        >
+                                            <Eye className="h-6 w-6 text-foreground" />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                // Trigger file input manually since we stop propagation
+                                                const fileInput = e.currentTarget.parentElement?.parentElement?.querySelector('input[type="file"]') as HTMLInputElement
+                                                fileInput?.click()
+                                            }}
+                                            className="bg-background/80 p-3 rounded-full shadow-sm hover:bg-background transition-colors"
+                                            title="Alterar Imagem"
+                                        >
+                                            <ImageIcon className="h-6 w-6 text-foreground" />
+                                        </button>
                                     </div>
                                 </>
                             ) : (
-                                <div className="flex flex-col items-center text-muted-foreground">
+                                <div className="flex flex-col items-center text-muted-foreground pointer-events-none">
                                     <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-2">
-                                        <div className="h-6 w-6 border-2 border-current rounded-sm" /> {/* Icon placeholder like Image */}
+                                        <ImageIcon className="h-6 w-6" />
                                     </div>
                                     <span className="font-semibold text-sm">ADICIONAR FOTO DA FACHADA / AVATAR</span>
-                                    <span className="text-xs">Toque para selecionar</span>
+                                    <span className="text-xs">Toque para selecionar da galeria</span>
                                 </div>
                             )}
                             <input
                                 type="file"
                                 accept="image/*"
-                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-50"
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-0"
                                 onChange={(e) => {
                                     const file = e.target.files?.[0]
                                     if (file) {
@@ -567,6 +603,27 @@ export function Clients() {
                                 }}
                             />
                         </div>
+
+                        {/* Image Viewer Dialog */}
+                        <Dialog open={!!viewingImage} onOpenChange={(open) => !open && setViewingImage(null)}>
+                            <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden bg-transparent border-none shadow-none flex items-center justify-center">
+                                {viewingImage && (
+                                    <div className="relative">
+                                        <img
+                                            src={viewingImage}
+                                            alt="Visualização"
+                                            className="max-w-full max-h-[85vh] rounded-lg shadow-2xl"
+                                        />
+                                        <button
+                                            onClick={() => setViewingImage(null)}
+                                            className="absolute -top-4 -right-4 bg-white rounded-full p-2 shadow-lg hover:bg-gray-100"
+                                        >
+                                            <Plus className="h-6 w-6 rotate-45 text-black" />
+                                        </button>
+                                    </div>
+                                )}
+                            </DialogContent>
+                        </Dialog>
 
                         {/* OCR / Import via Photo */}
                         {/* OCR / Import via Photo - Glassmorphism */}

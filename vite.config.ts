@@ -15,6 +15,22 @@ export default defineConfig({
             ],
         },
     },
+    server: {
+        proxy: {
+            '/api/focusnfe': {
+                target: 'https://homologacao.focusnfe.com.br',
+                changeOrigin: true,
+                rewrite: (path) => path.replace(/^\/api\/focusnfe/, ''),
+                secure: false,
+                configure: (proxy, options) => {
+                    proxy.on('proxyRes', (proxyRes, req, res) => {
+                        // Remove www-authenticate header to prevent browser popup on 401
+                        delete proxyRes.headers['www-authenticate'];
+                    });
+                }
+            }
+        }
+    },
     plugins: [
         react(),
         VitePWA({

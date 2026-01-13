@@ -11,6 +11,7 @@ import { useOutletContext } from 'react-router-dom'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { usePWAInstall } from '@/hooks/usePWAInstall'
 import { SignaturePad } from '@/components/SignaturePad'
+import { FocusNFeService } from '@/services/focusNFeService'
 
 export function Settings() {
     const { userData } = useAuth()
@@ -62,8 +63,19 @@ export function Settings() {
         complemento: '',
         bairro: '',
         cidade: '',
+        cidade: '',
         estado: ''
     })
+
+    // Fiscal Data State
+    const [fiscalData, setFiscalData] = useState({
+        focus_nfe_token: '',
+        focus_nfe_ambiente: 'homologacao',
+        inscricao_estadual: '',
+        inscricao_municipal: '',
+        regime_tributario: ''
+    })
+    const [showToken, setShowToken] = useState(false)
 
     const { setFabAction } = useOutletContext<{ setFabAction: (action: (() => void) | null) => void }>() ?? { setFabAction: () => { } }
 
@@ -141,6 +153,15 @@ export function Settings() {
                     cidade: company.cidade || '',
                     estado: company.estado || ''
                 })
+
+                setFiscalData({
+                    focus_nfe_token: company.focus_nfe_token || '',
+                    focus_nfe_ambiente: company.focus_nfe_ambiente || 'homologacao',
+                    inscricao_estadual: company.inscricao_estadual || '',
+                    inscricao_municipal: company.inscricao_municipal || '',
+                    regime_tributario: company.regime_tributario || ''
+                })
+
                 if (company.logo_url) {
                     setLogoPreview(company.logo_url)
                 }
@@ -215,6 +236,7 @@ export function Settings() {
                 .from('empresas') as any)
                 .update({
                     ...formData,
+                    ...fiscalData, // Save Fiscal Data
                     configs: configs,
                     logo_url: logoUrl,
                     assinatura_url: signatureUrlToSave
@@ -230,7 +252,7 @@ export function Settings() {
         } finally {
             setSaving(false)
         }
-    }, [formData, configs, logoFile, logoPreview, userData, companySignatureBlob, companySignaturePreview])
+    }, [formData, configs, logoFile, logoPreview, userData, companySignatureBlob, companySignaturePreview, fiscalData])
 
     // Technician Submit
     const handleTechSubmit = useCallback(async () => {
@@ -637,6 +659,125 @@ export function Settings() {
                             </div>
                         </div>
 
+
+
+                        {/* Fiscal Settings Section */}
+                        <div className="space-y-6 bg-card p-6 rounded-xl border border-border shadow-sm h-fit md:col-span-2">
+                            <h2 className="text-lg font-semibold flex items-center gap-2">
+                                <span className="text-2xl">🏛️</span>
+                                Configuração Fiscal (Focus NFe)
+                            </h2>
+                            <p className="text-sm text-muted-foreground">
+                                Configure seus dados para emissão de Notas Fiscais diretamente pelo sistema.
+                            </p>
+
+                            <div className="grid gap-6 md:grid-cols-2">
+                                <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <Label>Ambiente de Emissão</Label>
+                                        <div className="flex items-center space-x-4 border p-3 rounded-md">
+                                            <div className="flex items-center space-x-2">
+                                                <input
+                                                    type="radio"
+                                                    id="homologacao"
+                                                    name="ambiente"
+                                                    checked={fiscalData.focus_nfe_ambiente === 'homologacao'}
+                                                    onChange={() => setFiscalData(prev => ({ ...prev, focus_nfe_ambiente: 'homologacao' }))}
+                                                    className="accent-primary"
+                                                />
+                                                <Label htmlFor="homologacao" className="cursor-pointer">Homologação (Testes)</Label>
+                                            </div>
+                                            <div className="flex items-center space-x-2">
+                                                <input
+                                                    type="radio"
+                                                    id="producao"
+                                                    name="ambiente"
+                                                    checked={fiscalData.focus_nfe_ambiente === 'producao'}
+                                                    onChange={() => setFiscalData(prev => ({ ...prev, focus_nfe_ambiente: 'producao' }))}
+                                                    className="accent-primary"
+                                                />
+                                                <Label htmlFor="producao" className="cursor-pointer">Produção (Valendo)</Label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label>Token de Acesso (API Key)</Label>
+                                        <div className="relative">
+                                            <Input
+                                                type={showToken ? "text" : "password"}
+                                                value={fiscalData.focus_nfe_token}
+                                                onChange={e => setFiscalData(prev => ({ ...prev, focus_nfe_token: e.target.value }))}
+                                                placeholder="Insira seu token da Focus NFe"
+                                                className="pr-10"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowToken(!showToken)}
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                            >
+                                                {showToken ? "Ocultar" : "Mostrar"}
+                                            </button>
+                                        </div>
+                                        <p className="text-xs text-muted-foreground">
+                                            Token obtido no painel da Focus NFe. Mantenha em segredo.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <Label>Inscrição Estadual (IE)</Label>
+                                        <Input
+                                            value={fiscalData.inscricao_estadual}
+                                            onChange={e => setFiscalData(prev => ({ ...prev, inscricao_estadual: e.target.value.toUpperCase() }))}
+                                            placeholder="Número ou ISENTO"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label>Inscrição Municipal (IM)</Label>
+                                        <Input
+                                            value={fiscalData.inscricao_municipal}
+                                            onChange={e => setFiscalData(prev => ({ ...prev, inscricao_municipal: e.target.value.replace(/\D/g, '') }))}
+                                            placeholder="Para NFSe (Serviços)"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label>Regime Tributário</Label>
+                                        <select
+                                            className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                                            value={fiscalData.regime_tributario}
+                                            onChange={e => setFiscalData(prev => ({ ...prev, regime_tributario: e.target.value }))}
+                                        >
+                                            <option value="">Selecione...</option>
+                                            <option value="1">Simples Nacional</option>
+                                            <option value="2">Simples Nacional (Excesso de Sublimite)</option>
+                                            <option value="3">Regime Normal (Lucro Presumido/Real)</option>
+                                        </select>
+                                    </div>
+
+                                    <div className="pt-2">
+                                        <Button
+                                            variant="secondary"
+                                            onClick={async (e) => {
+                                                e.preventDefault()
+                                                try {
+                                                    await FocusNFeService.testConnection(userData?.empresa_id)
+                                                    alert('✅ Conexão com Focus NFe bem sucedida!')
+                                                } catch (error: any) {
+                                                    alert('❌ Erro de conexão: ' + error.message)
+                                                }
+                                            }}
+                                            className="w-full border border-primary/20 hover:bg-primary/10"
+                                        >
+                                            Testar Conexão com API
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
                         {/* Technician Permissions Section */}
                         <div className="space-y-6 bg-card p-6 rounded-xl border border-border shadow-sm h-fit md:col-span-2">
