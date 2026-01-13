@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useNavigate, useParams, useOutletContext, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Camera, FileText, Printer, Trash2, PenTool, Eraser, Calendar, Upload, Cloud, Wifi, CheckCircle2, AlertTriangle, Eye, Plus, User, ChevronDown, ClipboardList, ChevronRight } from 'lucide-react'
+import { ArrowLeft, Camera, FileText, Printer, Trash2, PenTool, Eraser, Calendar, Upload, Cloud, Wifi, CheckCircle2, AlertTriangle, Eye, Plus, User, ChevronDown, ClipboardList, ChevronRight, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -488,8 +488,21 @@ export function NewServiceOrder() {
             let signatureUrl = initialSignatureUrl
 
             if (signatureBlob) {
-                const fileName = `os - sig - ${Date.now()} `
-                await supabase.storage.from('avatars').upload(fileName, signatureBlob)
+                // Sanitize filename: no spaces, unique ID
+                const fileName = `os-sig-${Date.now()}-${Math.random().toString(36).substring(7)}.png`
+
+                const { error: uploadError } = await supabase.storage
+                    .from('avatars')
+                    .upload(fileName, signatureBlob, {
+                        contentType: 'image/png',
+                        upsert: true
+                    })
+
+                if (uploadError) {
+                    console.error('Erro upload assinatura:', uploadError)
+                    throw new Error('Falha ao salvar assinatura: ' + uploadError.message)
+                }
+
                 const { data } = supabase.storage.from('avatars').getPublicUrl(fileName)
                 signatureUrl = data.publicUrl
             }
@@ -543,11 +556,26 @@ export function NewServiceOrder() {
 
             if (options?.print && savedId) {
                 // Open PDF in new tab
-                window.open(`/ print / service - orders / ${savedId}?type = ${finalType} `, '_blank')
+                window.open(`/print/service-orders/${savedId}?type=${finalType}`, '_blank')
             }
 
             alert(id ? 'OS atualizada com sucesso!' : 'OS criada com sucesso!')
-            navigate('/service-orders')
+
+            // Only navigate away if NOT printing
+            if (!options?.print) {
+                navigate('/service-orders')
+            } else if (!id) {
+                // If it was new and we printed, maybe navigate to edit mode?
+                // For now, let's just go to list to be safe, OR stay.
+                // User said "returns to initial page".
+                // If we stay, we need to update the ID in URL to avoid creating duplicate if they save again.
+                // Safest default: Go to list, but since the PDF opens in new tab, the user has the PDF. 
+                // But user complained "voltou para inicial".
+                // Let's TRY staying. But we must update ID. 
+                // As I can't easily update URL params without reload or extensive state change logic:
+                // I will navigate to EDIT page of the new OS.
+                navigate(`/service-orders/${savedId}`, { replace: true })
+            }
 
         } catch (error: any) {
             console.error(error)
@@ -568,33 +596,39 @@ export function NewServiceOrder() {
     return (
         <div className="pb-20 md:pb-10 max-w-4xl mx-auto space-y-6 pt-6 md:pt-0">
             {/* Header with Print Button */}
-            <div className="flex items-center gap-4 mb-6">
-                <Button variant="ghost" size="icon" onClick={() => navigate('/service-orders')}>
-                    <ArrowLeft className="h-6 w-6" />
-                </Button>
-                <div>
-                    <h1 className="text-2xl font-bold">{id ? 'Editar Ordem de Serviço' : 'Nova Ordem de Serviço'}</h1>
-                    <p className="text-muted-foreground text-sm">Preencha os dados abaixo</p>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                <div className="flex items-center gap-4">
+                    <Button variant="ghost" size="icon" onClick={() => navigate('/service-orders')}>
+                        <ArrowLeft className="h-6 w-6" />
+                    </Button>
+                    <div>
+                        <h1 className="text-2xl font-bold">{id ? 'Editar OS' : 'Nova OS'}</h1>
+                        <p className="text-muted-foreground text-sm">Preencha os dados abaixo</p>
+                    </div>
                 </div>
-                {id && (
-                    <Button
-                        variant="outline"
-                        className="gap-2"
-                        onClick={() => window.open(`/ print / service - orders / ${id}?type = ${formData.tipo} `, '_blank')}
-                    >
-                        <Printer className="h-4 w-4" />
-                        Gerar PDF
-                    </Button>
-                )}
 
-                {id && formData.status !== 'CONCLUIDO' && (
-                    <Button
-                        className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/20"
-                        onClick={handleConclude}
-                    >
-                        ✅ Concluir OS
-                    </Button>
-                )}
+                <div className="flex items-center gap-2 w-full md:w-auto">
+                    {id && (
+                        <Button
+                            variant="outline"
+                            className="flex-1 md:flex-none gap-2"
+                            onClick={() => window.open(`/print/service-orders/${id}?type=${formData.tipo}`, '_blank')}
+                        >
+                            <Printer className="h-4 w-4" />
+                            <span className="md:inline">PDF</span>
+                        </Button>
+                    )}
+
+                    {id && formData.status !== 'CONCLUIDO' && (
+                        <Button
+                            className="flex-1 md:flex-none gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/20"
+                            onClick={handleConclude}
+                        >
+                            <CheckCircle2 className="h-4 w-4" />
+                            Concluir
+                        </Button>
+                    )}
+                </div>
             </div>
 
             {/* GERAL CARD */}
@@ -630,16 +664,16 @@ export function NewServiceOrder() {
 
                     <div className="space-y-3">
                         <Label className="text-slate-600 font-medium ml-1">Tipo de Documento</Label>
-                        <div className="flex bg-slate-100 p-1.5 rounded-full">
+                        <div className="flex bg-slate-100 p-1 rounded-xl md:rounded-full overflow-x-auto md:overflow-visible">
                             {['ORCAMENTO', 'RECIBO', 'CONTRATO'].map(type => (
                                 <button
                                     key={type}
                                     type="button"
                                     onClick={() => setFormData({ ...formData, tipo: type })}
-                                    className={`flex - 1 py - 3 text - xs font - bold rounded - full transition - all duration - 300 ${formData.tipo === type
+                                    className={`flex-1 py-2 md:py-3 px-2 text-[10px] md:text-xs font-bold rounded-lg md:rounded-full transition-all duration-300 whitespace-nowrap ${formData.tipo === type
                                         ? 'bg-white text-emerald-600 shadow-md transform scale-100'
                                         : 'text-slate-400 hover:text-slate-600'
-                                        } `}
+                                        }`}
                                 >
                                     {type}
                                 </button>
@@ -952,21 +986,46 @@ export function NewServiceOrder() {
                 </div>
             </div>
 
-            <div className="fixed bottom-24 left-4 right-4 md:left-0 md:right-0 md:bottom-0 p-0 md:p-0 flex gap-2 md:static z-[100] md:z-0 items-center">
-                <Button variant="outline" className="flex-1 h-10 text-sm" onClick={() => navigate(-1)} disabled={loading}>Cancelar</Button>
-
+            {/* Action Buttons (Footer) */}
+            <div className="flex flex-col-reverse md:flex-row gap-3 pt-4 pb-24 md:pb-0 bg-transparent">
                 <Button
-                    variant="secondary"
-                    className="flex-1 h-10 text-sm bg-amber-100 text-amber-900 hover:bg-amber-200 border border-amber-200"
-                    onClick={() => handleSubmit({ forceType: 'ORCAMENTO', print: true })}
+                    variant="outline"
+                    className="w-full md:w-auto h-11 text-sm font-medium border-slate-300 text-slate-600 rounded-xl"
+                    onClick={() => navigate(-1)}
                     disabled={loading}
                 >
-                    <FileText className="h-4 w-4 mr-1" /> Salvar Orçamento
+                    Cancelar
                 </Button>
 
-                <Button className="flex-1 h-10 text-sm font-bold shadow-sm" onClick={() => handleSubmit()} disabled={loading}>
-                    {loading ? 'Salvando...' : 'Salvar OS'}
-                </Button>
+                <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto md:ml-auto">
+                    <Button
+                        variant="secondary"
+                        className="w-full md:w-auto h-11 text-sm bg-amber-100 text-amber-900 hover:bg-amber-200 border border-amber-200 font-bold rounded-xl"
+                        onClick={() => handleSubmit({ forceType: 'ORCAMENTO', print: true })}
+                        disabled={loading}
+                    >
+                        <FileText className="h-5 w-5 mr-2" />
+                        Salvar Orçamento
+                    </Button>
+
+                    <Button
+                        className="w-full md:w-auto h-11 text-sm font-bold shadow-lg shadow-emerald-500/20 bg-slate-900 text-white rounded-xl"
+                        onClick={() => handleSubmit()}
+                        disabled={loading}
+                    >
+                        {loading ? (
+                            <>
+                                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                                Salvando...
+                            </>
+                        ) : (
+                            <>
+                                <CheckCircle2 className="mr-2 h-5 w-5" />
+                                Salvar OS
+                            </>
+                        )}
+                    </Button>
+                </div>
             </div>
 
             {/* Image Viewer Dialog */}

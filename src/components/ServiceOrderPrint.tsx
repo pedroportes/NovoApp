@@ -166,20 +166,29 @@ const ReceiptLayout = ({ os, company, title }: { os: any, company: any, title: s
                 {/* Signature Section - Receipt Layout */}
                 <div className="mt-4 border-2 border-black flex h-32 md:h-48 mx-2 md:mx-4 mb-4">
                     {/* LEFT SIDE: CLIENT SIGNATURE */}
-                    <div className="w-1/3 flex flex-col items-center justify-center border-r-2 border-black p-2 md:p-4 font-bold text-[10px] md:text-sm text-center relative">
-                        {os.assinatura_cliente_url ? (
-                            <img src={os.assinatura_cliente_url} alt="Assinatura Cliente" className="absolute inset-0 w-full h-full object-contain p-2 opacity-80" />
-                        ) : null}
-                        <span className="relative z-10 mt-auto">Assinatura do Cliente</span>
+                    <div className="w-1/3 flex flex-col items-center justify-between border-r-2 border-black p-1 md:p-2 font-bold text-[10px] md:text-sm text-center relative h-full">
+                        <div className="flex-1 w-full flex items-center justify-center overflow-hidden">
+                            {os.assinatura_cliente_url ? (
+                                <img src={os.assinatura_cliente_url} alt="Assinatura Cliente" className="max-w-full max-h-full object-contain" />
+                            ) : (
+                                <span className="text-gray-200 text-xs italic opacity-0">.</span>
+                            )}
+                        </div>
+                        <span className="w-full border-t border-black pt-1">Assinatura do Cliente</span>
                     </div>
 
                     {/* RIGHT SIDE: COMPANY SIGNATURE */}
-                    <div className="w-2/3 flex flex-col items-center justify-center relative p-2">
-                        {company?.assinatura_url && (
-                            <img src={company.assinatura_url} alt="Assinatura Empresa" className="max-h-20 md:max-h-32 object-contain" />
-                        )}
-                        <div className="mt-auto text-[10px] md:text-xs font-bold uppercase pt-2 border-t border-black w-full text-center">
-                            {company?.nome || 'Desentupidora'}
+                    <div className="w-2/3 flex flex-col items-center justify-between p-1 md:p-2 h-full">
+                        <div className="flex-1 w-full flex items-center justify-center overflow-hidden">
+                            {company?.assinatura_url && (
+                                <img src={company.assinatura_url} alt="Assinatura Empresa" className="max-w-full max-h-full object-contain" />
+                            )}
+                        </div>
+                        <div className="w-full text-center">
+                            <div className="border-t border-black w-full pt-1 mb-1"></div>
+                            <span className="text-[10px] md:text-xs font-bold uppercase block">
+                                {company?.nome || 'Desentupidora'}
+                            </span>
                         </div>
                     </div>
                 </div>

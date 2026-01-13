@@ -33,6 +33,39 @@ export function Login() {
         }
     }, [loginType, email])
 
+    const [isResetMode, setIsResetMode] = useState(false)
+
+    const handleResetPassword = async (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!email || !email.includes('@')) {
+            setError('Digite um e-mail válido para recuperação.')
+            return
+        }
+
+        setLoading(true)
+        setError('')
+
+        try {
+            const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: `${window.location.origin}/update-password`,
+            })
+
+            if (error) {
+                if (error.message.includes('Limit')) {
+                    setError('Muitas tentativas. Aguarde um pouco.')
+                } else {
+                    setError('Erro ao enviar e-mail. Verifique se o endereço está correto.')
+                }
+            } else {
+                setError('E-mail de recuperação enviado! Verifique sua caixa de entrada (e spam).')
+            }
+        } catch (err) {
+            setError('Erro ao processar solicitação.')
+        } finally {
+            setLoading(false)
+        }
+    }
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         setError('')
@@ -215,21 +248,28 @@ export function Login() {
                         </div>
 
                         {/* Título Dinâmico */}
-                        {/* <div className="text-center mb-6">
-                            <h2 className="text-lg font-medium text-foreground">
-                                {loginType === 'admin' ? 'Acesso Administrativo' : 'Acesso Técnico'}
+                        <div className="text-center mb-6">
+                            <h2 className="text-xl font-bold text-foreground">
+                                {isResetMode ? 'Recuperar Senha' : (loginType === 'admin' ? 'Acesso Administrativo' : 'Acesso Técnico')}
                             </h2>
-                        </div> */}
+                            {isResetMode && (
+                                <p className="text-sm text-muted-foreground mt-1">
+                                    Digite seu e-mail para receber um link de redefinição.
+                                </p>
+                            )}
+                        </div>
 
                         {/* Error Message */}
                         {error && (
-                            <div className="mb-6 p-3 bg-destructive/10 border border-destructive/20 rounded-md flex items-center justify-center text-center animate-in fade-in slide-in-from-top-2">
-                                <p className="text-sm text-destructive font-medium">{error}</p>
+                            <div className={cn("mb-6 p-3 rounded-md flex items-center justify-center text-center animate-in fade-in slide-in-from-top-2",
+                                error.includes('enviado') ? "bg-emerald-500/10 border border-emerald-500/20" : "bg-destructive/10 border border-destructive/20"
+                            )}>
+                                <p className={cn("text-sm font-medium", error.includes('enviado') ? "text-emerald-500" : "text-destructive")}>{error}</p>
                             </div>
                         )}
 
                         {/* Form */}
-                        <form onSubmit={handleSubmit} className="space-y-5">
+                        <form onSubmit={isResetMode ? handleResetPassword : handleSubmit} className="space-y-5">
                             {/* Email Input */}
                             <div className="space-y-1.5">
                                 <label htmlFor="email" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1">
@@ -250,25 +290,39 @@ export function Login() {
                                 </div>
                             </div>
 
-                            {/* Password Input */}
-                            <div className="space-y-1.5">
-                                <label htmlFor="password" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1">
-                                    SENHA
-                                </label>
-                                <div className="relative group">
-                                    <Lock className="absolute left-3 top-3.5 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                                    <Input
-                                        id="password"
-                                        type="password"
-                                        placeholder="••••••"
-                                        value={password}
-                                        onChange={(e) => setPassword(e.target.value)}
-                                        disabled={loading}
-                                        autoComplete="current-password"
-                                        className="pl-10 h-12 bg-background/50 border-input group-hover:border-primary/50 transition-colors"
-                                    />
+                            {!isResetMode && (
+                                /* Password Input */
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between ml-1">
+                                        <label htmlFor="password" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                            SENHA
+                                        </label>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setIsResetMode(true)
+                                                setError('')
+                                            }}
+                                            className="text-xs text-primary hover:underline font-medium"
+                                        >
+                                            Esqueceu a senha?
+                                        </button>
+                                    </div>
+                                    <div className="relative group">
+                                        <Lock className="absolute left-3 top-3.5 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                                        <Input
+                                            id="password"
+                                            type="password"
+                                            placeholder="••••••"
+                                            value={password}
+                                            onChange={(e) => setPassword(e.target.value)}
+                                            disabled={loading}
+                                            autoComplete="current-password"
+                                            className="pl-10 h-12 bg-background/50 border-input group-hover:border-primary/50 transition-colors"
+                                        />
+                                    </div>
                                 </div>
-                            </div>
+                            )}
 
                             {/* Submit Button */}
                             <Button
@@ -280,26 +334,42 @@ export function Login() {
                                 {loading ? (
                                     <>
                                         <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                                        Entrando...
+                                        {isResetMode ? 'Enviando...' : 'Entrando...'}
                                     </>
                                 ) : (
                                     <>
-                                        Entrar na Conta
+                                        {isResetMode ? 'Enviar Link de Recuperação' : 'Entrar na Conta'}
                                     </>
                                 )}
                             </Button>
 
-                            {/* Divider */}
-                            <div className="relative my-6">
-                                <div className="absolute inset-0 flex items-center">
-                                    <span className="w-full border-t border-muted" />
+                            {isResetMode && (
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className="w-full"
+                                    onClick={() => {
+                                        setIsResetMode(false)
+                                        setError('')
+                                    }}
+                                >
+                                    Voltar para Login
+                                </Button>
+                            )}
+
+                            {!isResetMode && (
+                                /* Divider */
+                                <div className="relative my-6">
+                                    <div className="absolute inset-0 flex items-center">
+                                        <span className="w-full border-t border-muted" />
+                                    </div>
+                                    <div className="relative flex justify-center text-xs uppercase">
+                                        <span className="bg-card px-2 text-muted-foreground">
+                                            Ou
+                                        </span>
+                                    </div>
                                 </div>
-                                <div className="relative flex justify-center text-xs uppercase">
-                                    <span className="bg-card px-2 text-muted-foreground">
-                                        Ou
-                                    </span>
-                                </div>
-                            </div>
+                            )}
 
                             {/* Google Login (Visível apenas para Admin por enquanto?) */}
                             <Button variant="outline" type="button" className="w-full h-12 font-medium" disabled={loading}>

@@ -12,6 +12,7 @@ import { ChatAssistant } from '@/components/ChatAssistant'
 const Dashboard = lazy(() => import('@/pages/Dashboard').then(module => ({ default: module.Dashboard })))
 const Login = lazy(() => import('@/pages/Login').then(module => ({ default: module.Login })))
 const SignUp = lazy(() => import('@/pages/SignUp').then(module => ({ default: module.SignUp })))
+const UpdatePassword = lazy(() => import('@/pages/UpdatePassword').then(module => ({ default: module.UpdatePassword })))
 const Technicians = lazy(() => import('@/pages/Technicians').then(module => ({ default: module.Technicians })))
 const Clients = lazy(() => import('@/pages/Clients').then(module => ({ default: module.Clients })))
 const ClientImport = lazy(() => import('@/pages/ClientImport').then(module => ({ default: module.ClientImport })))
@@ -48,6 +49,7 @@ function App() {
                                 {/* Public Routes */}
                                 <Route path="/login" element={<Login />} />
                                 <Route path="/signup" element={<SignUp />} />
+                                <Route path="/update-password" element={<UpdatePassword />} />
 
                                 {/* Public Print Routes (Access via Link) */}
                                 <Route path="/print/service-orders/:id" element={<PrintServiceOrder />} />
