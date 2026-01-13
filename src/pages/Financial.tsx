@@ -421,36 +421,36 @@ export function Financial() {
                                             <DollarSign className="h-5 w-5 text-emerald-500" />
                                             Transações Recentes
                                         </CardTitle>
-                                        <div className="flex gap-1 overflow-x-auto pb-1 md:pb-0 scrollbar-hide">
+                                        <div className="flex gap-2 flex-wrap pb-0">
                                             <Button
                                                 variant={filterType === 'ALL' ? 'default' : 'outline'}
                                                 size="sm"
                                                 onClick={() => setFilterType('ALL')}
-                                                className={cn("h-7 px-2 md:px-3", filterType === 'ALL' ? "bg-slate-800 text-white" : "")}
+                                                className={cn("h-8 px-3 flex-1 md:flex-none", filterType === 'ALL' ? "bg-slate-800 text-white" : "")}
                                                 title="Todas"
                                             >
-                                                <ClipboardList className="h-3.5 w-3.5 md:mr-1.5" />
-                                                <span className="hidden md:inline text-xs">Todas</span>
+                                                <ClipboardList className="h-3.5 w-3.5 mr-1.5" />
+                                                <span className="text-xs">Todas</span>
                                             </Button>
                                             <Button
                                                 variant={filterType === 'ENTRADA' ? 'default' : 'outline'}
                                                 size="sm"
                                                 onClick={() => setFilterType('ENTRADA')}
-                                                className={cn("h-7 px-2 md:px-3", filterType === 'ENTRADA' ? "bg-emerald-600 text-white" : "text-emerald-600 border-emerald-200 bg-emerald-50")}
+                                                className={cn("h-8 px-3 flex-1 md:flex-none", filterType === 'ENTRADA' ? "bg-emerald-600 text-white" : "text-emerald-600 border-emerald-200 bg-emerald-50")}
                                                 title="Entradas"
                                             >
-                                                <ArrowUpCircle className="h-3.5 w-3.5 md:mr-1.5" />
-                                                <span className="hidden md:inline text-xs">Entradas</span>
+                                                <ArrowUpCircle className="h-3.5 w-3.5 mr-1.5" />
+                                                <span className="text-xs">Entradas</span>
                                             </Button>
                                             <Button
                                                 variant={filterType === 'SAIDA' ? 'default' : 'outline'}
                                                 size="sm"
                                                 onClick={() => setFilterType('SAIDA')}
-                                                className={cn("h-7 px-2 md:px-3", filterType === 'SAIDA' ? "bg-red-600 text-white" : "text-red-600 border-red-200 bg-red-50")}
+                                                className={cn("h-8 px-3 flex-1 md:flex-none", filterType === 'SAIDA' ? "bg-red-600 text-white" : "text-red-600 border-red-200 bg-red-50")}
                                                 title="Saídas"
                                             >
-                                                <ArrowDownCircle className="h-3.5 w-3.5 md:mr-1.5" />
-                                                <span className="hidden md:inline text-xs">Saídas</span>
+                                                <ArrowDownCircle className="h-3.5 w-3.5 mr-1.5" />
+                                                <span className="text-xs">Saídas</span>
                                             </Button>
                                         </div>
                                     </div>
@@ -468,20 +468,20 @@ export function Financial() {
                                                 <div className="p-4 text-center text-slate-500">Nenhuma transação.</div>
                                             ) : (
                                                 filteredFluxo.slice(0, 5).map((item) => (
-                                                    <div key={item.id} className="py-3 px-2 hover:bg-slate-50 rounded-lg transition-colors flex items-center justify-between gap-3 group">
+                                                    <div key={item.id} className="py-4 px-3 hover:bg-slate-50 rounded-lg transition-colors flex items-center justify-between gap-3 group">
                                                         <div className="min-w-0 flex-1">
-                                                            <div className="font-medium text-slate-700 text-sm truncate pr-2">{item.descricao}</div>
-                                                            <div className="text-[10px] text-slate-400 font-normal flex items-center gap-1.5 mt-0.5">
+                                                            <div className="font-medium text-slate-800 text-sm md:text-base truncate pr-2">{item.descricao}</div>
+                                                            <div className="text-xs text-slate-500 font-normal flex items-center gap-2 mt-1">
                                                                 <span>{new Date(item.data_lancamento).toLocaleDateString()}</span>
                                                                 {item.responsavel && (
                                                                     <>
                                                                         <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-                                                                        <span className="text-emerald-600 font-medium truncate max-w-[100px]">{item.responsavel.split(' ')[0]}</span>
+                                                                        <span className="text-emerald-600 font-medium truncate max-w-[120px]">{item.responsavel.split(' ')[0]}</span>
                                                                     </>
                                                                 )}
                                                             </div>
                                                         </div>
-                                                        <div className={cn("text-right font-bold text-sm shrink-0", item.tipo === 'ENTRADA' ? "text-emerald-700" : "text-red-700")}>
+                                                        <div className={cn("text-right font-bold text-sm md:text-base shrink-0", item.tipo === 'ENTRADA' ? "text-emerald-700" : "text-red-700")}>
                                                             {item.tipo === 'ENTRADA' ? '+' : '-'} {formatCurrency(item.valor)}
                                                         </div>
                                                     </div>

@@ -17,6 +17,7 @@ const Clients = lazy(() => import('@/pages/Clients').then(module => ({ default: 
 const ClientImport = lazy(() => import('@/pages/ClientImport').then(module => ({ default: module.ClientImport })))
 const ServiceOrders = lazy(() => import('./pages/ServiceOrders').then(module => ({ default: module.ServiceOrders })))
 const NewServiceOrder = lazy(() => import('./pages/NewServiceOrder').then(module => ({ default: module.NewServiceOrder })))
+// import { NewServiceOrder } from './pages/NewServiceOrder'
 const Services = lazy(() => import('@/pages/Services').then(module => ({ default: module.Services })))
 const PrintServiceOrder = lazy(() => import('@/pages/PrintServiceOrder').then(module => ({ default: module.PrintServiceOrder })))
 const Settings = lazy(() => import('./pages/Settings').then(module => ({ default: module.Settings })))

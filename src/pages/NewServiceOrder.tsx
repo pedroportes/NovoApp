@@ -1,10 +1,11 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useNavigate, useParams, useOutletContext, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Camera, FileText, Printer, Trash2, PenTool, Eraser, Calendar, Upload, Cloud, Wifi, CheckCircle2, AlertTriangle, Eye, Plus } from 'lucide-react'
+import { ArrowLeft, Camera, FileText, Printer, Trash2, PenTool, Eraser, Calendar, Upload, Cloud, Wifi, CheckCircle2, AlertTriangle, Eye, Plus, User, ChevronDown, ClipboardList, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { SignaturePad } from '@/components/ui/signature-pad'
+import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog"
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { SyncService } from '@/services/syncService'
@@ -481,7 +482,7 @@ export function NewServiceOrder() {
             return
         }
 
-        setSubmitting(true)
+        setLoading(true)
 
         try {
             let signatureUrl = initialSignatureUrl
@@ -552,7 +553,7 @@ export function NewServiceOrder() {
             console.error(error)
             alert('Erro ao salvar: ' + error.message)
         } finally {
-            setSubmitting(false)
+            setLoading(false)
         }
     }
 
@@ -636,8 +637,8 @@ export function NewServiceOrder() {
                                     type="button"
                                     onClick={() => setFormData({ ...formData, tipo: type })}
                                     className={`flex - 1 py - 3 text - xs font - bold rounded - full transition - all duration - 300 ${formData.tipo === type
-                                            ? 'bg-white text-emerald-600 shadow-md transform scale-100'
-                                            : 'text-slate-400 hover:text-slate-600'
+                                        ? 'bg-white text-emerald-600 shadow-md transform scale-100'
+                                        : 'text-slate-400 hover:text-slate-600'
                                         } `}
                                 >
                                     {type}
@@ -871,7 +872,7 @@ export function NewServiceOrder() {
                     </div>
                     <h2 className="text-xl font-bold text-slate-800">Assinatura</h2>
                 </div>
-                <div className="border-0 rounded-2xl overflow-hidden bg-slate-50"><SignaturePad onSave={handleSignatureChange} initialUrl={initialSignatureUrl} /></div>
+                <div className="border-0 rounded-2xl overflow-hidden bg-slate-50"><SignaturePad onSignatureChange={handleSignatureChange} initialImage={initialSignatureUrl} /></div>
             </div>
 
             <div className="bg-white rounded-3xl p-8 shadow-xl shadow-slate-200/50 space-y-6">
@@ -952,19 +953,19 @@ export function NewServiceOrder() {
             </div>
 
             <div className="fixed bottom-24 left-4 right-4 md:left-0 md:right-0 md:bottom-0 p-0 md:p-0 flex gap-2 md:static z-[100] md:z-0 items-center">
-                <Button variant="outline" className="flex-1 h-10 text-sm" onClick={() => navigate(-1)} disabled={submitting}>Cancelar</Button>
+                <Button variant="outline" className="flex-1 h-10 text-sm" onClick={() => navigate(-1)} disabled={loading}>Cancelar</Button>
 
                 <Button
                     variant="secondary"
                     className="flex-1 h-10 text-sm bg-amber-100 text-amber-900 hover:bg-amber-200 border border-amber-200"
                     onClick={() => handleSubmit({ forceType: 'ORCAMENTO', print: true })}
-                    disabled={submitting}
+                    disabled={loading}
                 >
                     <FileText className="h-4 w-4 mr-1" /> Salvar Orçamento
                 </Button>
 
-                <Button className="flex-1 h-10 text-sm font-bold shadow-sm" onClick={() => handleSubmit()} disabled={submitting}>
-                    {submitting ? 'Salvando...' : 'Salvar OS'}
+                <Button className="flex-1 h-10 text-sm font-bold shadow-sm" onClick={() => handleSubmit()} disabled={loading}>
+                    {loading ? 'Salvando...' : 'Salvar OS'}
                 </Button>
             </div>
 
