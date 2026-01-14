@@ -63,7 +63,6 @@ export function Settings() {
         complemento: '',
         bairro: '',
         cidade: '',
-        cidade: '',
         estado: ''
     })
 
