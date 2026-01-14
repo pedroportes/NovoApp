@@ -1,6 +1,10 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
-import { Plus, Search, FileText, Calendar, User, Trash2, Phone, MapPin, Receipt, FileSignature, Pencil } from 'lucide-react'
+import { Plus, Search, FileText, Calendar, User, Trash2, Phone, MapPin, Receipt, FileSignature, Pencil, FileBadge, Loader2, Mic, MicOff } from 'lucide-react'
+import { useVoiceRecognition } from '@/hooks/useVoiceRecognition'
+import { SearchAssistant, SmartFilter } from '@/services/searchAssistant'
+import { FocusNFeService } from '@/services/focusNFeService'
+import { db } from '@/lib/db'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { supabase } from '@/lib/supabase'
@@ -15,6 +19,15 @@ import {
     DialogTitle,
     DialogFooter,
 } from '@/components/ui/dialog'
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
+import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 import { SyncService } from '@/services/syncService'
 import { useOfflineServiceOrders, useOfflineClients } from '@/hooks/useOfflineData'
 
@@ -26,6 +39,15 @@ export function ServiceOrders() {
     const { orders: rawOrders, loading: loadingOrders } = useOfflineServiceOrders()
     const { clients } = useOfflineClients()
     const [searchTerm, setSearchTerm] = useState('')
+    const [smartFilter, setSmartFilter] = useState<SmartFilter | null>(null)
+
+    const { isListening, startListening, stopListening } = useVoiceRecognition({
+        onResult: (transcript) => {
+            const parsed = SearchAssistant.parseQuery(transcript)
+            setSmartFilter(parsed)
+            setSearchTerm(parsed.term || transcript)
+        }
+    })
 
     // License Check
     const { canAddOS, isTrialExpired, usage, limits } = useLicenseCheck()
@@ -37,7 +59,7 @@ export function ServiceOrders() {
             if (isTrialExpired) {
                 setUpgradeMessage("Seu período de teste expirou. Assine um plano para continuar criando Ordens de Serviço.")
             } else {
-                setUpgradeMessage(`Você atingiu o limite de ${limits.os} OS do plano gratuito.`)
+                setUpgradeMessage(`Você atingiu o limite de ${limits?.os || 10} OS do plano gratuito.`)
             }
             setShowUpgradeModal(true)
             return
@@ -48,16 +70,18 @@ export function ServiceOrders() {
     // Delete Modal State
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
     const [osToDelete, setOsToDelete] = useState<string | null>(null)
+    const [emittingIds, setEmittingIds] = useState<Set<string>>(new Set())
 
     // ... (Enrichment logic stays same)
-    const orders = (rawOrders || []).map(order => {
-        const client = clients?.find(c => c.id === order.cliente_id)
-        return {
-            ...order,
-            clientes: client,
-            tecnicos: { nome_completo: 'Técnico' }
-        }
-    })
+    const orders = (rawOrders || [])
+        .map(order => {
+            const client = clients?.find(c => c.id === order.cliente_id)
+            return {
+                ...order,
+                clientes: client,
+                tecnicos: { nome_completo: 'Técnico' }
+            }
+        })
 
     const loading = loadingOrders
     const [isNavDialogOpen, setIsNavDialogOpen] = useState(false)
@@ -95,6 +119,23 @@ export function ServiceOrders() {
 
     const filteredOrders = orders.filter(os => {
         const term = searchTerm.toLowerCase()
+
+        // Strictly hide "Not Done" statuses from the main list unless explicitly filtered.
+        const osStatus = os.status?.toLowerCase()
+        const isNotDoneStatus = ['orcamento', 'nao_feito_outra_empresa', 'nao_feito_ja_realizado', 'nao_feito_cancelado'].includes(osStatus)
+
+        // If we have a smart filter for status, we use it, otherwise we hide not-done.
+        if (smartFilter?.status) {
+            if (osStatus !== smartFilter.status) return false
+        } else if (isNotDoneStatus) {
+            return false
+        }
+
+        // Filter by City if smartFilter has it
+        if (smartFilter?.city && !(os.clientes?.cidade || '').toLowerCase().includes(smartFilter.city.toLowerCase())) {
+            return false
+        }
+
         if (!term) return true
 
         // Search by client name
@@ -154,6 +195,50 @@ export function ServiceOrders() {
         }
     }
 
+    const handleQuickStatusUpdate = async (osId: string, newStatus: string) => {
+        try {
+            await SyncService.saveServiceOrder({
+                ...orders.find(o => o.id === osId),
+                status: newStatus
+            })
+            toast.success(`Status atualizado para ${newStatus.replace(/_/g, ' ')}`)
+        } catch (error) {
+            console.error('Erro ao atualizar status:', error)
+            toast.error('Erro ao atualizar status')
+        }
+    }
+
+    const handleQuickEmitNFe = async (osId: string) => {
+        try {
+            setEmittingIds(prev => new Set(prev).add(osId))
+            toast.info('Iniciando emissão da NFS-e...')
+
+            const result = await FocusNFeService.emitirNotaFiscal(osId)
+
+            toast.success('NFS-e enviada para processamento!')
+
+            // Update local DB instantly
+            if (result && result.data) {
+                await db.ordens_servico.update(osId, {
+                    nfe_status: result.data.status || 'enviada',
+                    nfe_ref: result.data.ref || null,
+                    nfe_id_focus: result.data.id_focus || null,
+                    synced: 1
+                })
+            }
+
+        } catch (error: any) {
+            console.error('Erro ao emitir NFe:', error)
+            toast.error(`Erro ao emitir: ${error.message}`)
+        } finally {
+            setEmittingIds(prev => {
+                const newSet = new Set(prev)
+                newSet.delete(osId)
+                return newSet
+            })
+        }
+    }
+
     const getStatusColor = (status: string, hasDeslocamento?: boolean) => {
         // Se está em deslocamento ativo (e não concluído), mostrar como azul
         if (hasDeslocamento && !['concluído', 'concluido'].includes(status?.toLowerCase())) {
@@ -162,31 +247,20 @@ export function ServiceOrders() {
 
         switch (status?.toLowerCase()) {
             case 'pendente': return 'bg-orange-500/10 text-orange-600 border-orange-500/20'
-            case 'em andamento': return 'bg-blue-500/10 text-blue-600 border-blue-500/20'
+            case 'em andamento':
+            case 'em_andamento': return 'bg-blue-500/10 text-blue-600 border-blue-500/20'
             case 'concluido':
-            case 'concluído': return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
-            case 'cancelado': return 'bg-red-500/10 text-red-600 border-red-500/20'
+            case 'concluído': return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]'
+            case 'orcamento': return 'bg-amber-500/10 text-amber-600 border-amber-500/20'
+            case 'cancelado':
+            case 'nao_feito_cancelado': return 'bg-red-500/10 text-red-600 border-red-500/20'
+            case 'nao_feito_outra_empresa':
+            case 'nao_feito_ja_realizado': return 'bg-slate-500/10 text-slate-600 border-slate-500/20'
             default: return 'bg-slate-100 text-slate-600 border-slate-200'
         }
     }
 
     // Helper to extract address for map query - updated for LocalServiceOrder structure
-    // useOfflineServiceOrders hook should return relations joined if implementation allows, 
-    // OR it returns ids and we might need to join recursively?
-    // Actually, dexie-react-hooks useLiveQuery in useOfflineData.ts *does* attempt to join if we programmed it to.
-    // Let's check useOfflineData.ts. If it joins 'clientes', then 'os.clientes' property exists.
-    // If not, we might need to fetch clients separately or useOfflineClients().
-    // Assuming for now the hook maps it or we need to adjust.
-
-    // Inspecting useOfflineData.ts previously: it did:
-    // const oss = await db.ordens_servico.orderBy('created_at').reverse().toArray()
-    // const clients = await db.clientes.toArray()
-    // const techs = await db.usuarios? or we don't have local users table yet? 
-    // We don't have local 'usuarios' table in db.ts yet! 
-    // So 'tecnicos.nome_completo' might be missing.
-    // We need to robustly handle missing relations.
-
-    // Helper to extract address for map query
     const getClientAddress = (os: ServiceOrder) => {
         const c = os.clientes
         if (!c) return ''
@@ -195,7 +269,6 @@ export function ServiceOrders() {
 
     // Helper to get phone
     const getClientPhone = (os: ServiceOrder) => {
-        // Tries to find phone in multiple places
         return os.clientes?.whatsapp || (os.clientes as any)?.telefone || os.cliente_whatsapp
     }
 
@@ -212,14 +285,31 @@ export function ServiceOrders() {
                 </Button>
             </div>
 
-            <div className="relative">
-                <Search className="absolute left-4 top-4 h-6 w-6 text-emerald-500/50" />
+            <div className="relative group max-w-2xl mx-auto mb-8">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-emerald-500/50 group-focus-within:text-emerald-500 transition-colors" />
                 <Input
                     placeholder="Buscar por cliente, endereço, telefone ou ID..."
-                    className="pl-14 h-14 text-lg shadow-xl shadow-emerald-500/5 border-0 bg-white/80 backdrop-blur-xl rounded-2xl focus:ring-2 focus:ring-emerald-500/20"
+                    className="pl-12 pr-14 h-14 text-lg shadow-xl shadow-emerald-500/5 border-0 bg-white/80 backdrop-blur-xl rounded-2xl focus:ring-2 focus:ring-emerald-500/20 transition-all"
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={(e) => {
+                        setSearchTerm(e.target.value)
+                        setSmartFilter(null)
+                    }}
                 />
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                        "absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-xl transition-all",
+                        isListening ? "bg-red-50 text-red-500 animate-pulse" : "text-slate-400 hover:bg-slate-50"
+                    )}
+                    onClick={(e) => {
+                        e.preventDefault()
+                        isListening ? stopListening() : startListening()
+                    }}
+                >
+                    {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+                </Button>
             </div>
 
             <UpgradeModal
@@ -245,12 +335,31 @@ export function ServiceOrders() {
                             <div className="absolute -top-10 -right-10 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl group-hover:bg-emerald-500/20 transition-all pointer-events-none" />
 
                             <div className="flex justify-between items-start mb-5 relative z-10">
-                                <div className={`px-4 py-1.5 rounded-full text-xs font-bold border flex items-center gap-1.5 ${getStatusColor(os.status || 'pendente', !!os.deslocamento_iniciado_em)}`}>
-                                    <div className="w-1.5 h-1.5 rounded-full bg-current" />
-                                    {os.deslocamento_iniciado_em && !['concluído', 'concluido'].includes(os.status?.toLowerCase() || '')
-                                        ? 'EM DESLOCAMENTO'
-                                        : (os.status || 'Pendente').toUpperCase()}
-                                </div>
+                                <Select
+                                    value={os.status || 'PENDENTE'}
+                                    onValueChange={(value) => handleQuickStatusUpdate(os.id, value)}
+                                >
+                                    <SelectTrigger onClick={(e) => e.stopPropagation()} className={cn(
+                                        "w-fit h-auto px-4 py-1.5 rounded-full text-xs font-bold border flex items-center gap-1.5 transition-all outline-none ring-0 focus:ring-0 select-none",
+                                        getStatusColor(os.status || 'pendente', !!os.deslocamento_iniciado_em)
+                                    )}>
+                                        <div className="w-1.5 h-1.5 rounded-full bg-current" />
+                                        <SelectValue>
+                                            {os.deslocamento_iniciado_em && !['concluído', 'concluido'].includes(os.status?.toLowerCase() || '')
+                                                ? 'EM DESLOCAMENTO'
+                                                : (os.status || 'Pendente').replace(/_/g, ' ').toUpperCase()}
+                                        </SelectValue>
+                                    </SelectTrigger>
+                                    <SelectContent onClick={(e) => e.stopPropagation()} className="rounded-xl shadow-xl border-slate-100">
+                                        <SelectItem value="PENDENTE">Pendente</SelectItem>
+                                        <SelectItem value="EM_ANDAMENTO">Em Andamento</SelectItem>
+                                        <SelectItem value="CONCLUIDO" className="text-emerald-600 font-bold">Concluído</SelectItem>
+                                        <SelectItem value="ORCAMENTO">Somente Orçamento</SelectItem>
+                                        <SelectItem value="NAO_FEITO_CANCELADO">Cancelado</SelectItem>
+                                        <SelectItem value="NAO_FEITO_OUTRA_EMPRESA">Outra Empresa</SelectItem>
+                                        <SelectItem value="NAO_FEITO_JA_REALIZADO">Já Realizado</SelectItem>
+                                    </SelectContent>
+                                </Select>
                                 <span className="text-xs text-slate-400 font-mono tracking-wider">#{os.id.slice(0, 8)}</span>
                             </div>
 
@@ -397,6 +506,40 @@ export function ServiceOrders() {
                                         >
                                             <FileSignature className="h-3.5 w-3.5 md:h-4 md:w-4" />
                                         </Button>
+
+                                        {/* NFS-e Button */}
+                                        {(os.status === 'CONCLUIDO' || os.status === 'concluido' || os.nfe_status) && (
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                title={os.nfe_url_pdf ? "Baixar NFS-e" : "Emitir NFS-e"}
+                                                disabled={emittingIds.has(os.id) || os.nfe_status === 'processando'}
+                                                className={`h-7 w-7 md:h-8 md:w-8 rounded-lg transition-all hover:scale-105 ${os.nfe_url_pdf ? 'text-emerald-700 bg-emerald-100 shadow-sm border border-emerald-200' :
+                                                    os.nfe_status === 'processando' ? 'text-amber-600 bg-amber-50 animate-pulse' :
+                                                        os.nfe_status === 'erro' ? 'text-red-600 bg-red-50' :
+                                                            'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'
+                                                    }`}
+                                                onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    if (os.nfe_url_pdf) {
+                                                        window.open(os.nfe_url_pdf, '_blank')
+                                                    } else if (!os.nfe_status || os.nfe_status === 'nao_emitida' || os.nfe_status === 'erro') {
+                                                        if (confirm('Deseja emitir a NFS-e para esta OS?')) {
+                                                            handleQuickEmitNFe(os.id)
+                                                        }
+                                                    } else {
+                                                        // Processando or other status, maybe navigate to details?
+                                                        navigate(`/service-orders/${os.id}`)
+                                                    }
+                                                }}
+                                            >
+                                                {emittingIds.has(os.id) || os.nfe_status === 'processando' ? (
+                                                    <Loader2 className="h-3.5 w-3.5 md:h-4 md:w-4 animate-spin" />
+                                                ) : (
+                                                    <FileBadge className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                                                )}
+                                            </Button>
+                                        )}
                                     </div>
                                 </div>
                             </div>

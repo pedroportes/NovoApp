@@ -61,7 +61,7 @@ export const SyncService = {
                     id: s.id,
                     nome: s.nome,
                     descricao: s.descricao || undefined,
-                    valor_padrao: s.valor_padrao || 0,
+                    valor_padrao: s.preco_padrao || 0,
                     empresa_id: s.empresa_id || '',
                     ativo: s.ativo ?? true
                 }))
@@ -290,6 +290,7 @@ export const SyncService = {
             ...client,
             id,
             synced: 0, // Not synced yet
+            created_at: client.created_at || now,
             updated_at: now
         } as LocalClient;
 
@@ -360,6 +361,7 @@ export const SyncService = {
             id,
             status,
             synced: 0,
+            created_at: os.created_at || now,
             updated_at: now
         } as LocalServiceOrder;
 

@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import XLSX from 'xlsx-js-style'
 import { useOutletContext, useNavigate } from 'react-router-dom'
-import { Plus, Search, Pencil, Trash2, Phone, Mail, User as UserIcon, MapPin, FileText, Camera, Upload, Download, Eye, Image as ImageIcon } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Phone, Mail, User as UserIcon, MapPin, FileText, Camera, Upload, Download, Eye, Image as ImageIcon, Mic, MicOff } from 'lucide-react'
+import { useVoiceRecognition } from '@/hooks/useVoiceRecognition'
+import { SearchAssistant, SmartFilter } from '@/services/searchAssistant'
 import { useLicenseCheck } from '@/hooks/useLicenseCheck'
 import { UpgradeModal } from '@/components/subscription/UpgradeModal'
 import { ocrService } from '@/services/ocrService'
@@ -13,6 +15,7 @@ import { searchAddress, AddressSuggestion } from '@/services/addressService'
 import { searchCnpj, formatPhone, formatLogradouro } from '@/services/cnpjService'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import {
     Dialog,
     DialogContent,
@@ -33,6 +36,15 @@ export function Clients() {
     const navigate = useNavigate()
     const { clients, loading } = useOfflineClients()
     const [searchTerm, setSearchTerm] = useState('')
+    const [smartFilter, setSmartFilter] = useState<SmartFilter | null>(null)
+
+    const { isListening, startListening, stopListening } = useVoiceRecognition({
+        onResult: (transcript) => {
+            const parsed = SearchAssistant.parseQuery(transcript)
+            setSmartFilter(parsed)
+            setSearchTerm(parsed.term || transcript)
+        }
+    })
     const [configs, setConfigs] = useState({
         view_all_clients: true,
         can_create_client: true,
@@ -244,11 +256,18 @@ export function Clients() {
     }
 
     // Filter by permission (if technician and view_all_clients is false)
-    const availableClients = clients ? (
-        (userData?.cargo === 'tecnico' && !configs.view_all_clients)
-            ? clients.filter(c => c.criado_por === userData.id || servicedClientIds.includes(c.id))
-            : clients
-    ) : []
+    const availableClients = (clients || [])
+        .filter(c => {
+            if (userData?.cargo === 'tecnico' && !configs.view_all_clients) {
+                return c.criado_por === userData.id || servicedClientIds.includes(c.id);
+            }
+            return true;
+        })
+        .filter(c => {
+            const cityFilter = smartFilter?.city?.toLowerCase()
+            if (!cityFilter) return true
+            return (c.cidade || '').toLowerCase().includes(cityFilter)
+        })
 
     const handleEdit = (client: LocalClient) => {
         if (userData?.cargo === 'tecnico' && !configs.can_edit_clients) {
@@ -965,14 +984,31 @@ export function Clients() {
             </Dialog>
 
 
-            <div className="relative">
-                <Search className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+            <div className="relative group max-w-2xl mx-auto mb-8">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-blue-500 transition-colors" />
                 <Input
                     placeholder="Buscar por nome ou telefone..."
-                    className="pl-10 h-14 text-lg shadow-sm"
+                    className="pl-12 pr-14 h-14 text-lg shadow-2xl shadow-blue-900/5 border-0 bg-white/80 backdrop-blur-xl rounded-2xl focus:ring-2 focus:ring-blue-500/20 transition-all"
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={(e) => {
+                        setSearchTerm(e.target.value)
+                        setSmartFilter(null)
+                    }}
                 />
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                        "absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-xl transition-all",
+                        isListening ? "bg-red-50 text-red-500 animate-pulse" : "text-muted-foreground hover:bg-slate-50"
+                    )}
+                    onClick={(e) => {
+                        e.preventDefault()
+                        isListening ? stopListening() : startListening()
+                    }}
+                >
+                    {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+                </Button>
             </div>
 
             {

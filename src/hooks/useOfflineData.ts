@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '@/lib/db';
+import { db, LocalClient, LocalServiceOrder } from '@/lib/db';
 import { useAuth } from '@/contexts/AuthContext';
 
 export function useOfflineClients() {
@@ -9,10 +9,22 @@ export function useOfflineClients() {
     const clients = useLiveQuery(
         async () => {
             if (!userData?.empresa_id) return [];
-            return await db.clientes
+            const list = await db.clientes
                 .where('empresa_id')
                 .equals(userData.empresa_id)
                 .toArray();
+
+            return list.sort((a, b) => {
+                const getTime = (val: any) => {
+                    if (!val) return 0;
+                    const d = new Date(val).getTime();
+                    return isNaN(d) ? 0 : d;
+                };
+                const tA = getTime(a.created_at || a.updated_at);
+                const tB = getTime(b.created_at || b.updated_at);
+                if (tB !== tA) return tB - tA;
+                return (a.nome_razao || '').localeCompare(b.nome_razao || '');
+            });
         },
         [userData?.empresa_id]
     );
@@ -29,15 +41,22 @@ export function useOfflineServiceOrders() {
     const orders = useLiveQuery(
         async () => {
             if (!userData?.empresa_id) return [];
-            // Sort by date desc
-            return await db.ordens_servico
+            const list = await db.ordens_servico
                 .where('empresa_id')
                 .equals(userData.empresa_id)
-                .reverse()
-                .sortBy('created_at'); // This sorts by everything in the store if not careful, but 'where' filters first? 
-            // Dexie 'where' returns collection. 
-            // Creating a compound index [empresa_id+created_at] would be better for sorting.
-            // For now, let's filter in memory if dataset is small, or just trusting Dexie.
+                .toArray();
+
+            return list.sort((a: LocalServiceOrder, b: LocalServiceOrder) => {
+                const getTime = (val: any) => {
+                    if (!val) return 0;
+                    const d = new Date(val).getTime();
+                    return isNaN(d) ? 0 : d;
+                };
+                const tA = getTime(a.created_at || a.data_agendamento);
+                const tB = getTime(b.created_at || b.data_agendamento);
+                if (tB !== tA) return tB - tA;
+                return b.id.localeCompare(a.id);
+            });
         },
         [userData?.empresa_id]
     );
