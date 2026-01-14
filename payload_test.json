@@ -1,0 +1,13 @@
+{
+    "event": "messages.upsert",
+    "instance": "Desentupidora Nossa Cidade",
+    "data": {
+        "key": {
+            "fromMe": false,
+            "remoteJid": "554199999999@s.whatsapp.net"
+        },
+        "message": {
+            "conversation": "PING"
+        }
+    }
+}
