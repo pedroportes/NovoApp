@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Users, ClipboardList, Settings, Menu, LogOut, Plus, Wrench, Wallet } from 'lucide-react'
+import { LayoutDashboard, Users, ClipboardList, Settings, Menu, LogOut, Plus, Wrench, Wallet, FileText, Bot, Calendar } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from './ui/button'
@@ -32,11 +32,14 @@ export function MainLayout() {
         ]
         : [
             { icon: LayoutDashboard, label: 'Início', path: '/' },
+            { icon: Calendar, label: 'Agenda', path: '/schedule' },
             { icon: ClipboardList, label: 'OS', path: '/service-orders' },
             { icon: Users, label: 'Clientes', path: '/clients' },
             { icon: Wrench, label: 'Serviços', path: '/services' },
             { icon: Users, label: 'Equipe', path: '/technicians' },
             { icon: Wallet, label: 'Financeiro', path: '/financial' },
+            { icon: FileText, label: 'Não Feitos', path: '/unfinished-services' },
+            { icon: Bot, label: 'IA', path: '/ai-chatbot' },
             { icon: Settings, label: 'Configurações', path: '/settings' },
         ]
 

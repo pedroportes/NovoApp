@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+
+// Bypass strict key checks for new tables not yet in types
+const supabaseClient = supabase as any
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,9 +21,14 @@ export function AIChatbot() {
     const [documents, setDocuments] = useState<any[]>([])
 
     // Form States
-    const [instanceName, setInstanceName] = useState('')
+    const [instanceName, setInstanceName] = useState('') // Legacy Evolution
     const [systemPrompt, setSystemPrompt] = useState('')
     const [botName, setBotName] = useState('')
+
+    // Z-API States
+    const [instanceId, setInstanceId] = useState('')
+    const [instanceToken, setInstanceToken] = useState('')
+    const [clientToken, setClientToken] = useState('')
 
     // Upload State
     const [uploading, setUploading] = useState(false)
@@ -47,6 +55,12 @@ export function AIChatbot() {
                 setInstanceName(configData.whatsapp_instance_name || '')
                 setSystemPrompt(configData.system_prompt || '')
                 setBotName(configData.nome_bot || '')
+
+                // Z-API
+                setInstanceId(configData.z_api_instance_id || '')
+                setInstanceToken(configData.z_api_token || '')
+                setClientToken(configData.z_api_client_token || '')
+
                 fetchDocuments(configData.empresa_id)
             }
 
@@ -59,6 +73,7 @@ export function AIChatbot() {
     }
 
     async function fetchDocuments(empresaId: string) {
+        // ... (unchanged)
         const { data } = await supabase
             .from('conhecimento_ia')
             .select('id, conteudo, created_at, metadata')
@@ -84,7 +99,11 @@ export function AIChatbot() {
                 empresa_id: usuario.empresa_id,
                 whatsapp_instance_name: instanceName,
                 system_prompt: systemPrompt,
-                nome_bot: botName
+                nome_bot: botName,
+                // Z-API
+                z_api_instance_id: instanceId,
+                z_api_token: instanceToken,
+                z_api_client_token: clientToken
             }
 
             let error
@@ -226,28 +245,67 @@ export function AIChatbot() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-                {/* CONFIGURAÇÃO */}
+                {/* CONFIGURAÇÃO Z-API (NOVO) */}
+                <Card className="col-span-1 md:col-span-2 border-green-500/20 bg-green-50/10">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-green-700">📱 Conexão WhatsApp (Z-API)</CardTitle>
+                        <CardDescription>Configure aqui os dados da sua instância Z-API para conectar o WhatsApp.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-sm font-medium">ID da Instância</label>
+                                <Input value={instanceId} onChange={e => setInstanceId(e.target.value)} placeholder="Ex: 3ED432..." />
+                            </div>
+                            <div>
+                                <label className="text-sm font-medium">Token da Instância</label>
+                                <Input value={instanceToken} onChange={e => setInstanceToken(e.target.value)} type="password" placeholder="Ex: E92E1C..." />
+                            </div>
+                            <div>
+                                <label className="text-sm font-medium">Client Token (Segurança)</label>
+                                <Input value={clientToken} onChange={e => setClientToken(e.target.value)} type="password" placeholder="Ex: Crie uma senha segura..." />
+                                <p className="text-xs text-muted-foreground mt-1">Defina uma senha segura e configure no Header "Client-Token" da Z-API.</p>
+                            </div>
+                        </div>
+
+                        <div className="mt-4 p-4 bg-gray-100 rounded-lg border border-gray-200">
+                            <p className="text-sm font-medium mb-2">🔗 Seu Webhook para configurar na Z-API:</p>
+                            <div className="flex items-center gap-2 bg-white p-2 rounded border font-mono text-xs overflow-x-auto text-nowrap">
+                                {`https://dltqxfyrltgbudtzxzot.supabase.co/functions/v1/z-api-webhook?client_token=${clientToken || 'DEFINA_UMA_SENHA'}`}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-2">
+                                1. Defina uma senha segura no campo "Client Token" acima.<br />
+                                2. Copie o link completo acima.<br />
+                                3. Na Z-API, vá em "Webhooks" e cole no campo <strong>"Ao receber"</strong> (conforme sua foto).
+                            </p>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* CONFIGURAÇÃO BOT (EXISTENTE) */}
                 <Card>
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2"><Bot /> Configurações do Bot</CardTitle>
-                        <CardDescription>Conecte sua instância da Evolution API e defina a personalidade.</CardDescription>
+                        <CardTitle className="flex items-center gap-2"><Bot /> Personalidade da IA</CardTitle>
+                        <CardDescription>Defina como sua IA deve se comportar.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div>
                             <label className="text-sm font-medium">Nome do Bot</label>
                             <Input value={botName} onChange={e => setBotName(e.target.value)} placeholder="Ex: Atendente Virtual" />
                         </div>
+                        {/* 
                         <div>
                             <label className="text-sm font-medium">Nome da Instância (Evolution API)</label>
                             <Input value={instanceName} onChange={e => setInstanceName(e.target.value)} placeholder="Ex: empresa_x_main" />
-                            <p className="text-xs text-muted-foreground mt-1">Deve ser exatamente o nome configurado na Evolution API.</p>
+                            <p className="text-xs text-muted-foreground mt-1">Campo legado (Evolution API).</p>
                         </div>
+                        */}
                         <div>
-                            <label className="text-sm font-medium">System Prompt (Personalidade)</label>
+                            <label className="text-sm font-medium">System Prompt (Instruções)</label>
                             <Textarea
                                 value={systemPrompt}
                                 onChange={e => setSystemPrompt(e.target.value)}
-                                placeholder="Ex: Você é um assistente útil. Responda apenas sobre serviços de desentupimento..."
+                                placeholder="Ex: Você é um assistente útil..."
                                 className="h-32"
                             />
                         </div>

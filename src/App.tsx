@@ -28,7 +28,10 @@ const Plans = lazy(() => import('./pages/Plans').then(module => ({ default: modu
 const TechnicianDashboard = lazy(() => import('./pages/TechnicianDashboard').then(module => ({ default: module.TechnicianDashboard })))
 const TechnicianExpenses = lazy(() => import('./pages/TechnicianExpenses').then(module => ({ default: module.TechnicianExpenses })))
 const TechnicianFinancial = lazy(() => import('./pages/TechnicianFinancial').then(module => ({ default: module.TechnicianFinancial })))
+
 const TechnicianFinancialPrint = lazy(() => import('./pages/TechnicianFinancialPrint').then(module => ({ default: module.TechnicianFinancialPrint })))
+const UnfinishedServices = lazy(() => import('./pages/UnfinishedServices').then(module => ({ default: module.UnfinishedServices })))
+const AIChatbot = lazy(() => import('./pages/admin/AIChatbot').then(module => ({ default: module.AIChatbot })))
 
 const LoadingSpinner = () => (
     <div className="flex h-screen w-full items-center justify-center bg-slate-50">
@@ -76,7 +79,10 @@ function App() {
                                     <Route path="/tecnico/financeiro" element={<TechnicianFinancial />} />
                                     <Route path="/tecnico/financeiro" element={<TechnicianFinancial />} />
                                     <Route path="/expenses" element={<TechnicianExpenses />} />
+                                    <Route path="/experiments" element={<TechnicianExpenses />} />
                                     <Route path="/plans" element={<Plans />} />
+                                    <Route path="/unfinished-services" element={<UnfinishedServices />} />
+                                    <Route path="/ai-chatbot" element={<AIChatbot />} />
                                 </Route>
 
 
