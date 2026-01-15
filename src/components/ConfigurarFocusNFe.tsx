@@ -23,7 +23,7 @@ export function ConfigurarFocusNFe({ empresaId }: ConfigurarFocusNFeProps) {
         inscricao_estadual: '',
         codigo_municipio: '',
         regime_tributario: '',
-        focus_nfe_is_nacional: false
+        usa_nfse_nacional: false
     });
 
     useEffect(() => {
@@ -33,7 +33,7 @@ export function ConfigurarFocusNFe({ empresaId }: ConfigurarFocusNFeProps) {
             try {
                 const { data, error } = await supabase
                     .from('empresas')
-                    .select('focus_nfe_token, focus_nfe_ambiente, focus_nfe_habilitado, inscricao_municipal, inscricao_estadual, codigo_municipio, regime_tributario, focus_nfe_is_nacional')
+                    .select('focus_nfe_token, focus_nfe_ambiente, focus_nfe_habilitado, inscricao_municipal, inscricao_estadual, codigo_municipio, regime_tributario, usa_nfse_nacional')
                     .eq('id', empresaId)
                     .single();
 
@@ -48,7 +48,7 @@ export function ConfigurarFocusNFe({ empresaId }: ConfigurarFocusNFeProps) {
                         inscricao_estadual: data.inscricao_estadual || '',
                         codigo_municipio: data.codigo_municipio || '',
                         regime_tributario: data.regime_tributario || '',
-                        focus_nfe_is_nacional: data.focus_nfe_is_nacional || false
+                        usa_nfse_nacional: data.usa_nfse_nacional || false
                     });
                 }
             } catch (error) {
@@ -160,8 +160,8 @@ export function ConfigurarFocusNFe({ empresaId }: ConfigurarFocusNFeProps) {
                             <div className="flex items-center space-x-2 border p-3 rounded-md bg-background">
                                 <Switch
                                     id="nfe-nacional"
-                                    checked={formData.focus_nfe_is_nacional}
-                                    onCheckedChange={(checked) => setFormData(prev => ({ ...prev, focus_nfe_is_nacional: checked }))}
+                                    checked={formData.usa_nfse_nacional}
+                                    onCheckedChange={(checked) => setFormData(prev => ({ ...prev, usa_nfse_nacional: checked }))}
                                 />
                                 <Label htmlFor="nfe-nacional" className="cursor-pointer flex flex-col">
                                     <span>Padrão Nacional (NFSe-Nacional)</span>

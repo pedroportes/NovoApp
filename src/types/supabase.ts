@@ -146,6 +146,8 @@ export type Database = {
                     inscricao_estadual: string | null
                     inscricao_municipal: string | null
                     regime_tributario: string | null
+                    usa_nfse_nacional: boolean | null
+                    codigo_municipio: string | null
                 }
                 Insert: {
                     cnpj?: string | null
@@ -165,6 +167,8 @@ export type Database = {
                     inscricao_estadual?: string | null
                     inscricao_municipal?: string | null
                     regime_tributario?: string | null
+                    usa_nfse_nacional?: boolean | null
+                    codigo_municipio?: string | null
                 }
                 Update: {
                     cnpj?: string | null
@@ -184,6 +188,8 @@ export type Database = {
                     inscricao_estadual?: string | null
                     inscricao_municipal?: string | null
                     regime_tributario?: string | null
+                    usa_nfse_nacional?: boolean | null
+                    codigo_municipio?: string | null
                 }
                 Relationships: [
                     {
@@ -512,6 +518,7 @@ export type Database = {
                     nome: string
                     preco_padrao: number
                     tipo_comissao: string | null
+                    codigo_tributacao_nacional: string | null
                 }
                 Insert: {
                     ativo?: boolean | null
@@ -524,6 +531,7 @@ export type Database = {
                     nome: string
                     preco_padrao: number
                     tipo_comissao?: string | null
+                    codigo_tributacao_nacional?: string | null
                 }
                 Update: {
                     ativo?: boolean | null
@@ -536,6 +544,7 @@ export type Database = {
                     nome?: string
                     valor_padrao?: number
                     tipo_comissao?: string | null
+                    codigo_tributacao_nacional?: string | null
                 }
                 Relationships: [
                     {

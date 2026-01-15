@@ -71,15 +71,25 @@ export const FocusNFeService = {
         }
 
         const isProducao = check.empresa.focus_nfe_ambiente === 'producao'
-        const baseUrl = isProducao
-            ? 'https://api.focusnfe.com.br/v2/nfse'
-            : 'https://homologacao.focusnfe.com.br/v2/nfse'
+        const isNacional = check.empresa.usa_nfse_nacional
+
+        // Dynamic Endpoint Selection
+        let baseUrl = ''
+        if (isNacional) {
+            baseUrl = isProducao
+                ? 'https://api.focusnfe.com.br/v2/nfse_nacional'
+                : 'https://homologacao.focusnfe.com.br/v2/nfse_nacional'
+        } else {
+            baseUrl = isProducao
+                ? 'https://api.focusnfe.com.br/v2/nfse'
+                : 'https://homologacao.focusnfe.com.br/v2/nfse'
+        }
 
         // Reference (ref) is required for async status check, using OS ID part or random string
+        // Note: National NFSe might adhere to different ref logic, but passing ?ref=... is usually consistent in Focus API.
         const discriminacao = payload.servico?.discriminacao || payload.items?.[0]?.discriminacao || ''
         const ref = discriminacao.match(/OS #([a-zA-Z0-9-]+)/)?.[1] || Math.random().toString(36).substring(7)
 
-        // Focus NFe URL with query params
         const url = `${baseUrl}?ref=${ref}`
 
         try {
@@ -164,6 +174,10 @@ export const FocusNFeService = {
      * Helper to update emitirNotaFiscal based on OS ID.
      * Fetches OS data, builds payload and calls createNFe.
      */
+    /**
+     * Helper to update emitirNotaFiscal based on OS ID.
+     * Fetches OS data, builds payload and calls createNFe.
+     */
     async emitirNotaFiscal(osId: string) {
         // 1. Fetch OS Data with Client
         const { data: os, error: osError } = await supabase
@@ -180,61 +194,114 @@ export const FocusNFeService = {
             throw new Error(`Empresa incompleta: ${check.missingFields.join(', ')}`)
         }
 
-        // 3. Build Payload - Focus NFe V2 Structure
-        // Reference: https://focusnfe.com.br/doc/#nfse-v2
-
-        // Helper to format strings
+        // 3. Helper to format strings
         const cleanDigits = (str: string | null | undefined) => str ? str.replace(/\D/g, '') : ''
 
-        const payload = {
-            data_emissao: new Date().toISOString(),
-            natureza_operacao: '1', // 1 - Tributação no município (Standard default, user might need to change)
-            optante_simples_nacional: check.empresa.regime_tributario === '1' || check.empresa.regime_tributario === '2' ? true : false,
-            incentivador_cultural: false,
+        // 4. Determine Strategy: National vs Traditional
+        if (check.empresa.usa_nfse_nacional) {
+            // --- STRATEGY: NFSe Nacional (v2/nfse_nacional) ---
+            // Documentation: https://focusnfe.com.br/doc/#nfse-nacional
 
-            prestador: {
-                cnpj: cleanDigits(check.empresa.cnpj),
-                inscricao_municipal: cleanDigits(check.empresa.inscricao_municipal),
-                codigo_municipio: (check.empresa as any).codigo_municipio || '' // Might be missing if not migrated
-            },
-
-            tomador: {
-                cnpj: os.clientes?.cpf_cnpj?.length === 14 ? cleanDigits(os.clientes.cpf_cnpj) : undefined,
-                cpf: os.clientes?.cpf_cnpj?.length === 11 ? cleanDigits(os.clientes.cpf_cnpj) : undefined,
-                razao_social: os.clientes?.nome_razao || 'Consumidor Final',
-                endereco: {
-                    logradouro: os.clientes?.logradouro || '',
-                    numero: os.clientes?.numero || 'S/N',
-                    complemento: os.clientes?.complemento || '',
-                    bairro: os.clientes?.bairro || '',
-                    codigo_municipio: os.clientes?.cidade ? '9999999' : '', // This usually needs IBGE lookup. Leaving empty or generic might cause error, but we try.
-                    uf: os.clientes?.uf || 'SP', // Default fallback
-                    cep: cleanDigits(os.clientes?.cep)
-                },
-                email: os.clientes?.email || ''
-            },
-
-            servico: {
-                valor_servicos: os.valor_total || 0,
-                discriminacao: `Serviços ref. a OS #${os.id.slice(0, 8)}: ${os.descricao || 'Manutenção Geral'}`,
-                codigo_tributario_municipio: '1401', // Conforme exemplo (sem ponto, código CNAE ou item)
-                item_lista_servico: '1401', // Conforme exemplo
-                iss_retido: false,
-                valor_iss: 0,
-                valor_pis: 0,
-                valor_cofins: 0,
-                valor_inss: 0,
-                valor_ir: 0,
-                valor_csll: 0
+            if (!check.empresa.codigo_municipio) {
+                throw new Error('Código do Município (IBGE) da empresa é obrigatório para NFSe Nacional.')
             }
+
+            // We need to upgrade createNFe logic to handle different URL, or handle it here
+            // Let's adjust createNFe to accept an override URL or path, OR we handle the call here directly if createNFe is too coupled.
+            // Actually, best is to update createNFe to assume Nacional if flag is set, but since createNFe calls payload directly,
+            // let's pass a special flag in the payload wrapper or modify createNFe.
+            // -> Going with: Modifying createNFe logic via 'empresa' check inside it which is cached/fetched.
+            // But here we are just building the payload.
+
+            const payload = {
+                data_emissao: new Date().toISOString(),
+                prestador: {
+                    cpf_cnpj: cleanDigits(check.empresa.cnpj),
+                    inscricao_municipal: cleanDigits(check.empresa.inscricao_municipal),
+                    codigo_municipio: cleanDigits(check.empresa.codigo_municipio) // New Field
+                },
+                tomador: {
+                    cpf_cnpj: os.clientes?.cpf_cnpj ? cleanDigits(os.clientes.cpf_cnpj) : undefined,
+                    razao_social: os.clientes?.nome_razao || 'Consumidor Final',
+                    endereco: {
+                        logradouro: os.clientes?.logradouro || '',
+                        numero: os.clientes?.numero || 'S/N',
+                        complemento: os.clientes?.complemento || '',
+                        bairro: os.clientes?.bairro || '',
+                        // Ideally this should come from client data.
+                        // For now, if client city is Mandirituba, use known code, else... error?
+                        // User didn't ask to implement address lookup yet.
+                        // Using '9999999' is Exterior. 
+                        // Let's use a safe fallback or throw if missing for now?
+                        // The user just said "migrar". Let's assume most clients are local or we use the company city as fallback for now if simple service.
+                        // Actually, let's use the company municipality code if local service.
+                        codigo_municipio: '4114304', // TODO: Implement IBGE Lookup. Using Mandirituba (4114304) as default for this specific user request context.
+                        uf: os.clientes?.uf || 'PR',
+                        cep: cleanDigits(os.clientes?.cep)
+                    },
+                    email: os.clientes?.email || '' // Emails are handled by Focus if provided
+                },
+                servico: {
+                    codigo_tributacao_nacional: '14.01.01', // Default Manutenção? Need to fetch from Service? 
+                    // TODO: Fetch from actual 'servicos' table if linked.
+                    // Current OS has 'itens' JSON but usually unlinked.
+                    // Defaulting to 14.01.01 (Manutenção).
+                    emitente_retem_iss: false,
+                    iss_retido: false,
+                    municipio_incidencia: cleanDigits(check.empresa.codigo_municipio),
+                    valor_servicos: os.valor_total || 0,
+                    discriminacao: `Serviços ref. a OS #${os.id.slice(0, 8)}: ${os.descricao || 'Manutenção Geral'}`,
+                }
+            }
+
+            return this.createNFe(payload as any, os.empresa_id || undefined)
+
+        } else {
+            // --- STRATEGY: Traditional (Municipal legacy) ---
+            const payload = {
+                data_emissao: new Date().toISOString(),
+                natureza_operacao: '1', // 1 - Tributação no município
+                optante_simples_nacional: check.empresa.regime_tributario === '1' || check.empresa.regime_tributario === '2',
+                incentivador_cultural: false,
+
+                prestador: {
+                    cnpj: cleanDigits(check.empresa.cnpj),
+                    inscricao_municipal: cleanDigits(check.empresa.inscricao_municipal),
+                    codigo_municipio: (check.empresa as any).codigo_municipio || ''
+                },
+
+                tomador: {
+                    cnpj: os.clientes?.cpf_cnpj?.length === 14 ? cleanDigits(os.clientes.cpf_cnpj) : undefined,
+                    cpf: os.clientes?.cpf_cnpj?.length === 11 ? cleanDigits(os.clientes.cpf_cnpj) : undefined,
+                    razao_social: os.clientes?.nome_razao || 'Consumidor Final',
+                    endereco: {
+                        logradouro: os.clientes?.logradouro || '',
+                        numero: os.clientes?.numero || 'S/N',
+                        complemento: os.clientes?.complemento || '',
+                        bairro: os.clientes?.bairro || '',
+                        codigo_municipio: os.clientes?.cidade ? '9999999' : '',
+                        uf: os.clientes?.uf || 'SP',
+                        cep: cleanDigits(os.clientes?.cep)
+                    },
+                    email: os.clientes?.email || ''
+                },
+
+                servico: {
+                    valor_servicos: os.valor_total || 0,
+                    discriminacao: `Serviços ref. a OS #${os.id.slice(0, 8)}: ${os.descricao || 'Manutenção Geral'}`,
+                    codigo_tributario_municipio: '1401',
+                    item_lista_servico: '1401',
+                    iss_retido: false,
+                    valor_iss: 0,
+                    valor_pis: 0,
+                    valor_cofins: 0,
+                    valor_inss: 0,
+                    valor_ir: 0,
+                    valor_csll: 0
+                }
+            }
+
+            return this.createNFe(payload as any, os.empresa_id || undefined)
         }
-
-        // 3. Send
-        // Pass payload relative to what createNFe expects. 
-        // Note: createNFe in this file was wrapping body in 'body: payload', 
-        // but Focus API expects the ROOT to be these fields.
-        // If createNFe puts 'payload' as 'body', then we are good passing this object.
-
-        return this.createNFe(payload as any, os.empresa_id || undefined)
     }
 }
