@@ -215,43 +215,42 @@ export const FocusNFeService = {
 
             const payload = {
                 data_emissao: new Date().toISOString(),
-                prestador: {
-                    cpf_cnpj: cleanDigits(check.empresa.cnpj),
-                    inscricao_municipal: cleanDigits(check.empresa.inscricao_municipal),
-                    codigo_municipio: cleanDigits(check.empresa.codigo_municipio) // New Field
-                },
-                tomador: {
-                    cpf_cnpj: os.clientes?.cpf_cnpj ? cleanDigits(os.clientes.cpf_cnpj) : undefined,
-                    razao_social: os.clientes?.nome_razao || 'Consumidor Final',
-                    endereco: {
-                        logradouro: os.clientes?.logradouro || '',
-                        numero: os.clientes?.numero || 'S/N',
-                        complemento: os.clientes?.complemento || '',
-                        bairro: os.clientes?.bairro || '',
-                        // Ideally this should come from client data.
-                        // For now, if client city is Mandirituba, use known code, else... error?
-                        // User didn't ask to implement address lookup yet.
-                        // Using '9999999' is Exterior. 
-                        // Let's use a safe fallback or throw if missing for now?
-                        // The user just said "migrar". Let's assume most clients are local or we use the company city as fallback for now if simple service.
-                        // Actually, let's use the company municipality code if local service.
-                        codigo_municipio: '4114304', // TODO: Implement IBGE Lookup. Using Mandirituba (4114304) as default for this specific user request context.
-                        uf: os.clientes?.uf || 'PR',
-                        cep: cleanDigits(os.clientes?.cep)
-                    },
-                    email: os.clientes?.email || '' // Emails are handled by Focus if provided
-                },
-                servico: {
-                    codigo_tributacao_nacional: '14.01.01', // Default Manutenção? Need to fetch from Service? 
-                    // TODO: Fetch from actual 'servicos' table if linked.
-                    // Current OS has 'itens' JSON but usually unlinked.
-                    // Defaulting to 14.01.01 (Manutenção).
-                    emitente_retem_iss: false,
-                    iss_retido: false,
-                    municipio_incidencia: cleanDigits(check.empresa.codigo_municipio),
-                    valor_servicos: os.valor_total || 0,
-                    discriminacao: `Serviços ref. a OS #${os.id.slice(0, 8)}: ${os.descricao || 'Manutenção Geral'}`,
-                }
+                data_competencia: new Date().toISOString().split('T')[0], // YYYY-MM-DD
+
+                // Prestador
+                cnpj_prestador: cleanDigits(check.empresa.cnpj),
+                inscricao_municipal_prestador: cleanDigits(check.empresa.inscricao_municipal),
+                codigo_municipio_emissora: cleanDigits(check.empresa.codigo_municipio),
+
+                // Regime (Simplificando: assumindo 1=Simples se regime='1')
+                // 1=Não Optante, 2=MEI, 3=ME/EPP (do Simples)
+                // Se o usuário selecionou "Simples Nacional" no form (value='1'), vamos mapear para 3 (ME/EPP) por segurança ou 1?
+                // O form tem: 1=Simples Nacional, 2=Simples Nacional (Excesso), 3=Normal.
+                // A API espera: 1-Não optante, 2-MEI, 3-Optante.
+                // Vou mapear: Form '1' -> API 3. Form '3' -> API 1.
+                codigo_opcao_simples_nacional: check.empresa.regime_tributario === '1' ? 3 : 1,
+                regime_especial_tributacao: 0,
+
+                // Tomador
+                cpf_tomador: os.clientes?.cpf_cnpj?.length === 11 ? cleanDigits(os.clientes.cpf_cnpj) : undefined,
+                cnpj_tomador: os.clientes?.cpf_cnpj?.length === 14 ? cleanDigits(os.clientes.cpf_cnpj) : undefined,
+                razao_social_tomador: os.clientes?.nome_razao || 'Consumidor Final',
+                logradouro_tomador: os.clientes?.logradouro || '',
+                numero_tomador: os.clientes?.numero || 'S/N',
+                complemento_tomador: os.clientes?.complemento || '',
+                bairro_tomador: os.clientes?.bairro || '',
+                cep_tomador: cleanDigits(os.clientes?.cep),
+                codigo_municipio_tomador: '4114304', // TODO: Implement IBGE Lookup. Using Mandirituba as default.
+                email_tomador: os.clientes?.email || '',
+                telefone_tomador: cleanDigits(os.clientes?.telefone) || '',
+
+                // Serviço
+                codigo_municipio_prestacao: cleanDigits(check.empresa.codigo_municipio),
+                codigo_tributacao_nacional_iss: '14.01.01', // Default
+                descricao_servico: `Serviços ref. a OS #${os.id.slice(0, 8)}: ${os.descricao || 'Manutenção Geral'}`,
+                valor_servico: os.valor_total || 0,
+                tributacao_iss: 1, // 1 – Operação tributável
+                tipo_retencao_iss: 1, // 1 – ISS a recolher pelo Prestador (Sem retenção)
             }
 
             return this.createNFe(payload as any, os.empresa_id || undefined)
