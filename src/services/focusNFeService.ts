@@ -77,8 +77,8 @@ export const FocusNFeService = {
         let baseUrl = ''
         if (isNacional) {
             baseUrl = isProducao
-                ? 'https://api.focusnfe.com.br/v2/nfse_nacional'
-                : 'https://homologacao.focusnfe.com.br/v2/nfse_nacional'
+                ? 'https://api.focusnfe.com.br/v2/nfsen'
+                : 'https://homologacao.focusnfe.com.br/v2/nfsen'
         } else {
             baseUrl = isProducao
                 ? 'https://api.focusnfe.com.br/v2/nfse'
