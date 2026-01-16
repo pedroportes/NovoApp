@@ -362,48 +362,40 @@ export function Financial() {
                         {/* Charts & Lists Grid */}
                         <div className="grid gap-6 lg:grid-cols-2">
                             {/* Recent Activities (OS) */}
-                            <Card className="border-slate-200 shadow-sm h-full">
-                                <CardHeader className="pb-4">
-                                    <div className="flex items-center justify-between">
-                                        <CardTitle className="flex items-center gap-2">
-                                            <Truck className="h-5 w-5 text-emerald-500" />
-                                            Atividades Recentes
-                                        </CardTitle>
-                                    </div>
+                            <Card className="border-slate-200 shadow-sm h-full overflow-hidden">
+                                <CardHeader className="pb-3 px-3 md:px-6">
+                                    <CardTitle className="flex items-center gap-2 text-base">
+                                        <Truck className="h-4 w-4 text-emerald-500" />
+                                        Atividades Recentes
+                                    </CardTitle>
                                 </CardHeader>
-                                <CardContent>
-                                    <div className="space-y-4">
+                                <CardContent className="px-3 pb-4 md:px-6">
+                                    <div className="space-y-2">
                                         {recentActivities.length === 0 ? (
-                                            <p className="text-center text-slate-400 py-4">Nenhuma atividade recente.</p>
+                                            <p className="text-center text-slate-400 py-4 text-sm">Nenhuma atividade recente.</p>
                                         ) : (
                                             recentActivities.map((os) => (
-                                                <div key={os.id} className="flex items-center justify-between p-2 md:p-3 hover:bg-slate-50 rounded-2xl transition-colors border border-transparent hover:border-slate-100 gap-2 md:gap-3 max-w-full overflow-hidden">
-                                                    <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
-                                                        <div className="w-8 h-8 md:w-10 md:h-10 shrink-0 rounded-xl bg-sky-100 text-sky-600 flex items-center justify-center">
-                                                            <ClipboardList className="h-4 w-4 md:h-5 md:w-5" />
+                                                <div key={os.id} className="flex items-center justify-between py-2 px-2 hover:bg-slate-50 rounded-lg transition-colors gap-2">
+                                                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                        <div className="w-8 h-8 shrink-0 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center">
+                                                            <ClipboardList className="h-4 w-4" />
                                                         </div>
                                                         <div className="min-w-0 flex-1">
-                                                            <p className="text-sm font-bold text-slate-800 truncate pr-1">{os.cliente_nome || 'Cliente sem nome'}</p>
-                                                            <div className="flex items-center gap-1 text-[10px] text-slate-500 whitespace-nowrap overflow-hidden">
-                                                                <span className="shrink-0">OS #{os.id.slice(0, 6)}</span>
-                                                                {os.tecnico?.nome_completo && (
-                                                                    <>
-                                                                        <span className="shrink-0">•</span>
-                                                                        <span className="truncate">{os.tecnico.nome_completo.split(' ')[0]}</span>
-                                                                    </>
-                                                                )}
-                                                            </div>
+                                                            <p className="text-sm font-medium text-slate-800 truncate">{os.cliente_nome || 'Cliente'}</p>
+                                                            <p className="text-[10px] text-slate-500">
+                                                                OS #{os.id.slice(0, 6)} {os.tecnico?.nome_completo && `• ${os.tecnico.nome_completo.split(' ')[0]}`}
+                                                            </p>
                                                         </div>
                                                     </div>
                                                     <div className="text-right shrink-0">
-                                                        <p className="text-sm font-bold text-slate-800 whitespace-nowrap">{formatCurrency(os.valor_total || 0)}</p>
-                                                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium uppercase whitespace-nowrap ${os.status?.toLowerCase() === 'concluido' ? 'bg-emerald-100 text-emerald-600' :
+                                                        <p className="text-sm font-bold text-slate-800">{formatCurrency(os.valor_total || 0)}</p>
+                                                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${os.status?.toLowerCase() === 'concluido' ? 'bg-emerald-100 text-emerald-600' :
                                                             os.deslocamento_iniciado_em ? 'bg-blue-100 text-blue-600' :
                                                                 'bg-slate-100 text-slate-500'
                                                             }`}>
-                                                            {os.status?.toLowerCase() === 'concluido' ? 'Concluído' :
-                                                                os.deslocamento_iniciado_em ? 'Deslocamento' :
-                                                                    os.status || 'Pendente'}
+                                                            {os.status?.toLowerCase() === 'concluido' ? 'OK' :
+                                                                os.deslocamento_iniciado_em ? 'EM ROTA' :
+                                                                    'PEND'}
                                                         </span>
                                                     </div>
                                                 </div>
@@ -414,75 +406,66 @@ export function Financial() {
                             </Card>
 
                             {/* Transaction List */}
-                            <Card className="border-slate-200 shadow-sm h-full">
-                                <CardHeader className="pb-4">
-                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                                        <CardTitle className="flex items-center gap-2 text-base md:text-lg">
-                                            <DollarSign className="h-5 w-5 text-emerald-500" />
+                            <Card className="border-slate-200 shadow-sm h-full overflow-hidden">
+                                <CardHeader className="pb-3 px-3 md:px-6">
+                                    <div className="flex flex-col gap-3">
+                                        <CardTitle className="flex items-center gap-2 text-base">
+                                            <DollarSign className="h-4 w-4 text-emerald-500" />
                                             Transações Recentes
                                         </CardTitle>
-                                        <div className="flex gap-2 flex-wrap pb-0">
+                                        <div className="flex gap-1.5">
                                             <Button
                                                 variant={filterType === 'ALL' ? 'default' : 'outline'}
                                                 size="sm"
                                                 onClick={() => setFilterType('ALL')}
-                                                className={cn("h-8 px-3 flex-1 md:flex-none", filterType === 'ALL' ? "bg-slate-800 text-white" : "")}
-                                                title="Todas"
+                                                className={cn("h-7 px-2 text-[11px]", filterType === 'ALL' ? "bg-slate-800 text-white" : "")}
                                             >
-                                                <ClipboardList className="h-3.5 w-3.5 mr-1.5" />
-                                                <span className="text-xs">Todas</span>
+                                                <ClipboardList className="h-3 w-3 mr-1" />
+                                                Todas
                                             </Button>
                                             <Button
                                                 variant={filterType === 'ENTRADA' ? 'default' : 'outline'}
                                                 size="sm"
                                                 onClick={() => setFilterType('ENTRADA')}
-                                                className={cn("h-8 px-3 flex-1 md:flex-none", filterType === 'ENTRADA' ? "bg-emerald-600 text-white" : "text-emerald-600 border-emerald-200 bg-emerald-50")}
-                                                title="Entradas"
+                                                className={cn("h-7 px-2 text-[11px]", filterType === 'ENTRADA' ? "bg-emerald-600 text-white" : "text-emerald-600 border-emerald-200 bg-emerald-50")}
                                             >
-                                                <ArrowUpCircle className="h-3.5 w-3.5 mr-1.5" />
-                                                <span className="text-xs">Entradas</span>
+                                                <ArrowUpCircle className="h-3 w-3 mr-1" />
+                                                Entradas
                                             </Button>
                                             <Button
                                                 variant={filterType === 'SAIDA' ? 'default' : 'outline'}
                                                 size="sm"
                                                 onClick={() => setFilterType('SAIDA')}
-                                                className={cn("h-8 px-3 flex-1 md:flex-none", filterType === 'SAIDA' ? "bg-red-600 text-white" : "text-red-600 border-red-200 bg-red-50")}
-                                                title="Saídas"
+                                                className={cn("h-7 px-2 text-[11px]", filterType === 'SAIDA' ? "bg-red-600 text-white" : "text-red-600 border-red-200 bg-red-50")}
                                             >
-                                                <ArrowDownCircle className="h-3.5 w-3.5 mr-1.5" />
-                                                <span className="text-xs">Saídas</span>
+                                                <ArrowDownCircle className="h-3 w-3 mr-1" />
+                                                Saídas
                                             </Button>
                                         </div>
                                     </div>
                                 </CardHeader>
-                                <CardContent className="p-4 md:p-6">
-                                    <div className="space-y-4">
-                                        <div className="grid grid-cols-[1fr_auto] gap-4 px-2 text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">
+                                <CardContent className="px-3 pb-4 md:px-6">
+                                    <div className="space-y-2">
+                                        <div className="grid grid-cols-[1fr_auto] gap-2 px-1 text-[10px] font-medium text-slate-400 uppercase tracking-wider">
                                             <div>Descrição</div>
                                             <div className="text-right">Valor</div>
                                         </div>
                                         <div className="divide-y divide-slate-100">
                                             {loading ? (
-                                                <div className="p-4 text-center text-slate-500">Carregando...</div>
+                                                <div className="py-4 text-center text-slate-500 text-sm">Carregando...</div>
                                             ) : filteredFluxo.length === 0 ? (
-                                                <div className="p-4 text-center text-slate-500">Nenhuma transação.</div>
+                                                <div className="py-4 text-center text-slate-500 text-sm">Nenhuma transação.</div>
                                             ) : (
                                                 filteredFluxo.slice(0, 5).map((item) => (
-                                                    <div key={item.id} className="py-4 px-3 hover:bg-slate-50 rounded-lg transition-colors flex items-center justify-between gap-3 group">
+                                                    <div key={item.id} className="py-3 px-1 hover:bg-slate-50 rounded-lg transition-colors flex items-center justify-between gap-2">
                                                         <div className="min-w-0 flex-1">
-                                                            <div className="font-medium text-slate-800 text-sm md:text-base truncate pr-2">{item.descricao}</div>
-                                                            <div className="text-xs text-slate-500 font-normal flex items-center gap-2 mt-1">
-                                                                <span>{new Date(item.data_lancamento).toLocaleDateString()}</span>
-                                                                {item.responsavel && (
-                                                                    <>
-                                                                        <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-                                                                        <span className="text-emerald-600 font-medium truncate max-w-[120px]">{item.responsavel.split(' ')[0]}</span>
-                                                                    </>
-                                                                )}
+                                                            <div className="font-medium text-slate-800 text-sm truncate">{item.descricao}</div>
+                                                            <div className="text-[10px] text-slate-500 mt-0.5">
+                                                                {new Date(item.data_lancamento).toLocaleDateString()}
                                                             </div>
                                                         </div>
-                                                        <div className={cn("text-right font-bold text-sm md:text-base shrink-0", item.tipo === 'ENTRADA' ? "text-emerald-700" : "text-red-700")}>
-                                                            {item.tipo === 'ENTRADA' ? '+' : '-'} {formatCurrency(item.valor)}
+                                                        <div className={cn("text-right font-bold text-sm shrink-0 whitespace-nowrap", item.tipo === 'ENTRADA' ? "text-emerald-700" : "text-red-700")}>
+                                                            {item.tipo === 'ENTRADA' ? '' : '- '}{formatCurrency(item.valor)}
                                                         </div>
                                                     </div>
                                                 ))
