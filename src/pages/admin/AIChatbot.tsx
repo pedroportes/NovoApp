@@ -13,8 +13,9 @@ import { Loader2, Save, Upload, Trash2, Bot, Database } from 'lucide-react'
 import { GoogleGenerativeAI } from "@google/generative-ai"
 import * as pdfjsLib from 'pdfjs-dist'
 
-// Set worker source for pdf.js
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
+// Set worker source for pdf.js - using CDN with fallback
+// Note: Version 5.x may not be on CDN yet, using latest stable 4.x
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`
 
 export function AIChatbot() {
     const [loading, setLoading] = useState(true)
