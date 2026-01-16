@@ -14,7 +14,6 @@ interface NFePayload {
     cpf_destinatario?: string
     cnpj_destinatario?: string
     // ... complete payload based on needs
-    // ... complete payload based on needs
     prestador?: any
     tomador?: any
     servico?: any
@@ -174,10 +173,6 @@ export const FocusNFeService = {
      * Helper to update emitirNotaFiscal based on OS ID.
      * Fetches OS data, builds payload and calls createNFe.
      */
-    /**
-     * Helper to update emitirNotaFiscal based on OS ID.
-     * Fetches OS data, builds payload and calls createNFe.
-     */
     async emitirNotaFiscal(osId: string) {
         // 1. Fetch OS Data with Client
         const { data: os, error: osError } = await supabase
@@ -206,13 +201,6 @@ export const FocusNFeService = {
                 throw new Error('Código do Município (IBGE) da empresa é obrigatório para NFSe Nacional.')
             }
 
-            // We need to upgrade createNFe logic to handle different URL, or handle it here
-            // Let's adjust createNFe to accept an override URL or path, OR we handle the call here directly if createNFe is too coupled.
-            // Actually, best is to update createNFe to assume Nacional if flag is set, but since createNFe calls payload directly,
-            // let's pass a special flag in the payload wrapper or modify createNFe.
-            // -> Going with: Modifying createNFe logic via 'empresa' check inside it which is cached/fetched.
-            // But here we are just building the payload.
-
             const payload = {
                 data_emissao: new Date().toISOString(),
                 data_competencia: new Date().toISOString().split('T')[0], // YYYY-MM-DD
@@ -220,7 +208,7 @@ export const FocusNFeService = {
                 // Prestador
                 cnpj_prestador: cleanDigits(check.empresa.cnpj),
                 inscricao_municipal_prestador: cleanDigits(check.empresa.inscricao_municipal),
-                codigo_municipio_emissora: cleanDigits(check.empresa.codigo_municipio),
+                codigo_municipio_emissora: Number(cleanDigits(check.empresa.codigo_municipio)),
 
                 // Regime (Simplificando: assumindo 1=Simples se regime='1')
                 // 1=Não Optante, 2=MEI, 3=ME/EPP (do Simples)
@@ -240,12 +228,13 @@ export const FocusNFeService = {
                 complemento_tomador: os.clientes?.complemento || '',
                 bairro_tomador: os.clientes?.bairro || '',
                 cep_tomador: cleanDigits(os.clientes?.cep),
-                codigo_municipio_tomador: '4114304', // TODO: Implement IBGE Lookup. Using Mandirituba as default.
+                // Fix: Send as Number. Using 4114304 (Mandirituba) default if unknown or client lookup missing.
+                codigo_municipio_tomador: 4114304, // TODO: Implement dynamic lookup
                 email_tomador: os.clientes?.email || '',
-                telefone_tomador: cleanDigits(os.clientes?.telefone) || '',
+                telefone_tomador: cleanDigits(os.clientes?.whatsapp) || '',
 
                 // Serviço
-                codigo_municipio_prestacao: cleanDigits(check.empresa.codigo_municipio),
+                codigo_municipio_prestacao: Number(cleanDigits(check.empresa.codigo_municipio)),
                 codigo_tributacao_nacional_iss: '14.01.01', // Default
                 descricao_servico: `Serviços ref. a OS #${os.id.slice(0, 8)}: ${os.descricao || 'Manutenção Geral'}`,
                 valor_servico: os.valor_total || 0,
@@ -253,6 +242,7 @@ export const FocusNFeService = {
                 tipo_retencao_iss: 1, // 1 – ISS a recolher pelo Prestador (Sem retenção)
             }
 
+            console.log('PAYLOAD NFSe NACIONAL:', JSON.stringify(payload, null, 2))
             return this.createNFe(payload as any, os.empresa_id || undefined)
 
         } else {

@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
 import { Toaster, toast } from 'sonner'
 import { Loader2, Save, Upload, Trash2, Bot, Database } from 'lucide-react'
 import { GoogleGenerativeAI } from "@google/generative-ai"
@@ -20,15 +21,23 @@ export function AIChatbot() {
     const [config, setConfig] = useState<any>(null)
     const [documents, setDocuments] = useState<any[]>([])
 
-    // Form States
-    const [instanceName, setInstanceName] = useState('') // Legacy Evolution
+    // --- STATE FOR PROVIDER ---
+    const [provider, setProvider] = useState<'zapi' | 'evolution'>('zapi')
+    const [whatsappInstanceName, setWhatsappInstanceName] = useState('')
+
+    // Z-API Fields
+    const [zApiInstanceId, setZApiInstanceId] = useState('')
+    const [zApiToken, setZApiToken] = useState('')
+    const [zApiClientToken, setZApiClientToken] = useState('')
+
+    // Evolution Key Fields
+    const [apiKey, setApiKey] = useState('')
+    const [apiUrl, setApiUrl] = useState('')
+    const [instanceId, setInstanceId] = useState('') // Can overlap with zApiInstanceId conceptually but kept separate for clarity
+
+    // Common
     const [systemPrompt, setSystemPrompt] = useState('')
     const [botName, setBotName] = useState('')
-
-    // Z-API States
-    const [instanceId, setInstanceId] = useState('')
-    const [instanceToken, setInstanceToken] = useState('')
-    const [clientToken, setClientToken] = useState('')
 
     // Upload State
     const [uploading, setUploading] = useState(false)
@@ -52,14 +61,26 @@ export function AIChatbot() {
 
             if (configData) {
                 setConfig(configData)
-                setInstanceName(configData.whatsapp_instance_name || '')
+
+                // Common
+                setWhatsappInstanceName(configData.whatsapp_instance_name || '')
                 setSystemPrompt(configData.system_prompt || '')
                 setBotName(configData.nome_bot || '')
 
-                // Z-API
-                setInstanceId(configData.z_api_instance_id || '')
-                setInstanceToken(configData.z_api_token || '')
-                setClientToken(configData.z_api_client_token || '')
+                // Provider Detection
+                const dbProvider = configData.provider || 'zapi'
+                setProvider(dbProvider)
+
+                if (dbProvider === 'zapi') {
+                    setZApiInstanceId(configData.z_api_instance_id || '')
+                    setZApiToken(configData.z_api_token || '')
+                    setZApiClientToken(configData.z_api_client_token || '')
+                } else {
+                    // Evolution / Generic
+                    setApiKey(configData.api_key || '')
+                    setApiUrl(configData.api_url || '')
+                    setInstanceId(configData.instance_id || '')
+                }
 
                 fetchDocuments(configData.empresa_id)
             }
@@ -84,49 +105,54 @@ export function AIChatbot() {
         if (data) setDocuments(data)
     }
 
-    async function handleSaveConfig() {
+    const handleSave = async () => {
         try {
-            setLoading(true)
-            const user = await supabase.auth.getUser()
-            const userId = user.data.user?.id
-            if (!userId) throw new Error('Usuário não logado')
+            setLoading(true);
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
 
             // Get empresa_id
-            const { data: usuario } = await supabase.from('usuarios').select('empresa_id').eq('id', userId).single()
-            if (!usuario?.empresa_id) throw new Error('Empresa não encontrada')
+            const { data: userData } = await supabase.from('usuarios').select('empresa_id').eq('id', user.id).single();
+            if (!userData) throw new Error('Empresa não encontrada');
 
-            const payload = {
-                empresa_id: usuario.empresa_id,
-                whatsapp_instance_name: instanceName,
+            const payload: any = {
+                empresa_id: userData.empresa_id,
+                whatsapp_instance_name: whatsappInstanceName,
                 system_prompt: systemPrompt,
-                nome_bot: botName,
-                // Z-API
-                z_api_instance_id: instanceId,
-                z_api_token: instanceToken,
-                z_api_client_token: clientToken
+                nome_bot: botName, // Keep botName
+                provider: provider,
+                updated_at: new Date().toISOString()
+            };
+
+            // Save all fields to allow provider switching without losing data
+            payload.z_api_instance_id = zApiInstanceId;
+            payload.z_api_token = zApiToken;
+            payload.z_api_client_token = zApiClientToken;
+            payload.api_key = apiKey;
+            payload.api_url = apiUrl;
+            payload.instance_id = instanceId;
+
+            let error;
+
+            if (config?.id) {
+                const { error: updateError } = await supabase.from('configuracoes_bot').update(payload).eq('id', config.id);
+                error = updateError;
+            } else {
+                const { error: insertError } = await supabase.from('configuracoes_bot').insert(payload);
+                error = insertError;
             }
 
-            let error
+            if (error) throw error;
 
-            // Use upsert to handle both insert (new) and update (existing)
-            // preventing race conditions or manual inserts via SQL
-            const { error: upsertError } = await supabase
-                .from('configuracoes_bot')
-                .upsert(payload, { onConflict: 'empresa_id' })
-
-            error = upsertError
-
-            if (error) throw error
-
-            toast.success('Configurações salvas com sucesso!')
-            fetchConfig() // Refresh to get ID if new
-
+            toast.success('Configurações salvas com sucesso!');
+            fetchConfig(); // Refresh to get ID if new
         } catch (error: any) {
-            toast.error('Erro ao salvar: ' + error.message)
+            console.error(error);
+            toast.error('Erro ao salvar: ' + error.message);
         } finally {
-            setLoading(false)
+            setLoading(false);
         }
-    }
+    };
 
     async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
         const file = e.target.files?.[0]
@@ -245,76 +271,124 @@ export function AIChatbot() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-                {/* CONFIGURAÇÃO Z-API (NOVO) */}
-                <Card className="col-span-1 md:col-span-2 border-green-500/20 bg-green-50/10">
+
+                {/* CONFIGURAÇÃO DE CONEXÃO (PROVIDER) */}
+                <Card className="col-span-1 md:col-span-2">
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-green-700">📱 Conexão WhatsApp (Z-API)</CardTitle>
-                        <CardDescription>Configure aqui os dados da sua instância Z-API para conectar o WhatsApp.</CardDescription>
+                        <CardTitle className="flex items-center gap-2">📱 Conexão WhatsApp</CardTitle>
+                        <CardDescription>Escolha o provedor e configure a conexão.</CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="text-sm font-medium">ID da Instância</label>
-                                <Input value={instanceId} onChange={e => setInstanceId(e.target.value)} placeholder="Ex: 3ED432..." />
-                            </div>
-                            <div>
-                                <label className="text-sm font-medium">Token da Instância</label>
-                                <Input value={instanceToken} onChange={e => setInstanceToken(e.target.value)} type="password" placeholder="Ex: E92E1C..." />
-                            </div>
-                            <div>
-                                <label className="text-sm font-medium">Client Token (Segurança)</label>
-                                <Input value={clientToken} onChange={e => setClientToken(e.target.value)} type="password" placeholder="Ex: Crie uma senha segura..." />
-                                <p className="text-xs text-muted-foreground mt-1">Defina uma senha segura e configure no Header "Client-Token" da Z-API.</p>
+                    <CardContent className="space-y-6">
+
+                        {/* Provider Selector */}
+                        <div className="bg-muted/50 p-4 rounded-lg">
+                            <Label className="mb-2 block">Provedor de API</Label>
+                            <div className="flex gap-6">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="provider"
+                                        value="zapi"
+                                        checked={provider === 'zapi'}
+                                        onChange={() => setProvider('zapi')}
+                                        className="h-4 w-4"
+                                    />
+                                    <span className="font-semibold">Z-API (Tradicional)</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="provider"
+                                        value="evolution"
+                                        checked={provider === 'evolution'}
+                                        onChange={() => setProvider('evolution')}
+                                        className="h-4 w-4"
+                                    />
+                                    <span className="font-semibold">Evolution API (Novo)</span>
+                                </label>
                             </div>
                         </div>
 
-                        <div className="mt-4 p-4 bg-gray-100 rounded-lg border border-gray-200">
-                            <p className="text-sm font-medium mb-2">🔗 Seu Webhook para configurar na Z-API:</p>
-                            <div className="flex items-center gap-2 bg-white p-2 rounded border font-mono text-xs overflow-x-auto text-nowrap">
-                                {`https://dltqxfyrltgbudtzxzot.supabase.co/functions/v1/z-api-webhook?client_token=${clientToken || 'DEFINA_UMA_SENHA'}`}
+                        {provider === 'zapi' ? (
+                            <div className="space-y-4 border-l-4 border-green-500 pl-4 py-2 bg-green-50/20 rounded-r">
+                                <h3 className="font-semibold text-green-700">Configuração Z-API</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <Label>ID da Instância</Label>
+                                        <Input value={zApiInstanceId} onChange={e => setZApiInstanceId(e.target.value)} placeholder="Ex: 3ED432..." />
+                                    </div>
+                                    <div>
+                                        <Label>Token da Instância</Label>
+                                        <Input value={zApiToken} onChange={e => setZApiToken(e.target.value)} type="password" />
+                                    </div>
+                                    <div className="md:col-span-2">
+                                        <Label>Client Token (Segurança)</Label>
+                                        <Input value={zApiClientToken} onChange={e => setZApiClientToken(e.target.value)} type="password" />
+                                    </div>
+                                </div>
+                                <div className="p-3 bg-white rounded border text-xs font-mono break-all text-muted-foreground mt-2">
+                                    <p className="font-bold mb-1">Webhook URL:</p>
+                                    {`https://dltqxfyrltgbudtzxzot.supabase.co/functions/v1/z-api-webhook?client_token=${zApiClientToken || 'SENHA'}`}
+                                </div>
                             </div>
-                            <p className="text-xs text-muted-foreground mt-2">
-                                1. Defina uma senha segura no campo "Client Token" acima.<br />
-                                2. Copie o link completo acima.<br />
-                                3. Na Z-API, vá em "Webhooks" e cole no campo <strong>"Ao receber"</strong> (conforme sua foto).
-                            </p>
-                        </div>
-                    </CardContent>
-                </Card>
+                        ) : (
+                            <div className="space-y-4 border-l-4 border-blue-500 pl-4 py-2 bg-blue-50/20 rounded-r">
+                                <h3 className="font-semibold text-blue-700">Configuração Evolution API</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="md:col-span-2">
+                                        <Label>API URL (Base URL)</Label>
+                                        <Input value={apiUrl} onChange={e => setApiUrl(e.target.value)} placeholder="https://api.evolution.com" />
+                                    </div>
+                                    <div>
+                                        <Label>Global API Key</Label>
+                                        <Input value={apiKey} onChange={e => setApiKey(e.target.value)} type="password" />
+                                    </div>
+                                    <div>
+                                        <Label>Nome da Instância</Label>
+                                        <Input value={instanceId} onChange={e => setInstanceId(e.target.value)} placeholder="Ex: Divulgacao1" />
+                                    </div>
+                                </div>
+                                <div className="p-3 bg-white rounded border text-xs font-mono break-all text-muted-foreground mt-2">
+                                    <p className="font-bold mb-1">Webhook URL:</p>
+                                    {`https://dltqxfyrltgbudtzxzot.supabase.co/functions/v1/evolution-webhook`}
+                                </div>
+                            </div>
+                        )}
 
-                {/* CONFIGURAÇÃO BOT (EXISTENTE) */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2"><Bot /> Personalidade da IA</CardTitle>
-                        <CardDescription>Defina como sua IA deve se comportar.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
+                        <hr className="my-4 border-t" />
+
                         <div>
-                            <label className="text-sm font-medium">Nome do Bot</label>
-                            <Input value={botName} onChange={e => setBotName(e.target.value)} placeholder="Ex: Atendente Virtual" />
+                            <CardTitle className="flex items-center gap-2 mb-4"><Bot size={20} /> Personalidade da IA</CardTitle>
+                            <div className="grid grid-cols-1 gap-4">
+                                <div>
+                                    <Label>Nome do Bot</Label>
+                                    <Input value={botName} onChange={e => setBotName(e.target.value)} placeholder="Ex: Atendente Virtual" />
+                                </div>
+                                <div>
+                                    <Label>Identificador Único (Nome da Instância no Painel)</Label>
+                                    <Input value={whatsappInstanceName} onChange={e => setWhatsappInstanceName(e.target.value)} placeholder="Ex: MinhaEmpresaBot" />
+                                    <p className="text-xs text-muted-foreground">Usado para identificar qual configuração carregar no webhook.</p>
+                                </div>
+                                <div>
+                                    <Label>System Prompt (Instruções)</Label>
+                                    <Textarea
+                                        value={systemPrompt}
+                                        onChange={e => setSystemPrompt(e.target.value)}
+                                        placeholder="Ex: Você é um assistente útil..."
+                                        className="h-32"
+                                    />
+                                </div>
+                            </div>
                         </div>
-                        {/* 
-                        <div>
-                            <label className="text-sm font-medium">Nome da Instância (Evolution API)</label>
-                            <Input value={instanceName} onChange={e => setInstanceName(e.target.value)} placeholder="Ex: empresa_x_main" />
-                            <p className="text-xs text-muted-foreground mt-1">Campo legado (Evolution API).</p>
-                        </div>
-                        */}
-                        <div>
-                            <label className="text-sm font-medium">System Prompt (Instruções)</label>
-                            <Textarea
-                                value={systemPrompt}
-                                onChange={e => setSystemPrompt(e.target.value)}
-                                placeholder="Ex: Você é um assistente útil..."
-                                className="h-32"
-                            />
-                        </div>
-                        <Button onClick={handleSaveConfig} disabled={loading} className="w-full">
+
+                        <Button onClick={handleSave} disabled={loading} className="w-full">
                             {loading ? <Loader2 className="animate-spin mr-2" /> : <Save className="mr-2 h-4 w-4" />}
                             Salvar Configurações
                         </Button>
+
                     </CardContent>
                 </Card>
+
 
                 {/* BASE DE CONHECIMENTO */}
                 <Card>

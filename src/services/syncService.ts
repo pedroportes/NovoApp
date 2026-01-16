@@ -192,30 +192,28 @@ export const SyncService = {
 
     async processClientSync(item: SyncQueueItem) {
         const { data: payload, action } = item;
-        // Clean payload of local-only fields - remove ALL non-database fields
-        const { id, synced, updated_at, action: localAction, ...cleanPayload } = payload;
 
-        console.log(`[SyncService] processClientSync - Action: ${action}, ID: ${id}`);
-        console.log('[SyncService] Client payload before cleanup:', cleanPayload);
+        console.log(`[SyncService] processClientSync - Action: ${action}, ID: ${payload.id}`);
 
-        // Remover campos que NÃO existem na tabela clientes do Supabase
-        // Campos válidos: id, empresa_id, nome_razao, cpf_cnpj, whatsapp, logradouro, numero, 
-        // bairro, cidade, created_at, email, address, reference, is_recurring, rating, 
-        // signature_url, photo_url, documento, referencia, avatar_url, endereco
-        const invalidFields = ['synced', 'updated_at', 'action'];
-        const validPayload = { ...cleanPayload };
-        for (const field of invalidFields) {
-            delete validPayload[field];
+        // Helper: Filter payload to only include valid Supabase columns
+        const allowedColumns = [
+            'id', 'empresa_id', 'nome_razao', 'cpf_cnpj', 'whatsapp', 'email',
+            'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf', 'cep',
+            'referencia', 'ativo', 'criado_por', 'created_at', 'assinatura_url',
+            'avatar_url', 'observacoes' // Add any other columns from schema if needed
+        ];
+
+        const finalPayload: any = {};
+        // Only copy allowed fields that are present in payload
+        for (const key of allowedColumns) {
+            if (payload[key] !== undefined) {
+                finalPayload[key] = payload[key];
+            }
         }
 
-        console.log('[SyncService] Client payload after cleanup:', validPayload);
+        console.log('[SyncService] Client payload final:', finalPayload);
 
         if (action === 'create' || action === 'update') {
-            // Upsert to be safe
-            // Ensure ID is included
-            const finalPayload = { id, ...validPayload };
-            console.log('[SyncService] Upserting client to Supabase:', finalPayload);
-
             const { data, error } = await supabase.from('clientes').upsert(finalPayload).select();
 
             if (error) {
@@ -224,36 +222,47 @@ export const SyncService = {
             }
 
             console.log('[SyncService] ✅ Client synced successfully:', data);
+            await db.clientes.update(payload.id, { synced: 1 });
 
-            // Mark local record as synced
-            await db.clientes.update(id, { synced: 1 });
         } else if (action === 'delete') {
-            const { error } = await supabase.from('clientes').delete().eq('id', id);
+            const { error } = await supabase.from('clientes').delete().eq('id', payload.id);
             if (error) throw error;
         }
     },
 
     async processOSSync(item: SyncQueueItem) {
         const { data: payload, action } = item;
-        const { id, synced, action: localAction, updated_at, ...cleanPayload } = payload;
 
-        console.log(`[SyncService] processOSSync - Action: ${action}, ID: ${id}`);
-        console.log('[SyncService] OS Payload before cleanup:', cleanPayload);
+        console.log(`[SyncService] processOSSync - Action: ${action}, ID: ${payload.id}`);
 
-        // Clean potentially invalid fields just like clients
-        const validPayload = { ...cleanPayload };
-        const invalidFields = ['synced', 'action', 'updated_at', 'undefined', 'null'];
-        // Also remove specific known bad fields if necessary, though 'items' and 'fotos' are expected
-        for (const field of invalidFields) {
-            delete validPayload[field];
+        // Helper: Filter payload to only include valid Supabase columns
+        const allowedColumns = [
+            'id', 'empresa_id', 'cliente_id', 'cliente_nome', 'tecnico_id',
+            'status', 'data_agendamento', 'descricao', 'observacoes_internas',
+            'valor_total', 'itens', 'fotos_conclusao', 'deslocamento_iniciado_em',
+            'previsao_chegada', 'endereco', 'created_at', 'updated_at'
+            // Added based on schema. Note: 'orcamento_gerado' etc might not be in schema, 
+            // if they are not, they shouldn't be sent. 
+            // Schema check: orcamento_gerado NOT in schema 'ordens_servico'.
+            // So they are local-only flags or need to be added to DB if we want to sync them.
+            // For now, EXCLUDE logic is safer (only allow DB columns).
+        ];
+
+        const finalPayload: any = {};
+        for (const key of allowedColumns) {
+            if (payload[key] !== undefined) {
+                finalPayload[key] = payload[key];
+            }
         }
 
-        console.log('[SyncService] OS Payload final:', validPayload);
+        // Fix mapping: local 'descricao_servico' -> remote 'descricao'
+        if (payload.descricao_servico && !finalPayload.descricao) {
+            finalPayload.descricao = payload.descricao_servico;
+        }
 
-        const finalPayload = { id, ...validPayload };
+        console.log('[SyncService] OS Payload final (Cleaned):', finalPayload);
 
         if (action === 'create' || action === 'update') {
-            console.log('[SyncService] Upserting to Supabase...');
             const { data, error } = await supabase.from('ordens_servico').upsert(finalPayload).select();
 
             if (error) {
@@ -262,12 +271,11 @@ export const SyncService = {
             }
 
             console.log('[SyncService] ✅ Successfully synced to Supabase:', data);
+            await db.ordens_servico.update(payload.id, { synced: 1 });
 
-            // Update local record to mark as synced
-            await db.ordens_servico.update(id, { synced: 1 });
         } else if (action === 'delete') {
-            console.log(`[SyncService] Deleting OS ${id} from Supabase...`);
-            const { error } = await supabase.from('ordens_servico').delete().eq('id', id);
+            console.log(`[SyncService] Deleting OS ${payload.id} from Supabase...`);
+            const { error } = await supabase.from('ordens_servico').delete().eq('id', payload.id);
 
             if (error) {
                 console.error('[SyncService] ❌ Supabase delete error:', error);
