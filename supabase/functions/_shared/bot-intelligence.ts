@@ -24,38 +24,45 @@ export class BotIntelligence {
         return parts;
     }
 
-    // LIMPEZA AGRESSIVA - remove TUDO que parece codigo/json/prefixo
+    // LIMPEZA ULTRA AGRESSIVA v39
     private static cleanResponse(text: string): string {
         let cleaned = text;
         
-        // Remover QUALQUER bloco que contenha chaves { }
-        cleaned = cleaned.replace(/\{[^}]*\}/g, '');
+        // Remover blocos JSON completos
+        cleaned = cleaned.replace(/\{[\s\S]*?\}/g, '');
+        
+        // Remover chaves soltas { ou }
+        cleaned = cleaned.replace(/[{}]/g, '');
         
         // Remover blocos markdown
         cleaned = cleaned.replace(/```[\s\S]*?```/g, '');
-        cleaned = cleaned.replace(/`[^`]+`/g, '');
+        cleaned = cleaned.replace(/`[^`]*`/g, '');
         
-        // Remover prefixos em QUALQUER lugar
+        // Remover prefixos
         cleaned = cleaned.replace(/\[ASSISTENTE\]:?\s*/gi, '');
         cleaned = cleaned.replace(/\[SISTEMA\]:?\s*/gi, '');
         cleaned = cleaned.replace(/\[BOT\]:?\s*/gi, '');
         cleaned = cleaned.replace(/^(Bot|Gra[cç]a|Assistente):\s*/gim, '');
         
-        // Remover menções a ferramentas
+        // Remover mencoes a ferramentas e termos tecnicos
         cleaned = cleaned.replace(/consultar_cliente|consultar_meus_agendamentos|agendar_servico|verificar_agenda/gi, '');
-        cleaned = cleaned.replace(/ferramenta|tool|"tool"|"ferramenta"/gi, '');
+        cleaned = cleaned.replace(/ferramenta|tool|"tool"|"ferramenta"|args|json/gi, '');
+        
+        // Remover linhas que parecem codigo (comeca com espacos/tabs)
+        cleaned = cleaned.replace(/^[\t ]{2,}.*$/gm, '');
         
         // Remover emojis
         cleaned = cleaned.replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{27BF}]/gu, '');
         
-        // Limpar espaços e quebras excessivas
+        // Limpar espacos e quebras
         cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
         cleaned = cleaned.replace(/  +/g, ' ');
+        cleaned = cleaned.replace(/^\s*\n/gm, '');
         
         return cleaned.trim();
     }
 
-    private static async callGemini(model: any, prompt: string, logDb?: (msg: string, meta?: any) => Promise<void>): Promise<string> {
+    private static async callGemini(model: any, prompt: string): Promise<string> {
         const delays = [2000, 5000, 10000];
         for (let attempt = 0; attempt < 3; attempt++) {
             try {
@@ -79,7 +86,7 @@ export class BotIntelligence {
             const msgText = message.body;
             if (message.isGroup || !msgText) return;
             
-            await logDb(`v38 Processing: ${senderPhone}`, { text: msgText.substring(0, 50) });
+            await logDb(`v39 Processing: ${senderPhone}`);
             await supabase.from('chat_historico').insert({ empresa_id: config.empresa_id, contact_phone: senderPhone, role: 'user', content: msgText, status: 'pending', message_id_zapi: message.messageId });
             
             await new Promise(r => setTimeout(r, 8000));
@@ -87,11 +94,9 @@ export class BotIntelligence {
             const { data: latestPending } = await supabase.from('chat_historico').select('created_at').eq('empresa_id', config.empresa_id).eq('contact_phone', senderPhone).eq('status', 'pending').order('created_at', { ascending: false }).limit(1).single();
             if (latestPending && Date.now() - new Date(latestPending.created_at).getTime() < 6000) return;
             
-            // Trava 15 min
             const fifteenMinAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
             const { data: humanMsg } = await supabase.from('chat_historico').select('id').eq('empresa_id', config.empresa_id).eq('contact_phone', senderPhone).eq('role', 'attendant').gt('created_at', fifteenMinAgo).limit(1);
             if (humanMsg?.length) {
-                await logDb('BOT PAUSADO - Humano ativo');
                 await supabase.from('chat_historico').update({ status: 'ignored_human' }).eq('empresa_id', config.empresa_id).eq('contact_phone', senderPhone).eq('status', 'pending');
                 return;
             }
@@ -107,20 +112,19 @@ export class BotIntelligence {
             const { data: history } = await supabase.from('chat_historico').select('role, content').eq('empresa_id', config.empresa_id).eq('contact_phone', senderPhone).neq('status', 'pending').order('created_at', { ascending: false }).limit(10);
             const historyText = history?.reverse().map((h: any) => `${h.role === 'user' ? 'Cliente' : 'Atendente'}: ${h.content}`).join('\n') || '';
             
-            await logDb('Starting AI v38');
             const genAI = new GoogleGenerativeAI(this.geminiKey);
             const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
             const now = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
             const systemPrompt = config.system_prompt || "Voce e um assistente";
-            const toolsInstructions = `DATA: ${now}\nTELEFONE: ${senderPhone}\nIMPORTANTE: Responda APENAS texto natural. Se precisar de dados do sistema, responda SO o JSON {"tool":"nome","args":{}}. NUNCA misture texto com JSON.\nFERRAMENTAS: consultar_cliente(), verificar_agenda(data), consultar_meus_agendamentos(), agendar_servico(data,horario,descricao,cliente_nome,endereco)`;
+            const toolsInstructions = `DATA: ${now}\nTELEFONE: ${senderPhone}\nResponda APENAS texto natural. Se precisar dados, responda SO JSON puro: {"tool":"nome","args":{}}\nFERRAMENTAS: consultar_cliente(), verificar_agenda(data), consultar_meus_agendamentos(), agendar_servico(data,horario,descricao,cliente_nome,endereco)`;
             
             let finalResponse = '';
             let loopHistory = '';
             const basePrompt = `${systemPrompt}\n${toolsInstructions}\nCONTEXTO: ${contextText}\nHISTORICO: ${historyText}\nMENSAGEM: ${consolidatedText}`;
             
             for (let i = 0; i < 3; i++) {
-                const textResponse = await this.callGemini(model, basePrompt + loopHistory, logDb);
-                await logDb(`Iter ${i+1}`, { resp: textResponse.substring(0, 150) });
+                const textResponse = await this.callGemini(model, basePrompt + loopHistory);
+                await logDb(`Iter ${i+1}`, { resp: textResponse.substring(0, 100) });
                 
                 const trimmed = textResponse.trim();
                 if (trimmed.startsWith('{')) {
@@ -144,8 +148,20 @@ export class BotIntelligence {
                         } else if (toolCall.tool === 'agendar_servico') {
                             const { data: d, horario: h, descricao: desc, cliente_nome: nome, endereco: end } = toolCall.args || {};
                             const { data: c } = await supabase.from('clientes').select('id, nome_razao, endereco').eq('empresa_id', config.empresa_id).ilike('whatsapp', `%${senderPhone.slice(-8)}%`).maybeSingle();
-                            const { data: t } = await supabase.from('usuarios').select('id').eq('empresa_id', config.empresa_id).eq('active', true).limit(1).maybeSingle();
-                            const { error } = await supabase.from('ordens_servico').insert({ empresa_id: config.empresa_id, cliente_id: c?.id, cliente_nome: nome || c?.nome_razao || senderPhone, tecnico_id: t?.id, data_agendamento: `${d}T${h}:00`, descricao: desc || 'Via WhatsApp', endereco: end || c?.endereco, status: 'PENDENTE' });
+                            
+                            // BUSCAR PROPRIETARIO/ADMIN como tecnico padrao (nao qualquer um)
+                            const { data: owner } = await supabase.from('usuarios').select('id, nome_completo').eq('empresa_id', config.empresa_id).eq('cargo', 'admin').eq('active', true).limit(1).maybeSingle();
+                            
+                            const { error } = await supabase.from('ordens_servico').insert({
+                                empresa_id: config.empresa_id,
+                                cliente_id: c?.id,
+                                cliente_nome: nome || c?.nome_razao || senderPhone,
+                                tecnico_id: owner?.id || null,
+                                data_agendamento: `${d}T${h}:00`,
+                                descricao: desc || 'Via WhatsApp',
+                                endereco: end || c?.endereco,
+                                status: 'PENDENTE'
+                            });
                             result = error ? `Erro: ${error.message}` : `Agendado ${d} as ${h}`;
                         }
                         loopHistory += `\nSistema: ${result}\n`;
@@ -160,7 +176,7 @@ export class BotIntelligence {
             finalResponse = this.cleanResponse(finalResponse);
             if (finalResponse.length < 5) finalResponse = 'Desculpa, tive um probleminha. Pode repetir?';
             
-            await logDb('Final v38', { resp: finalResponse.substring(0, 80) });
+            await logDb('Final v39', { resp: finalResponse.substring(0, 80) });
             
             if (finalResponse.length > 300) {
                 const parts = this.splitMessage(finalResponse, 300);
@@ -173,6 +189,6 @@ export class BotIntelligence {
             }
             
             await supabase.from('chat_historico').insert({ empresa_id: config.empresa_id, contact_phone: senderPhone, role: 'model', content: finalResponse, status: 'processed' });
-        } catch (e: any) { await logDb('FATAL v38', { error: e.message }); }
+        } catch (e: any) { await logDb('FATAL v39', { error: e.message }); }
     }
 }
