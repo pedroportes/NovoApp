@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Toaster, toast } from 'sonner'
 import { Loader2, Save, Upload, Trash2, Bot, Database } from 'lucide-react'
+import { ContatosBloqueados } from '@/components/ContatosBloqueados'
 import { GoogleGenerativeAI } from "@google/generative-ai"
 import * as pdfjsLib from 'pdfjs-dist'
 
@@ -453,6 +454,11 @@ export function AIChatbot() {
 
                     </CardContent>
                 </Card>
+
+                {/* Contatos Bloqueados */}
+                {config?.empresa_id && (
+                    <ContatosBloqueados empresaId={config.empresa_id} />
+                )}
 
             </div>
         </div>

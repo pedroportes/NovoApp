@@ -86,7 +86,21 @@ export class BotIntelligence {
             const msgText = message.body;
             if (message.isGroup || !msgText) return;
             
-            await logDb(`v39 Processing: ${senderPhone}`);
+            await logDb(`v40 Processing: ${senderPhone}`);
+            
+            // VERIFICAR BLACKLIST - Contatos bloqueados
+            const { data: bloqueado } = await supabase
+                .from('contatos_bloqueados')
+                .select('id')
+                .eq('empresa_id', config.empresa_id)
+                .eq('telefone', senderPhone)
+                .maybeSingle();
+            
+            if (bloqueado) {
+                await logDb('Blocked contact - skipping', { phone: senderPhone });
+                return; // Não responde a contatos bloqueados
+            }
+            
             await supabase.from('chat_historico').insert({ empresa_id: config.empresa_id, contact_phone: senderPhone, role: 'user', content: msgText, status: 'pending', message_id_zapi: message.messageId });
             
             await new Promise(r => setTimeout(r, 8000));
