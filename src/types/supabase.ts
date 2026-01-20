@@ -517,6 +517,7 @@ export type Database = {
                     id: string
                     nome: string
                     preco_padrao: number
+                    valor_padrao: number
                     tipo_comissao: string | null
                     codigo_tributacao_nacional: string | null
                 }
@@ -530,6 +531,7 @@ export type Database = {
                     id?: string
                     nome: string
                     preco_padrao: number
+                    valor_padrao: number
                     tipo_comissao?: string | null
                     codigo_tributacao_nacional?: string | null
                 }
