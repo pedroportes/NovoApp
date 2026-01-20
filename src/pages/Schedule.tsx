@@ -198,7 +198,8 @@ export function Schedule() {
                             size="sm"
                             onClick={() => {
                                 const dateParam = format(currentDate, 'yyyy-MM-dd')
-                                navigate(`/new-order?date=${dateParam}`)
+                                navigate(`/service-orders/new?date=${dateParam}`)
+                                // navigate(`/new-order?date=${dateParam}`)
                             }}
                         >
                             <Plus className="h-4 w-4 md:mr-2" />

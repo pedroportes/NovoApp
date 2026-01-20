@@ -13,80 +13,108 @@ const toolsDefinition = [
         function_declarations: [
             {
                 name: "search_clients",
-                description: "Busca clientes da empresa no banco de dados. Use para responder perguntas como 'Quem é o cliente X?' ou 'Liste meus clientes'.",
+                description: "Busca clientes da empresa. Pode pesquisar por nome (ex: 'Maria'), telefone (ex: 'final 9999') ou endereço (ex: 'Rua das Flores').",
                 parameters: {
                     type: "OBJECT",
                     properties: {
-                        query: { type: "STRING", description: "Nome, telefone ou termo de busca para filtrar clientes. Deixe vazio para listar recentes." }
+                        query: { type: "STRING", description: "Termo de busca. Pode ser nome, telefone ou parte do endereço." }
                     },
                 }
             },
             {
                 name: "get_financial_report",
-                description: "Gera um resumo financeiro (Entradas, Saídas, Lucro) para um determinado período.",
+                description: "Gera um relatório financeiro DETALHADO (Receitas, Despesas, Lucro) para um período.",
                 parameters: {
                     type: "OBJECT",
                     properties: {
-                        period: { type: "STRING", description: "Período desejado: 'current_month', 'last_month', 'last_week', 'last_7_days', 'last_3_months', 'year_to_date'." }
+                        period: { type: "STRING", description: "Período: 'current_month', 'last_month', 'last_week', 'last_7_days', 'last_3_months', 'year_to_date'." }
                     },
                     required: ["period"]
                 }
             },
             {
-                name: "get_service_history",
-                description: "Busca o histórico de serviços e valores de um cliente específico.",
+                name: "get_financial_summary",
+                description: "Resumo financeiro rápido do mês atual (Saldo, Entradas e Saídas). Use para perguntas como 'Como está o financeiro?' ou 'Resumo do mês'.",
+                parameters: {
+                    type: "OBJECT",
+                    properties: {}
+                }
+            },
+            {
+                name: "get_recent_services",
+                description: "Lista os últimos serviços realizados ou agendados pela empresa (GLOBAL). Use para 'Quais os últimos serviços?', 'O que foi feito hoje?', 'Últimos chamados'.",
                 parameters: {
                     type: "OBJECT",
                     properties: {
-                        clientName: { type: "STRING", description: "Nome do cliente para buscar o histórico." }
+                        limit: { type: "NUMBER", description: "Quantidade de serviços a listar (padrão 5)." }
+                    }
+                }
+            },
+            {
+                name: "get_expenses",
+                description: "Lista as últimas despesas/gastos lançados na empresa.",
+                parameters: {
+                    type: "OBJECT",
+                    properties: {
+                        category: { type: "STRING", description: "Filtrar por categoria (opcional)." }
+                    }
+                }
+            },
+            {
+                name: "get_service_history",
+                description: "Busca o histórico de serviços de um CLIENTE ESPECÍFICO.",
+                parameters: {
+                    type: "OBJECT",
+                    properties: {
+                        clientName: { type: "STRING", description: "Nome do cliente." }
                     },
                     required: ["clientName"]
                 }
             },
             {
                 name: "create_client",
-                description: "Cadastra um novo cliente no sistema. Requer Nome, Telefone e Endereço (Rua e Número). Peça confirmação antes de salvar.",
+                description: "Cadastra um novo cliente. Requer Nome, Telefone e Endereço.",
                 parameters: {
                     type: "OBJECT",
                     properties: {
-                        name: { type: "STRING", description: "Nome completo do cliente ou Razão Social." },
-                        phone: { type: "STRING", description: "Telefone ou WhatsApp do cliente (apenas números ou formatado)." },
-                        street: { type: "STRING", description: "Nome da rua ou logradouro." },
-                        number: { type: "STRING", description: "Número do endereço." }
+                        name: { type: "STRING", description: "Nome completo." },
+                        phone: { type: "STRING", description: "Telefone/WhatsApp." },
+                        street: { type: "STRING", description: "Rua/Logradouro." },
+                        number: { type: "STRING", description: "Número." }
                     },
                     required: ["name", "phone", "street", "number"]
                 }
             },
             {
                 name: "create_schedule",
-                description: "Agenda uma visita técnica (Ordem de Serviço). Busca o cliente pelo nome e cria o agendamento.",
+                description: "Agenda uma visita técnica. Busca cliente pelo nome.",
                 parameters: {
                     type: "OBJECT",
                     properties: {
                         clientName: { type: "STRING", description: "Nome do cliente." },
-                        description: { type: "STRING", description: "Descrição do problema ou serviço a ser realizado." },
-                        dateTime: { type: "STRING", description: "Data e hora do agendamento no formato ISO 8601 (ex: 2024-01-01T14:30:00). Se o usuário disser 'amanhã', calcule a data." }
+                        description: { type: "STRING", description: "Descrição do serviço." },
+                        dateTime: { type: "STRING", description: "Data ISO 8601 (2024-01-01T14:30:00)." }
                     },
                     required: ["clientName", "description", "dateTime"]
                 }
             },
             {
                 name: "create_expense",
-                description: "Registra uma despesa ou gasto.",
+                description: "Lança uma nova despesa no sistema.",
                 parameters: {
                     type: "OBJECT",
                     properties: {
-                        description: { type: "STRING", description: "Descrição do gasto (ex: Gasolina, Almoço)." },
-                        amount: { type: "NUMBER", description: "Valor do gasto em reais." },
-                        category: { type: "STRING", description: "Categoria: combustivel, alimentacao, material, outros." },
-                        licensePlate: { type: "STRING", description: "Placa do veículo (opcional, se for gasto com carro)." }
+                        description: { type: "STRING", description: "Descrição." },
+                        amount: { type: "NUMBER", description: "Valor (R$)." },
+                        category: { type: "STRING", description: "Categoria." },
+                        licensePlate: { type: "STRING", description: "Placa (opcional)." }
                     },
                     required: ["description", "amount", "category"]
                 }
             },
             {
                 name: "get_daily_briefing",
-                description: "Fornece um resumo do dia: próximas visitas e saldo financeiro rápido.",
+                description: "Resumo da agenda de HOJE.",
                 parameters: {
                     type: "OBJECT",
                     properties: {},
@@ -114,6 +142,7 @@ export const aiService = {
         const systemInstruction = `
 Você é o Consultor Especialista do FlowDrain, um sistema de gestão para desentupidoras.
 Seu usuário atual é ${context.userName} (Empresa ID: ${context.empresaId}).
+Data de Hoje: ${new Date().toLocaleDateString('pt-BR')} (Dia da semana: ${new Date().toLocaleDateString('pt-BR', { weekday: 'long' })}).
 
 Sua missão é ajudar com:
 1. Consultas rápidas sobre clientes e dados operacionais.
@@ -129,7 +158,7 @@ Regras de Segurança:
         try {
             const genAI = new GoogleGenerativeAI(API_KEY);
             const model = genAI.getGenerativeModel({
-                model: "gemini-2.0-flash",
+                model: "gemini-flash-latest",
                 tools: toolsDefinition as any
             });
 
@@ -176,11 +205,24 @@ Regras de Segurança:
                 if (functionName === 'search_clients') {
                     functionResult = await this.searchClients(context.empresaId, args.query);
                 } else if (functionName === 'get_financial_report') {
-                    // SECURITY CHECK: Only admins can access financial reports
                     if (context.role !== 'admin') {
-                        functionResult = { message: "⛔ Acesso Negado: Apenas administradores podem acessar relatórios financeiros." };
+                        functionResult = { message: "⛔ Acesso Negado: Apenas administradores." };
                     } else {
                         functionResult = await this.getFinancialReport(context.empresaId, args.period);
+                    }
+                } else if (functionName === 'get_financial_summary') {
+                     if (context.role !== 'admin') {
+                        functionResult = { message: "⛔ Acesso Negado: Apenas administradores." };
+                    } else {
+                        functionResult = await this.getFinancialSummary(context.empresaId);
+                    }
+                } else if (functionName === 'get_recent_services') {
+                    functionResult = await this.getRecentServices(context.empresaId, args.limit);
+                } else if (functionName === 'get_expenses') {
+                    if (context.role !== 'admin') {
+                        functionResult = { message: "⛔ Acesso Negado: Apenas administradores." };
+                    } else {
+                        functionResult = await this.getExpenses(context.empresaId, args.category);
                     }
                 } else if (functionName === 'get_service_history') {
                     functionResult = await this.getServiceHistory(context.empresaId, args.clientName);
@@ -211,6 +253,9 @@ Regras de Segurança:
 
         } catch (error: any) {
             console.error("Erro no Gemini:", error);
+            if (error.message?.includes('429') || error.toString().includes('Resource exhausted')) {
+                return "⚠️ A IA está com alta demanda no momento (Limite de cota atingido). Por favor, aguarde 1 minuto e tente novamente.";
+            }
             return `Erro técnico: ${error.message || error.toString()}. (Verifique o console para mais detalhes)`;
         }
     },
@@ -220,18 +265,101 @@ Regras de Segurança:
     async searchClients(empresaId: string, query?: string) {
         let dbQuery = supabase
             .from('clientes')
-            .select('id, nome_razao, whatsapp, cidade, bairro')
+            .select('id, nome_razao, whatsapp, logradouro, bairro, cidade, numero')
             .eq('empresa_id', empresaId)
             .limit(10); // Limit to avoid token overflow
 
         if (query) {
-            dbQuery = dbQuery.ilike('nome_razao', `%${query}%`);
+            // Search across Name, WhatsApp, Street, Neighborhood
+            // Using ilike with OR syntax
+            dbQuery = dbQuery.or(`nome_razao.ilike.%${query}%,whatsapp.ilike.%${query}%,logradouro.ilike.%${query}%,bairro.ilike.%${query}%`);
         } else {
             dbQuery = dbQuery.order('created_at', { ascending: false });
         }
 
-        const { data } = await dbQuery;
-        return data || [];
+        const { data, error } = await dbQuery;
+        
+        if (error) {
+            console.error("Erro busca clientes:", error);
+            return [];
+        }
+
+        return data?.map(c => ({
+            nome: c.nome_razao,
+            telefone: c.whatsapp,
+            endereco: `${c.logradouro}, ${c.numero} - ${c.bairro}`,
+            cidade: c.cidade
+        })) || [];
+    },
+
+    async getRecentServices(empresaId: string, limit: number = 5) {
+        const { data: services } = await supabase
+            .from('ordens_servico')
+            .select('id, data_agendamento, status, valor_total, descricao_servico, cliente_nome, tecnico:tecnico_id(nome_completo)')
+            .eq('empresa_id', empresaId)
+            .order('data_agendamento', { ascending: false })
+            .limit(limit);
+
+        if (!services || services.length === 0) return { message: "Nenhum serviço encontrado recentemente." };
+
+        return services.map((s: any) => ({
+            data: new Date(s.data_agendamento).toLocaleDateString('pt-BR') + ' ' + new Date(s.data_agendamento).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'}),
+            cliente: s.cliente_nome,
+            servico: s.descricao_servico,
+            tecnico: s.tecnico?.nome_completo || 'N/A',
+            status: s.status,
+            valor: s.valor_total
+        }));
+    },
+
+    async getExpenses(empresaId: string, category?: string) {
+        let query = supabase
+            .from('despesas_tecnicos')
+            .select('descricao, valor, categoria, data_gasto, tecnico:tecnico_id(nome_completo)')
+            .eq('empresa_id', empresaId)
+            .order('data_gasto', { ascending: false })
+            .limit(10);
+
+        if (category) {
+            query = query.ilike('categoria', `%${category}%`);
+        }
+
+        const { data } = await query;
+        if (!data || data.length === 0) return { message: "Nenhuma despesa encontrada." };
+
+        return data.map((d: any) => ({
+            data: new Date(d.data_gasto).toLocaleDateString('pt-BR'),
+            descricao: d.descricao,
+            valor: d.valor,
+            categoria: d.categoria,
+            responsavel: d.tecnico?.nome_completo || 'Empresa'
+        }));
+    },
+
+    async getFinancialSummary(empresaId: string) {
+        // Reusing the same RPC or logic as the Dashboard
+        // For simplicity/robustness, we'll calculate from flow (financeiro_fluxo) for current month
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0,0,0,0);
+        
+        const { data } = await supabase
+             .from('financeiro_fluxo')
+             .select('tipo, valor')
+             .eq('empresa_id', empresaId)
+             .gte('data_lancamento', startOfMonth.toISOString());
+             
+        if (!data) return { message: "Sem dados financeiros deste mês." };
+
+        const entradas = data.filter((d: any) => d.tipo === 'RECEITA' || d.tipo === 'ENTRADA').reduce((acc, curr) => acc + Number(curr.valor), 0);
+        const saidas = data.filter((d: any) => d.tipo === 'DESPESA' || d.tipo === 'SAIDA').reduce((acc, curr) => acc + Number(curr.valor), 0);
+
+        return {
+            periodo: "Mês Atual",
+            receitas: entradas,
+            despesas: saidas,
+            saldo: entradas - saidas
+        };
     },
 
     async getFinancialReport(empresaId: string, period: string) {

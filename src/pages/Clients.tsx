@@ -858,13 +858,8 @@ export function Clients() {
                                     value={formData.logradouro || addressQuery}
                                     onChange={(e) => {
                                         const value = e.target.value
-                                        if (formData.logradouro) {
-                                            // Se já tem logradouro preenchido, permite edição direta
-                                            setFormData({ ...formData, logradouro: value })
-                                        } else {
-                                            // Se não tem, ativa autocomplete
-                                            handleAddressSearch(value)
-                                        }
+                                        setFormData({ ...formData, logradouro: value })
+                                        handleAddressSearch(value)
                                     }}
                                     onFocus={() => {
                                         if (!formData.logradouro) setShowSuggestions(true)

@@ -11,8 +11,8 @@ import { useOutletContext } from 'react-router-dom'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { usePWAInstall } from '@/hooks/usePWAInstall'
 import { SignaturePad } from '@/components/SignaturePad'
-import { FocusNFeService } from '@/services/focusNFeService'
-import { ConfigurarFocusNFe } from '@/components/ConfigurarFocusNFe'
+import { WebmaniaService } from '@/services/webmaniaService'
+import { ConfigurarWebmania } from '@/components/ConfigurarWebmania'
 
 export function Settings() {
     const { userData } = useAuth()
@@ -648,7 +648,7 @@ export function Settings() {
 
                         {/* Fiscal Settings Section (Component Import) */}
                         <div className="md:col-span-2">
-                            <ConfigurarFocusNFe empresaId={userData?.empresa_id || ''} />
+                            <ConfigurarWebmania empresaId={userData?.empresa_id || ''} />
                         </div>
 
                         {/* Technician Permissions Section */}

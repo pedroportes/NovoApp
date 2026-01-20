@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useNavigate, useParams, useOutletContext, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Camera, FileText, Printer, Trash2, PenTool, Eraser, Calendar, Upload, Cloud, Wifi, CheckCircle2, AlertTriangle, Eye, Plus, User, ChevronDown, ClipboardList, ChevronRight, Loader2 } from 'lucide-react'
+import { ArrowLeft, Camera, FileText, Printer, Trash2, PenTool, Eraser, Calendar, Upload, Cloud, Wifi, CheckCircle2, AlertTriangle, Eye, Plus, User, ChevronDown, ClipboardList, ChevronRight, Loader2, Receipt } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,6 +12,8 @@ import { SyncService } from '@/services/syncService'
 import { LocalServiceOrder, db } from '@/lib/db'
 import { useOfflineClients, useOfflineTechnicians, useOfflineServices } from '@/hooks/useOfflineData'
 import { compressImage } from '@/lib/utils'
+import { WebmaniaService } from '@/services/webmaniaService'
+import { toast } from 'sonner'
 
 interface ServiceItem {
     descricao: string
@@ -27,6 +29,7 @@ export function NewServiceOrder() {
     const [savingSignature, setSavingSignature] = useState(false)
     const [viewingPhoto, setViewingPhoto] = useState<string | null>(null)
     const [loading, setLoading] = useState(false)
+    const [emittingNF, setEmittingNF] = useState(false)
 
 
 
@@ -591,6 +594,38 @@ export function NewServiceOrder() {
         }
     }
 
+    const handleEmitNFSe = async () => {
+        if (!id) {
+            toast.error('Salve a OS antes de emitir a nota fiscal.')
+            return
+        }
+
+        if (!confirm('Deseja emitir a NFS-e para esta ordem de serviço?')) {
+            return
+        }
+
+        setEmittingNF(true)
+        try {
+            const result = await WebmaniaService.emitirNotaFiscal(id)
+
+            if (result.status === 'aprovado') {
+                toast.success(`NFS-e emitida com sucesso! Número: ${result.numero || 'Aguardando'}`)
+            } else if (result.status === 'processando') {
+                toast.info('NFS-e enviada! Aguardando processamento pela prefeitura.')
+            } else {
+                toast.warning(`Status: ${result.status} - ${result.motivo}`)
+            }
+
+            // Reload OS data to show NF info
+            window.location.reload()
+        } catch (error: any) {
+            console.error('Erro ao emitir NFS-e:', error)
+            toast.error('Erro ao emitir NFS-e: ' + error.message)
+        } finally {
+            setEmittingNF(false)
+        }
+    }
+
     if (loading) return <div className="p-8 text-center">Carregando dados da OS...</div>
 
     return (
@@ -616,6 +651,22 @@ export function NewServiceOrder() {
                         >
                             <Printer className="h-4 w-4" />
                             <span className="md:inline">PDF</span>
+                        </Button>
+                    )}
+
+                    {id && formData.status === 'CONCLUIDO' && (
+                        <Button
+                            variant="outline"
+                            className="flex-1 md:flex-none gap-2 border-purple-300 text-purple-700 hover:bg-purple-50"
+                            onClick={handleEmitNFSe}
+                            disabled={emittingNF}
+                        >
+                            {emittingNF ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                                <Receipt className="h-4 w-4" />
+                            )}
+                            <span className="md:inline">NFS-e</span>
                         </Button>
                     )}
 
@@ -779,8 +830,8 @@ export function NewServiceOrder() {
                     {isCalculatorOpen && (
                         <div className="p-6 bg-white space-y-6">
                             <div className="flex bg-slate-100 p-1 rounded-xl">
-                                <button type="button" onClick={() => setCalcType('rectangular')} className={`flex - 1 py - 2 text - xs font - bold rounded - lg transition - all ${calcType === 'rectangular' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-400'} `}>RETANGULAR</button>
-                                <button type="button" onClick={() => setCalcType('cilindrico')} className={`flex - 1 py - 2 text - xs font - bold rounded - lg transition - all ${calcType === 'cilindrico' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-400'} `}>CILÍNDRICO</button>
+                                <button type="button" onClick={() => setCalcType('rectangular')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${calcType === 'rectangular' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-400'}`}>RETANGULAR</button>
+                                <button type="button" onClick={() => setCalcType('cilindrico')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${calcType === 'cilindrico' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-400'}`}>CILÍNDRICO</button>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 {calcType === 'rectangular' ? (<>

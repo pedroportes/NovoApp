@@ -61,7 +61,7 @@ export const SyncService = {
                     id: s.id,
                     nome: s.nome,
                     descricao: s.descricao || undefined,
-                    valor_padrao: s.valor_padrao || 0,  // CORRIGIDO: era preco_padrao
+                    valor_padrao: s.preco_padrao || 0,
                     empresa_id: s.empresa_id || '',
                     ativo: s.ativo ?? true
                 }))
@@ -211,6 +211,14 @@ export const SyncService = {
             }
         }
 
+        // SANITIZE: Convert empty strings to null for UUID fields
+        const uuidFields = ['id', 'empresa_id'];
+        for (const key of uuidFields) {
+            if (finalPayload[key] === '') {
+                finalPayload[key] = null;
+            }
+        }
+
         console.log('[SyncService] Client payload final:', finalPayload);
 
         if (action === 'create' || action === 'update') {
@@ -258,6 +266,14 @@ export const SyncService = {
         // Fix mapping: local 'descricao_servico' -> remote 'descricao'
         if (payload.descricao_servico && !finalPayload.descricao) {
             finalPayload.descricao = payload.descricao_servico;
+        }
+
+        // SANITIZE: Convert empty strings to null for UUID fields to prevent "invalid input syntax for type uuid"
+        const uuidFields = ['id', 'empresa_id', 'cliente_id', 'tecnico_id', 'nf_uuid'];
+        for (const key of uuidFields) {
+            if (finalPayload[key] === '') {
+                finalPayload[key] = null;
+            }
         }
 
         console.log('[SyncService] OS Payload final (Cleaned):', finalPayload);
