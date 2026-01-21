@@ -576,7 +576,7 @@ export function Dashboard() {
             {/* LISTAS INFERIORES */}
             <div className="grid gap-6 md:grid-cols-2">
                 {/* LISTA RECENTE */}
-                <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-4 md:p-6">
+                <div className="bg-gradient-to-br from-white to-indigo-50/30 rounded-3xl shadow-xl shadow-indigo-500/5 border border-slate-100 border-l-4 border-l-indigo-500 p-4 md:p-6 hover:shadow-indigo-500/10 transition-all duration-300">
                     <div className="flex items-center justify-between mb-6">
                         <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                             <FileChartColumn className="h-5 w-5 text-emerald-500" />
@@ -611,7 +611,7 @@ export function Dashboard() {
 
                 {/* DESPESAS PENDENTES (Somente Admin) */}
                 {userData?.cargo === 'admin' && pendingExpenses.length > 0 && (
-                    <div className="bg-white rounded-3xl shadow-lg shadow-amber-100/50 p-4 md:p-6 border-l-4 border-amber-400">
+                    <div className="bg-gradient-to-br from-white to-amber-50/30 rounded-3xl shadow-xl shadow-amber-500/10 border border-slate-100 p-4 md:p-6 border-l-4 border-amber-400 hover:shadow-amber-500/20 transition-all duration-300">
                         <div className="flex items-center justify-between mb-6">
                             <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                                 <AlertTriangle className="h-5 w-5 text-amber-500" />
@@ -622,23 +622,30 @@ export function Dashboard() {
 
                         <div className="space-y-4">
                             {pendingExpenses.map((expense) => (
-                                <div key={expense.id} className="flex items-center justify-between p-3 bg-amber-50/50 hover:bg-amber-50 rounded-2xl transition-colors border border-amber-100/50">
+                                <div key={expense.id} className="flex items-center justify-between p-4 bg-white hover:bg-amber-50 rounded-2xl transition-all duration-300 border border-amber-200 shadow-md shadow-amber-500/5 group">
                                     <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center">
+                                        <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-lg shadow-amber-500/20 group-hover:scale-110 transition-transform">
                                             <Receipt className="h-5 w-5" />
                                         </div>
                                         <div>
                                             <p className="text-sm font-bold text-slate-800">{expense.descricao}</p>
-                                            <p className="text-xs text-slate-500">{formatCurrency(expense.valor)}</p>
+                                            <p className="text-xs text-slate-500 font-medium">{formatCurrency(expense.valor)}</p>
                                         </div>
                                     </div>
                                     <Button
                                         size="sm"
                                         variant="ghost"
-                                        className="h-7 text-xs text-amber-600 hover:bg-amber-100"
-                                        onClick={() => navigate('/financial')}
+                                        className="h-8 px-4 text-xs font-bold text-amber-600 hover:bg-amber-100 rounded-xl transition-colors"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (expense.comprovante_url) {
+                                                window.open(expense.comprovante_url, '_blank');
+                                            } else {
+                                                navigate('/financial');
+                                            }
+                                        }}
                                     >
-                                        Ver
+                                        {expense.comprovante_url ? 'Ver Comprovante' : 'Ver Detalhes'}
                                     </Button>
                                 </div>
                             ))}
@@ -648,7 +655,7 @@ export function Dashboard() {
 
                 {/* RASTREAMENTO EM TEMPO REAL (Somente Admin) */}
                 {userData?.cargo === 'admin' && (
-                    <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/40 p-6">
+                    <div className="bg-gradient-to-br from-white to-slate-50/30 rounded-3xl shadow-xl shadow-slate-500/5 border border-slate-100 p-6 border-l-4 border-l-slate-400 hover:shadow-slate-500/10 transition-all duration-300">
                         <LiveMap />
                     </div>
                 )}

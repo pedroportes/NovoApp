@@ -248,12 +248,8 @@ export const SyncService = {
             'id', 'empresa_id', 'cliente_id', 'cliente_nome', 'tecnico_id',
             'status', 'data_agendamento', 'descricao', 'observacoes_internas',
             'valor_total', 'itens', 'fotos_conclusao', 'deslocamento_iniciado_em',
-            'previsao_chegada', 'endereco', 'created_at', 'updated_at'
-            // Added based on schema. Note: 'orcamento_gerado' etc might not be in schema, 
-            // if they are not, they shouldn't be sent. 
-            // Schema check: orcamento_gerado NOT in schema 'ordens_servico'.
-            // So they are local-only flags or need to be added to DB if we want to sync them.
-            // For now, EXCLUDE logic is safer (only allow DB columns).
+            'previsao_chegada', 'endereco', 'created_at', 'updated_at',
+            'assinatura_cliente_url', 'orcamento_gerado', 'recibo_gerado', 'contrato_gerado'
         ];
 
         const finalPayload: any = {};

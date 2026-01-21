@@ -44,7 +44,7 @@ export function ClientGrowthChart({ data }: ClientGrowthChartProps) {
     }
 
     return (
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 h-full">
+        <div className="bg-gradient-to-br from-white to-emerald-50/30 p-6 rounded-3xl shadow-xl shadow-emerald-500/5 border border-slate-100 border-l-4 border-l-emerald-500 h-full hover:shadow-emerald-500/10 transition-all duration-300">
             <div className="flex items-center justify-between mb-6">
                 <div>
                     <h3 className="text-lg font-bold text-slate-800">Crescimento da Base</h3>

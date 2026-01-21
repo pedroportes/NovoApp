@@ -23,7 +23,7 @@ export function TechnicianRanking({ data }: TechnicianRankingProps) {
     }
 
     return (
-        <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 h-full">
+        <div className="bg-gradient-to-br from-white to-amber-50/30 rounded-3xl shadow-xl shadow-amber-500/5 border border-slate-100 border-l-4 border-l-amber-500 p-6 h-full hover:shadow-amber-500/10 transition-all duration-300">
             <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-6">
                 <Crown className="h-5 w-5 text-emerald-500" />
                 Performance da Equipe

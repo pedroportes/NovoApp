@@ -40,7 +40,7 @@ export function ServiceDistributionChart({ data }: ServiceDistributionChartProps
     }
 
     return (
-        <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 h-full flex flex-col">
+        <div className="bg-gradient-to-br from-white to-violet-50/30 p-4 md:p-6 rounded-3xl shadow-xl shadow-violet-500/5 border border-slate-100 h-full flex flex-col border-l-4 border-l-violet-500 hover:shadow-violet-500/10 transition-all duration-300">
             <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4 px-2">
                 Serviços Mais Vendidos
             </h3>

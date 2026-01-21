@@ -46,9 +46,9 @@ const ReceiptLayout = ({ os, company, title }: { os: any, company: any, title: s
     const finalTotal = os.valor_total || (subtotal - discountValue)
 
     return (
-        <div className="p-4 md:p-8 bg-white text-black font-sans max-w-[210mm] mx-auto print:p-0 print:max-w-none h-full min-h-[900px] relative text-[10px] md:text-xs">
+        <div className="p-4 md:p-8 bg-white text-black font-sans max-w-[210mm] mx-auto print:p-0 print:max-w-none relative text-[10px] md:text-xs">
             {/* Main Border Container */}
-            <div className="border border-black md:border-2 h-full min-h-[900px] relative flex flex-col">
+            <div className="border-2 border-black relative flex flex-col min-h-[95vh]">
 
                 {/* Header */}
                 <div className="border-b-2 border-black flex">
@@ -119,38 +119,40 @@ const ReceiptLayout = ({ os, company, title }: { os: any, company: any, title: s
                 </div>
 
                 {/* Items List */}
-                <div className="flex-1 min-h-[300px]">
+                <div className="flex-1">
                     {os.itens && os.itens.map((item: any, index: number) => (
-                        <div key={index} className="flex border-b border-gray-300 text-sm">
-                            <div className="flex-1 p-2 border-r border-black uppercase">
+                        <div key={index} className="flex border-b border-black text-sm">
+                            <div className="flex-1 p-2 border-r-2 border-black uppercase min-h-[32px]">
                                 {item.descricao}
                                 {item.qtd > 1 && <span className="text-xs text-gray-500 ml-2">(x{item.qtd})</span>}
                             </div>
-                            <div className="w-32 p-2 text-right border-l-2 border-black -ml-[2px]">
+                            <div className="w-32 p-2 text-right flex items-center justify-end font-semibold">
                                 {formatCurrency(item.total)}
                             </div>
                         </div>
                     ))}
+                    {/* Fill remaining space if list is short (optional for printed sheets look) */}
+                    <div className="flex-1"></div>
                 </div>
 
                 {/* Date and Total */}
-                <div className="border-t-2 border-black flex font-bold border-b-2">
+                <div className="border-t-2 border-black flex font-bold border-b-2 overflow-hidden">
                     <div className="flex-1 flex border-r-2 border-black">
-                        <div className="bg-gray-200 p-2 px-4 border-r-2 border-black flex items-center">Data que foi feito</div>
+                        <div className="bg-gray-100 p-2 px-4 border-r-2 border-black flex items-center uppercase text-[10px]">Data que foi feito</div>
                         <div className="p-2 px-4 flex items-center">{formatDate(os.data_agendamento)}</div>
                     </div>
-                    <div className="w-auto flex flex-col min-w-[300px]">
+                    <div className="flex flex-col">
                         {os.desconto > 0 && (
-                            <div className="flex border-b border-black">
-                                <div className="bg-gray-200 p-1 px-4 border-r-2 border-black flex-1 flex items-center text-xs justify-end">Desconto ({os.desconto}%)</div>
-                                <div className="p-1 px-4 text-sm flex items-center w-32 justify-end text-red-600">
+                            <div className="flex border-b-2 border-black">
+                                <div className="bg-gray-100 p-1 px-4 border-r-2 border-black flex-1 flex items-center text-xs justify-end uppercase">Desconto ({os.desconto}%)</div>
+                                <div className="p-1 px-4 text-sm flex items-center min-w-[128px] justify-end text-red-600">
                                     - {formatCurrency(discountValue)}
                                 </div>
                             </div>
                         )}
                         <div className="flex flex-1">
-                            <div className="bg-gray-200 p-2 px-4 border-r-2 border-black flex-1 flex items-center justify-end text-[10px] md:text-xs">Valor do Serviço - Total</div>
-                            <div className="p-2 px-4 text-base md:text-xl flex items-center w-32 justify-end">{formatCurrency(finalTotal)}</div>
+                            <div className="bg-gray-100 p-2 px-4 border-r-2 border-black flex-1 flex items-center justify-end text-[10px] uppercase">Valor do Serviço - Total</div>
+                            <div className="p-2 px-4 text-base md:text-xl flex items-center min-w-[128px] justify-end whitespace-nowrap">{formatCurrency(finalTotal)}</div>
                         </div>
                     </div>
                 </div>

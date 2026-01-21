@@ -10,42 +10,36 @@ interface DashboardStatsProps {
 
 export function DashboardStats({ revenue, receivables, payables, averageTicket, monthlyGrowth = 0 }: DashboardStatsProps) {
     return (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            {/* Revenue Card - Highlighted */}
-            <div className="bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-3xl p-6 text-white shadow-xl shadow-emerald-200">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+            {/* Revenue Card */}
+            <div className="bg-gradient-to-br from-white to-emerald-50/50 rounded-3xl p-6 shadow-xl shadow-emerald-500/10 border border-slate-100 border-t-4 border-t-emerald-500 relative overflow-hidden group hover:shadow-emerald-500/20 hover:-translate-y-1 transition-all duration-300">
                 <div className="flex items-center justify-between mb-4">
-                    <div className="p-3 bg-white/20 rounded-2xl">
+                    <div className="p-3 bg-emerald-500 rounded-2xl shadow-lg shadow-emerald-500/30 group-hover:scale-110 transition-transform">
                         <DollarSign className="h-6 w-6 text-white" />
                     </div>
-                    {monthlyGrowth !== 0 && (
-                        <div className={`flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full ${monthlyGrowth > 0 ? 'bg-white/20 text-white' : 'bg-red-500/20 text-red-100'}`}>
-                            {monthlyGrowth > 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownLeft className="h-3 w-3" />}
-                            {Math.abs(monthlyGrowth)}%
-                        </div>
-                    )}
                 </div>
                 <div className="space-y-1">
-                    <p className="text-emerald-100 text-sm font-medium">Faturamento (Este Mês)</p>
-                    <h3 className="text-3xl font-bold tracking-tight">
+                    <p className="text-slate-500 text-sm font-medium">Faturamento</p>
+                    <h3 className="text-2xl font-bold tracking-tight text-slate-800">
                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(revenue)}
                     </h3>
                 </div>
-                <div className="mt-4 pt-4 border-t border-white/10 flex items-center gap-2 text-xs text-emerald-100 opacity-80">
-                    <TrendingUp className="h-3 w-3" />
-                    <span>Atualizado em tempo real</span>
+                <div className="mt-4 pt-4 border-t border-slate-100 flex items-center gap-2 text-xs text-emerald-600 font-bold">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>AO VIVO</span>
                 </div>
             </div>
 
             {/* Ticket Médio Card */}
-            <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+            <div className="bg-gradient-to-br from-white to-indigo-50/50 rounded-3xl p-6 shadow-xl shadow-indigo-500/10 border border-slate-100 border-t-4 border-t-indigo-500 relative overflow-hidden group hover:shadow-indigo-500/20 hover:-translate-y-1 transition-all duration-300">
                 <div className="flex items-center justify-between mb-4">
-                    <div className="p-3 bg-indigo-100 rounded-2xl">
-                        <Receipt className="h-6 w-6 text-indigo-600" />
+                    <div className="p-3 bg-indigo-500 rounded-2xl shadow-lg shadow-indigo-500/30 group-hover:scale-110 transition-transform">
+                        <Receipt className="h-6 w-6 text-white" />
                     </div>
                 </div>
                 <div className="space-y-1">
                     <p className="text-slate-500 text-sm font-medium">Ticket Médio</p>
-                    <h3 className="text-3xl font-bold tracking-tight text-slate-800">
+                    <h3 className="text-2xl font-bold tracking-tight text-slate-800">
                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(averageTicket)}
                     </h3>
                 </div>
@@ -55,15 +49,15 @@ export function DashboardStats({ revenue, receivables, payables, averageTicket, 
             </div>
 
             {/* Receivables Card */}
-            <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+            <div className="bg-gradient-to-br from-white to-sky-50/50 rounded-3xl p-6 shadow-xl shadow-sky-500/10 border border-slate-100 border-t-4 border-t-sky-500 relative overflow-hidden group hover:shadow-sky-500/20 hover:-translate-y-1 transition-all duration-300">
                 <div className="flex items-center justify-between mb-4">
-                    <div className="p-3 bg-sky-100 rounded-2xl">
-                        <Wallet className="h-6 w-6 text-sky-600" />
+                    <div className="p-3 bg-sky-500 rounded-2xl shadow-lg shadow-sky-500/30 group-hover:scale-110 transition-transform">
+                        <Wallet className="h-6 w-6 text-white" />
                     </div>
                 </div>
                 <div className="space-y-1">
-                    <p className="text-slate-500 text-sm font-medium">A Receber (Pendentes)</p>
-                    <h3 className="text-3xl font-bold tracking-tight text-slate-800">
+                    <p className="text-slate-500 text-sm font-medium">A Receber</p>
+                    <h3 className="text-2xl font-bold tracking-tight text-slate-800">
                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(receivables)}
                     </h3>
                 </div>
@@ -73,20 +67,20 @@ export function DashboardStats({ revenue, receivables, payables, averageTicket, 
             </div>
 
             {/* Payables Card */}
-            <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+            <div className="bg-gradient-to-br from-white to-orange-50/50 rounded-3xl p-6 shadow-xl shadow-orange-500/10 border border-slate-100 border-t-4 border-t-orange-500 relative overflow-hidden group hover:shadow-orange-500/20 hover:-translate-y-1 transition-all duration-300">
                 <div className="flex items-center justify-between mb-4">
-                    <div className="p-3 bg-orange-100 rounded-2xl">
-                        <ArrowDownLeft className="h-6 w-6 text-orange-600" />
+                    <div className="p-3 bg-orange-500 rounded-2xl shadow-lg shadow-orange-500/30 group-hover:scale-110 transition-transform">
+                        <ArrowDownLeft className="h-6 w-6 text-white" />
                     </div>
                 </div>
                 <div className="space-y-1">
                     <p className="text-slate-500 text-sm font-medium">Contas a Pagar</p>
-                    <h3 className="text-3xl font-bold tracking-tight text-slate-800">
+                    <h3 className="text-2xl font-bold tracking-tight text-slate-800">
                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(payables)}
                     </h3>
                 </div>
                 <div className="mt-4 pt-4 border-t border-slate-100 text-xs text-slate-400">
-                    Comissões e Despesas aprovadas
+                    Pendências aprovadas
                 </div>
             </div>
         </div>

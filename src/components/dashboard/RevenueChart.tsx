@@ -11,7 +11,7 @@ interface RevenueChartProps {
 
 export function RevenueChart({ data }: RevenueChartProps) {
     return (
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+        <div className="bg-gradient-to-br from-white to-emerald-50/30 p-6 rounded-3xl shadow-xl shadow-emerald-500/5 border border-slate-100 border-l-4 border-l-emerald-500 hover:shadow-emerald-500/10 transition-all duration-300">
             <div className="mb-6">
                 <h3 className="text-lg font-bold text-slate-800">Histórico de Faturamento</h3>
                 <p className="text-sm text-slate-500">Acompanhamento dos últimos meses</p>
