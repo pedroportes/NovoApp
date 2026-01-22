@@ -67,11 +67,18 @@ export function useLicenseCheck() {
             let plan: PlanType = 'free'
             if (companyData.subscription_status === 'active') {
                 const priceId = companyData.subscription_price_id
-                if (priceId === 'price_1Sn40G2HN3YhJoauSSD0AcEE') plan = 'essencial'
+                // Mapeamento de IDs de Produção (Live)
+                if (priceId === 'price_1SsUSMC2SBfOxdrqfHxP7H4q') plan = 'essencial'
+                else if (priceId === 'price_1SsUaDC2SBfOxdrq9LBbQkcl') plan = 'pro'
+                else if (priceId === 'price_1SsUe8C2SBfOxdrqRMtj4wjh') plan = 'operacional'
+                else if (priceId === 'price_1SsUkBC2SBfOxdrqofDd7Euj') plan = 'prime'
+                
+                // Mantendo compatibilidade com plano de teste de R$ 1,99 (Tratado como Pro)
+                else if (priceId === 'price_1SsOJhC2SBfOxdrqy7Jf2xNO') plan = 'pro'
+                
+                // Fallbacks antigos (se necessário manter por segurança, senão remover)
                 else if (priceId === 'price_1Sn41V2HN3YhJoauwIng5GnO' || priceId === '12990') plan = 'pro'
-                else if (priceId === 'price_1Sn42t2HN3YhJoauLrtAaWr0') plan = 'operacional'
-                else if (priceId === 'price_1Sn44d2HN3YhJoaumqXIuvAg') plan = 'prime'
-                else plan = 'essencial' // Fallback to basic paid plan if price ID unknown but active
+                else plan = 'essencial'
             }
 
             // 3. Calculate Trial Days

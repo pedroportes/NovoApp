@@ -14,7 +14,7 @@ export function Plans() {
     const PLANS = [
         {
             id: 'essencial', // ID INTERNO PARA CONTROLE VISUAL
-            stripe_price_id: 'price_1Sn40G2HN3YhJoauSSD0AcEE', // Atualizado com ID real
+            stripe_price_id: 'price_1SsUSMC2SBfOxdrqfHxP7H4q', // Atualizado com ID real
             name: 'Essencial',
             price: 'R$ 59,90',
             period: '/mês',
@@ -24,7 +24,7 @@ export function Plans() {
         },
         {
             id: 'pro',
-            stripe_price_id: 'price_1Sn41V2HN3YhJoauwIng5GnO', // Pro Fluxo
+            stripe_price_id: 'price_1SsUaDC2SBfOxdrq9LBbQkcl', // Pro Fluxo
             name: 'Pro Fluxo',
             price: 'R$ 129,90',
             period: '/mês',
@@ -34,7 +34,7 @@ export function Plans() {
         },
         {
             id: 'operacional',
-            stripe_price_id: 'price_1Sn42t2HN3YhJoauLrtAaWr0', // Operacional
+            stripe_price_id: 'price_1SsUe8C2SBfOxdrqRMtj4wjh', // Operacional
             name: 'Operacional',
             price: 'R$ 249,90',
             period: '/mês',
@@ -44,13 +44,23 @@ export function Plans() {
         },
         {
             id: 'prime',
-            stripe_price_id: 'price_1Sn44d2HN3YhJoaumqXIuvAg', // Prime Fleet
+            stripe_price_id: 'price_1SsUkBC2SBfOxdrqofDd7Euj', // Prime Fleet
             name: 'Prime Fleet',
             price: 'R$ 499,90',
             period: '/mês',
             features: ['Técnicos Ilimitados', 'API Personalizada', 'White Label (Sua Marca)', 'Atendimento 24/7'],
             recommended: false,
             icon: Shield
+        },
+        {
+            id: 'teste',
+            stripe_price_id: 'price_1SsOJhC2SBfOxdrqy7Jf2xNO',
+            name: 'Plano de Teste (Live)',
+            price: 'R$ 1,99',
+            period: '/mês',
+            features: ['Plano para validação de cartão real', 'Acesso total por 30 dias', 'Suporte direto'],
+            recommended: false,
+            icon: Check
         }
     ]
 
@@ -67,7 +77,17 @@ export function Plans() {
                 }
             })
 
-            if (error) throw error
+            if (error) {
+                console.error('Erro de Rede/Supabase:', error)
+                throw new Error(error.message || 'Erro de conexão com o servidor')
+            }
+
+            // Agora a Function retorna 200 mesmo com erro para a gente conseguir ler.
+            if (data && (data as any).error) {
+                console.error('Erro retornado pelo Stripe:', data)
+                throw new Error((data as any).error)
+            }
+
             if (data?.url) {
                 window.location.href = data.url
             }

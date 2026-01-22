@@ -25,6 +25,7 @@ const Settings = lazy(() => import('./pages/Settings').then(module => ({ default
 const Financial = lazy(() => import('./pages/Financial').then(module => ({ default: module.Financial })))
 const Schedule = lazy(() => import('./pages/Schedule').then(module => ({ default: module.Schedule })))
 const Plans = lazy(() => import('./pages/Plans').then(module => ({ default: module.Plans })))
+const PlansSuccess = lazy(() => import('./pages/PlansSuccess').then(module => ({ default: module.PlansSuccess })))
 const TechnicianDashboard = lazy(() => import('./pages/TechnicianDashboard').then(module => ({ default: module.TechnicianDashboard })))
 const TechnicianExpenses = lazy(() => import('./pages/TechnicianExpenses').then(module => ({ default: module.TechnicianExpenses })))
 const TechnicianFinancial = lazy(() => import('./pages/TechnicianFinancial').then(module => ({ default: module.TechnicianFinancial })))
@@ -81,6 +82,7 @@ function App() {
                                     <Route path="/expenses" element={<TechnicianExpenses />} />
                                     <Route path="/experiments" element={<TechnicianExpenses />} />
                                     <Route path="/plans" element={<Plans />} />
+                                    <Route path="/plans/success" element={<PlansSuccess />} />
                                     <Route path="/unfinished-services" element={<UnfinishedServices />} />
                                     <Route path="/ai-chatbot" element={<AIChatbot />} />
                                 </Route>

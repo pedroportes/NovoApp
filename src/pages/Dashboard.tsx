@@ -1,4 +1,4 @@
-import { Truck, AlertTriangle, CheckCircle, Receipt, Download, FileChartColumn } from 'lucide-react'
+import { Truck, AlertTriangle, CheckCircle, Receipt, Download, FileChartColumn, ArrowUpRight } from 'lucide-react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
@@ -162,10 +162,10 @@ export function Dashboard() {
                     .lte('created_at', dateRange.end.toISOString())
                     .order('updated_at', { ascending: false })
                     .limit(5),
-                // 8. Service Distribution
+                // 8. Service Distribution & Stats Accuracy
                 supabase
                     .from('ordens_servico')
-                    .select('itens')
+                    .select('itens, status, valor_total')
                     .eq('empresa_id', userData.empresa_id)
                     .neq('status', 'CANCELADO')
                     .gte('created_at', dateRange.start.toISOString())
@@ -266,19 +266,20 @@ export function Dashboard() {
             setChartData(historical);
 
             // Set Stats
-            if (statsData && statsData[0]) {
-                const revenue = statsData[0].period_revenue || 0
-                const count = completedCount || 0
-                const avgTicket = count > 0 ? revenue / count : 0
+            if (allOS) {
+                const completedOS = allOS.filter((os: any) => ['CONCLUIDO', 'concluido'].includes(os.status))
+                const completedRevenue = completedOS.reduce((acc: number, os: any) => acc + (Number(os.valor_total) || 0), 0)
+                const count = completedOS.length
+                const avgTicket = count > 0 ? completedRevenue / count : 0
 
                 setStats({
-                    revenue: revenue,
-                    monthlyRevenue: revenue,
+                    revenue: completedRevenue,
+                    monthlyRevenue: completedRevenue,
                     receivables: receivables,
                     payables: payables,
                     averageTicket: avgTicket,
-                    activeServices: statsData[0].active_services || 0,
-                    newClients: statsData[0].total_clients || 0,
+                    activeServices: statsData ? (statsData[0]?.active_services || 0) : 0,
+                    newClients: statsData ? (statsData[0]?.total_clients || 0) : 0,
                     commissions: totalCommissions
                 })
             }
@@ -497,6 +498,14 @@ export function Dashboard() {
                     <div className="flex items-center gap-2 bg-slate-100/50 backdrop-blur-sm px-3 py-1.5 rounded-2xl border border-slate-200/50">
                         <ShieldCheck className="h-4 w-4 text-emerald-500" />
                         <span className="text-xs font-bold text-slate-600 uppercase tracking-tight"> Plano {plan} </span>
+                        {plan !== 'prime' && (
+                            <button
+                                onClick={() => navigate('/plans')}
+                                className="ml-1 text-[9px] bg-emerald-600 text-white px-2 py-0.5 rounded-md font-black hover:bg-emerald-700 transition-all uppercase tracking-tighter shadow-sm hover:scale-105 active:scale-95"
+                            >
+                                Upgrade
+                            </button>
+                        )}
                     </div>
 
                     {isTrial ? (
@@ -506,7 +515,13 @@ export function Dashboard() {
                                 {isTrialExpired ? 'Período de Teste Expirado' : `Período de Teste (${7 - (usage.daysUsed || 0)} dias restantes)`}
                             </span>
                             {!isTrialExpired && (
-                                <button onClick={() => navigate('/settings/plan')} className="text-[10px] underline ml-1 hover:opacity-80">Assinar agora</button>
+                                <button
+                                    onClick={() => navigate('/plans')}
+                                    className="ml-2 text-[10px] bg-amber-600 text-white px-2.5 py-1 rounded-lg font-black hover:bg-amber-700 transition-all uppercase tracking-wide shadow-md shadow-amber-500/20 flex items-center gap-1 group"
+                                >
+                                    Assinar agora
+                                    <ArrowUpRight className="h-3 w-3 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                                </button>
                             )}
                         </div>
                     ) : (
@@ -576,13 +591,15 @@ export function Dashboard() {
             {/* LISTAS INFERIORES */}
             <div className="grid gap-6 md:grid-cols-2">
                 {/* LISTA RECENTE */}
-                <div className="bg-gradient-to-br from-white to-indigo-50/30 rounded-3xl shadow-xl shadow-indigo-500/5 border border-slate-100 border-l-4 border-l-indigo-500 p-4 md:p-6 hover:shadow-indigo-500/10 transition-all duration-300">
+                <div className="bg-white rounded-3xl shadow-2xl shadow-indigo-500/10 border border-slate-200/60 border-l-4 border-l-indigo-500 p-4 md:p-6 hover:shadow-indigo-500/20 hover:-translate-y-1 transition-all duration-500 group">
                     <div className="flex items-center justify-between mb-6">
-                        <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                            <FileChartColumn className="h-5 w-5 text-emerald-500" />
+                        <h3 className="text-lg font-black text-slate-800 flex items-center gap-3">
+                            <div className="p-2 bg-indigo-500 rounded-xl shadow-lg shadow-indigo-500/30 group-hover:scale-110 transition-transform">
+                                <FileChartColumn className="h-5 w-5 text-white" />
+                            </div>
                             Recentes
                         </h3>
-                        <button onClick={() => navigate('/service-orders')} className="text-sm font-medium text-emerald-600 hover:text-emerald-700">Ver</button>
+                        <button onClick={() => navigate('/service-orders')} className="text-xs font-bold uppercase tracking-widest text-indigo-600 hover:text-indigo-700 bg-indigo-50 px-3 py-1 rounded-full transition-colors">Ver Tudo</button>
                     </div>
 
                     <div className="space-y-4">
@@ -611,13 +628,15 @@ export function Dashboard() {
 
                 {/* DESPESAS PENDENTES (Somente Admin) */}
                 {userData?.cargo === 'admin' && pendingExpenses.length > 0 && (
-                    <div className="bg-gradient-to-br from-white to-amber-50/30 rounded-3xl shadow-xl shadow-amber-500/10 border border-slate-100 p-4 md:p-6 border-l-4 border-amber-400 hover:shadow-amber-500/20 transition-all duration-300">
+                    <div className="bg-white rounded-3xl shadow-2xl shadow-amber-500/10 border border-slate-200/60 border-l-4 border-l-amber-500 p-4 md:p-6 hover:shadow-amber-500/20 hover:-translate-y-1 transition-all duration-500 group">
                         <div className="flex items-center justify-between mb-6">
-                            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                                <AlertTriangle className="h-5 w-5 text-amber-500" />
+                            <h3 className="text-lg font-black text-slate-800 flex items-center gap-3">
+                                <div className="p-2 bg-amber-500 rounded-xl shadow-lg shadow-amber-500/30 group-hover:scale-110 transition-transform">
+                                    <AlertTriangle className="h-5 w-5 text-white" />
+                                </div>
                                 Requer Atenção
                             </h3>
-                            <button onClick={() => navigate('/financial')} className="text-sm font-medium text-amber-600 hover:text-amber-700">Resolver</button>
+                            <button onClick={() => navigate('/financial')} className="text-xs font-bold uppercase tracking-widest text-amber-600 hover:text-amber-700 bg-amber-50 px-3 py-1 rounded-full transition-colors">Resolver</button>
                         </div>
 
                         <div className="space-y-4">
@@ -655,7 +674,13 @@ export function Dashboard() {
 
                 {/* RASTREAMENTO EM TEMPO REAL (Somente Admin) */}
                 {userData?.cargo === 'admin' && (
-                    <div className="bg-gradient-to-br from-white to-slate-50/30 rounded-3xl shadow-xl shadow-slate-500/5 border border-slate-100 p-6 border-l-4 border-l-slate-400 hover:shadow-slate-500/10 transition-all duration-300">
+                    <div className="bg-white rounded-3xl shadow-2xl shadow-slate-500/10 border border-slate-200/60 border-l-4 border-l-slate-800 p-6 hover:shadow-slate-500/20 hover:-translate-y-1 transition-all duration-500">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="p-2 bg-slate-800 rounded-xl shadow-lg shadow-slate-800/30">
+                                <Truck className="h-5 w-5 text-white" />
+                            </div>
+                            <h3 className="text-lg font-black text-slate-800">Monitoramento</h3>
+                        </div>
                         <LiveMap />
                     </div>
                 )}

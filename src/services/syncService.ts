@@ -246,8 +246,8 @@ export const SyncService = {
         // Helper: Filter payload to only include valid Supabase columns
         const allowedColumns = [
             'id', 'empresa_id', 'cliente_id', 'cliente_nome', 'tecnico_id',
-            'status', 'data_agendamento', 'descricao', 'observacoes_internas',
-            'valor_total', 'itens', 'fotos_conclusao', 'deslocamento_iniciado_em',
+            'status', 'data_agendamento', 'descricao', 'observacoes',
+            'valor_total', 'itens', 'fotos', 'deslocamento_iniciado_em',
             'previsao_chegada', 'endereco', 'created_at', 'updated_at',
             'assinatura_cliente_url', 'orcamento_gerado', 'recibo_gerado', 'contrato_gerado'
         ];
@@ -262,6 +262,11 @@ export const SyncService = {
         // Fix mapping: local 'descricao_servico' -> remote 'descricao'
         if (payload.descricao_servico && !finalPayload.descricao) {
             finalPayload.descricao = payload.descricao_servico;
+        }
+
+        // Fix mapping: local 'observacoes' -> ensure it's mapped if it comes as 'observacoes' in payload
+        if (payload.observacoes && !finalPayload.observacoes) {
+            finalPayload.observacoes = payload.observacoes;
         }
 
         // SANITIZE: Convert empty strings to null for UUID fields to prevent "invalid input syntax for type uuid"

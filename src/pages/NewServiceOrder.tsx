@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useNavigate, useParams, useOutletContext, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Camera, FileText, Printer, Trash2, PenTool, Eraser, Calendar, Upload, Cloud, Wifi, CheckCircle2, AlertTriangle, Eye, Plus, User, ChevronDown, ClipboardList, ChevronRight, Loader2, Receipt } from 'lucide-react'
+import { ArrowLeft, Camera, FileText, Printer, Trash2, PenTool, Eraser, Calendar, Upload, Cloud, Wifi, CheckCircle2, AlertTriangle, Eye, Plus, User, ChevronDown, ClipboardList, ChevronRight, Loader2, Receipt, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -59,6 +59,9 @@ export function NewServiceOrder() {
     // preventing the circular calculation from messing up the input while typing.
     const [currencyInput, setCurrencyInput] = useState('')
     const [percentInput, setPercentInput] = useState('')
+
+    const [clientSearch, setClientSearch] = useState('')
+    const [isClientSearchOpen, setIsClientSearchOpen] = useState(false)
 
     // FAB Action Context
     const { setFabAction } = useOutletContext<{ setFabAction: (action: (() => void) | null) => void }>() ?? { setFabAction: () => { } }
@@ -187,7 +190,27 @@ export function NewServiceOrder() {
     const { technicians: rawTechnicians, loading: loadingTechs } = useOfflineTechnicians()
     const { services: rawServices, loading: loadingServices } = useOfflineServices()
 
-    const clients = rawClients || []
+    const clients = useMemo(() => {
+        if (!rawClients) return []
+
+        // 1. Sort by created_at DESC (Newest first)
+        const sorted = [...rawClients].sort((a, b) => {
+            const dateA = a.created_at ? new Date(a.created_at).getTime() : 0
+            const dateB = b.created_at ? new Date(b.created_at).getTime() : 0
+            return dateB - dateA
+        })
+
+        // 2. Filter by search query
+        if (!clientSearch) return sorted
+
+        const search = clientSearch.toLowerCase()
+        return sorted.filter(c =>
+            c.nome_razao.toLowerCase().includes(search) ||
+            (c.cpf_cnpj && c.cpf_cnpj.includes(search)) ||
+            (c.whatsapp && c.whatsapp.includes(search))
+        )
+    }, [rawClients, clientSearch])
+
     const services = rawServices || []
 
     // Filter technicians based on role
@@ -701,29 +724,95 @@ export function NewServiceOrder() {
                     <div className="space-y-2">
                         <Label className="text-slate-600 font-medium ml-1">Cliente</Label>
                         <div className="relative">
-                            <select
-                                className="w-full h-14 pl-4 pr-10 bg-slate-50 border-0 rounded-2xl text-slate-700 font-medium focus:ring-2 focus:ring-emerald-500/20 transition-all appearance-none"
-                                value={formData.cliente_id}
-                                onChange={e => setFormData({ ...formData, cliente_id: e.target.value })}
-                            >
-                                <option value="">Selecione o Cliente</option>
-                                {clients.map(c => <option key={c.id} value={c.id}>{c.nome_razao}</option>)}
-                            </select>
-                            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 h-5 w-5 pointer-events-none" />
+                            <Dialog open={isClientSearchOpen} onOpenChange={setIsClientSearchOpen}>
+                                <DialogTrigger asChild>
+                                    <button
+                                        type="button"
+                                        className="w-full h-14 pl-4 pr-10 bg-slate-50 border-0 rounded-2xl text-slate-700 font-medium focus:ring-2 focus:ring-emerald-500/20 transition-all text-left flex items-center justify-between"
+                                    >
+                                        <span className={formData.cliente_id ? 'text-slate-700' : 'text-slate-400'}>
+                                            {clients.find(c => c.id === formData.cliente_id)?.nome_razao || 'Pesquisar Cliente...'}
+                                        </span>
+                                        <Search className="h-5 w-5 text-slate-400" />
+                                    </button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-xl p-0 overflow-hidden bg-white rounded-3xl sm:rounded-3xl border-none shadow-2xl">
+                                    <div className="p-6 space-y-4">
+                                        <div className="relative">
+                                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                                            <input
+                                                autoFocus
+                                                placeholder="Nome, CPF ou WhatsApp..."
+                                                className="w-full h-12 pl-12 pr-4 bg-slate-100 border-0 rounded-xl text-slate-700 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+                                                value={clientSearch}
+                                                onChange={e => setClientSearch(e.target.value)}
+                                            />
+                                            {clientSearch && (
+                                                <button
+                                                    onClick={() => setClientSearch('')}
+                                                    className="absolute right-4 top-1/2 -translate-y-1/2 p-1 hover:bg-slate-200 rounded-full transition-colors"
+                                                >
+                                                    <X className="h-4 w-4 text-slate-400" />
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        <div className="max-h-[350px] overflow-y-auto pr-1 space-y-1 scrollbar-thin scrollbar-thumb-slate-200">
+                                            {clients.length > 0 ? (
+                                                clients.map(client => (
+                                                    <button
+                                                        key={client.id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setFormData({ ...formData, cliente_id: client.id });
+                                                            setIsClientSearchOpen(false);
+                                                            setClientSearch('');
+                                                        }}
+                                                        className={`w-full p-4 text-left rounded-2xl transition-all border-2 ${formData.cliente_id === client.id
+                                                            ? 'bg-emerald-50 border-emerald-500/30 text-emerald-900'
+                                                            : 'bg-white border-transparent hover:bg-slate-50 text-slate-700'
+                                                            }`}
+                                                    >
+                                                        <div className="font-bold">{client.nome_razao}</div>
+                                                        <div className="text-xs text-slate-400 flex gap-3 mt-1">
+                                                            {client.cpf_cnpj && <span>{client.cpf_cnpj}</span>}
+                                                            {client.whatsapp && <span>{client.whatsapp}</span>}
+                                                        </div>
+                                                    </button>
+                                                ))
+                                            ) : (
+                                                <div className="text-center py-8 text-slate-400">
+                                                    Nenhum cliente encontrado.
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="pt-2 border-t border-slate-100 flex justify-end">
+                                            <Button
+                                                variant="ghost"
+                                                className="text-emerald-600 font-bold"
+                                                onClick={() => navigate('/clients?new=true')}
+                                            >
+                                                + Novo Cliente
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </DialogContent>
+                            </Dialog>
                         </div>
                     </div>
 
                     <div className="space-y-3">
                         <Label className="text-slate-600 font-medium ml-1">Tipo de Documento</Label>
-                        <div className="flex bg-slate-100 p-1 rounded-xl md:rounded-full overflow-x-auto md:overflow-visible">
+                        <div className="flex bg-slate-200 p-1.5 rounded-xl md:rounded-full overflow-x-auto md:overflow-visible">
                             {['ORCAMENTO', 'RECIBO', 'CONTRATO'].map(type => (
                                 <button
                                     key={type}
                                     type="button"
                                     onClick={() => setFormData({ ...formData, tipo: type })}
                                     className={`flex-1 py-2 md:py-3 px-2 text-[10px] md:text-xs font-bold rounded-lg md:rounded-full transition-all duration-300 whitespace-nowrap ${formData.tipo === type
-                                        ? 'bg-white text-emerald-600 shadow-md transform scale-100'
-                                        : 'text-slate-400 hover:text-slate-600'
+                                        ? 'bg-emerald-600 text-white shadow-lg transform scale-100'
+                                        : 'text-slate-600 hover:text-slate-800'
                                         }`}
                                 >
                                     {type}
@@ -829,9 +918,9 @@ export function NewServiceOrder() {
 
                     {isCalculatorOpen && (
                         <div className="p-6 bg-white space-y-6">
-                            <div className="flex bg-slate-100 p-1 rounded-xl">
-                                <button type="button" onClick={() => setCalcType('rectangular')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${calcType === 'rectangular' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-400'}`}>RETANGULAR</button>
-                                <button type="button" onClick={() => setCalcType('cilindrico')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${calcType === 'cilindrico' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-400'}`}>CILÍNDRICO</button>
+                            <div className="flex bg-slate-200 p-1.5 rounded-xl">
+                                <button type="button" onClick={() => setCalcType('rectangular')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${calcType === 'rectangular' ? 'bg-sky-600 text-white shadow-lg' : 'text-slate-600 hover:text-slate-800'}`}>RETANGULAR</button>
+                                <button type="button" onClick={() => setCalcType('cilindrico')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${calcType === 'cilindrico' ? 'bg-sky-600 text-white shadow-lg' : 'text-slate-600 hover:text-slate-800'}`}>CILÍNDRICO</button>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 {calcType === 'rectangular' ? (<>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import XLSX from 'xlsx-js-style'
-import { useOutletContext, useNavigate } from 'react-router-dom'
+import { useOutletContext, useNavigate, useSearchParams } from 'react-router-dom'
 import { Plus, Search, Pencil, Trash2, Phone, Mail, User as UserIcon, MapPin, FileText, Camera, Upload, Download, Eye, Image as ImageIcon, Mic, MicOff } from 'lucide-react'
 import { useVoiceRecognition } from '@/hooks/useVoiceRecognition'
 import { SearchAssistant, SmartFilter } from '@/services/searchAssistant'
@@ -180,6 +180,27 @@ export function Clients() {
     }
 
     const { setFabAction } = useOutletContext<{ setFabAction: (action: (() => void) | null) => void }>() ?? { setFabAction: () => { } }
+
+    const [searchParams, setSearchParams] = useSearchParams()
+
+    useEffect(() => {
+        if (searchParams.get('new') === 'true' && canAddClient !== undefined) {
+            // Wait for license check to be ready
+            if (canAddClient) {
+                // Remove the param so it doesn't re-open on refresh
+                const newParams = new URLSearchParams(searchParams)
+                newParams.delete('new')
+                setSearchParams(newParams, { replace: true })
+
+                handleNewClientClick()
+            } else if (isTrialExpired || usage.clients >= Number(limits.clients)) {
+                // If they can't add, we still clear the param so they don't get stuck
+                const newParams = new URLSearchParams(searchParams)
+                newParams.delete('new')
+                setSearchParams(newParams, { replace: true })
+            }
+        }
+    }, [searchParams, canAddClient, handleNewClientClick, setSearchParams, isTrialExpired, usage, limits])
 
     useEffect(() => {
         setFabAction(handleNewClientClick)

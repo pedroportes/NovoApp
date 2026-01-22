@@ -53,8 +53,8 @@ serve(async (req) => {
                     .from('empresas')
                     .update({
                         stripe_subscription_id: subscriptionId,
-                        subscription_status: 'active', // Assuming success means active initially
-                        subscription_price_id: session.amount_total // Or getting from line_items expanded
+                        subscription_status: 'active',
+                        subscription_price_id: session.metadata?.price_id || session.subscription_price_id
                     })
                     .eq('stripe_customer_id', customerId)
 
