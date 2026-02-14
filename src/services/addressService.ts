@@ -1,6 +1,6 @@
 // Serviço para autocomplete de endereço via Geoapify
 
-const GEOAPIFY_API_KEY = 'e398041403a845a18f2948f7a9d347f4'
+const GEOAPIFY_API_KEY = import.meta.env.VITE_GEOAPIFY_API_KEY || ''
 
 export interface AddressSuggestion {
     formatted: string

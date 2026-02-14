@@ -4,9 +4,11 @@ import { MainLayout } from '@/components/MainLayout'
 import { ThemeProvider } from "@/components/theme-provider"
 import { AuthProvider } from '@/contexts/AuthContext'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
+import { RequireSuperAdmin } from '@/components/RequireSuperAdmin'
 import { Toaster } from 'sonner'
 import { OfflineSyncProvider } from '@/components/OfflineSyncProvider'
 import { ChatAssistant } from '@/components/ChatAssistant'
+import { AffiliateTracker } from '@/components/AffiliateTracker'
 
 // Lazy Load Pages
 const Dashboard = lazy(() => import('@/pages/Dashboard').then(module => ({ default: module.Dashboard })))
@@ -34,11 +36,21 @@ const TechnicianFinancialPrint = lazy(() => import('./pages/TechnicianFinancialP
 const UnfinishedServices = lazy(() => import('./pages/UnfinishedServices').then(module => ({ default: module.UnfinishedServices })))
 const AIChatbot = lazy(() => import('./pages/admin/AIChatbot').then(module => ({ default: module.AIChatbot })))
 
+// Super Admin Pages
+const SuperAdminDashboard = lazy(() => import('./pages/super-admin/SuperAdminDashboard').then(module => ({ default: module.SuperAdminDashboard })))
+const CompanyDetails = lazy(() => import('./pages/super-admin/CompanyDetails').then(module => ({ default: module.CompanyDetails })))
+const SuperAdminLogin = lazy(() => import('./pages/super-admin/SuperAdminLogin').then(module => ({ default: module.SuperAdminLogin })))
+
 const LoadingSpinner = () => (
     <div className="flex h-screen w-full items-center justify-center bg-slate-50">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
     </div>
 )
+
+const AffiliateLayout = lazy(() => import('./pages/affiliates/AffiliateLayout').then(module => ({ default: module.AffiliateLayout })))
+const AffiliateDashboard = lazy(() => import('./pages/affiliates/AffiliateDashboard').then(module => ({ default: module.AffiliateDashboard })))
+const AffiliateLinks = lazy(() => import('./pages/affiliates/AffiliateLinks').then(module => ({ default: module.AffiliateLinks })))
+const AffiliatePayments = lazy(() => import('./pages/affiliates/AffiliatePayments').then(module => ({ default: module.AffiliatePayments })))
 
 function App() {
     return (
@@ -48,12 +60,14 @@ function App() {
                     <Toaster richColors position="top-right" />
                     <ChatAssistant />
                     <BrowserRouter>
+                        <AffiliateTracker />
                         <Suspense fallback={<LoadingSpinner />}>
                             <Routes>
                                 {/* Public Routes */}
                                 <Route path="/login" element={<Login />} />
                                 <Route path="/signup" element={<SignUp />} />
                                 <Route path="/update-password" element={<UpdatePassword />} />
+                                <Route path="/super-admin/login" element={<SuperAdminLogin />} />
 
                                 {/* Public Print Routes (Access via Link) */}
                                 <Route path="/print/service-orders/:id" element={<PrintServiceOrder />} />
@@ -85,6 +99,32 @@ function App() {
                                     <Route path="/plans/success" element={<PlansSuccess />} />
                                     <Route path="/unfinished-services" element={<UnfinishedServices />} />
                                     <Route path="/ai-chatbot" element={<AIChatbot />} />
+                                    {/* (Super Admin routes movidas para fora do ProtectedRoute) */}
+                                </Route>
+
+                                {/* Super Admin Routes — fora do ProtectedRoute pois SA tem empresa_id=NULL */}
+                                <Route path="/super-admin" element={
+                                    <RequireSuperAdmin>
+                                        <SuperAdminDashboard />
+                                    </RequireSuperAdmin>
+                                } />
+                                <Route path="/super-admin/empresa/:empresaId" element={
+                                    <RequireSuperAdmin>
+                                        <CompanyDetails />
+                                    </RequireSuperAdmin>
+                                } />
+
+                                {/* Affiliate Routes */}
+                                <Route path="/afiliado" element={
+                                    <ProtectedRoute>
+                                        <AffiliateLayout />
+                                    </ProtectedRoute>
+                                }>
+                                    <Route index element={<Navigate to="/afiliado/dashboard" replace />} />
+                                    <Route path="dashboard" element={<AffiliateDashboard />} />
+                                    <Route path="links" element={<AffiliateLinks />} />
+                                    <Route path="financeiro" element={<AffiliatePayments />} />
+                                    <Route path="perfil" element={<div className="p-8">Em breve: Perfil</div>} />
                                 </Route>
 
 

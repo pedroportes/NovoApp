@@ -273,7 +273,7 @@ export const FocusNFeService = {
                 tipo_retencao_iss: 1,
             }
 
-            console.log('PAYLOAD NFSe NACIONAL:', JSON.stringify(payload, null, 2))
+
             return this.createNFe(payload as any, os.empresa_id || undefined)
 
         } else {
@@ -321,7 +321,7 @@ export const FocusNFeService = {
                 }
             }
 
-            console.log('PAYLOAD NFSe TRADICIONAL:', JSON.stringify(payload, null, 2))
+
             return this.createNFe(payload as any, os.empresa_id || undefined)
         }
     }

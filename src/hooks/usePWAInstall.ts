@@ -29,7 +29,7 @@ export const usePWAInstall = () => {
             e.preventDefault();
             setDeferredPrompt(e as BeforeInstallPromptEvent);
             setIsInstallable(true);
-            console.log('[PWA] Evento beforeinstallprompt capturado!');
+
         };
 
         // Detecta quando o app foi instalado
@@ -37,7 +37,7 @@ export const usePWAInstall = () => {
             setIsInstalled(true);
             setIsInstallable(false);
             setDeferredPrompt(null);
-            console.log('[PWA] App instalado com sucesso!');
+
         };
 
         window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -51,7 +51,7 @@ export const usePWAInstall = () => {
 
     const install = async () => {
         if (!deferredPrompt) {
-            console.log('[PWA] Sem prompt disponível');
+
             return false;
         }
 

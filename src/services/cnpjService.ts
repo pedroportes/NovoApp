@@ -26,7 +26,7 @@ export async function searchCnpj(cnpj: string): Promise<CnpjResponse | null> {
 
     // TENTATIVA 1: BrasilAPI
     try {
-        console.log(`Buscando CNPJ ${cleanCnpj} na BrasilAPI...`)
+
         const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cleanCnpj}`)
 
         if (response.ok) {
@@ -40,7 +40,7 @@ export async function searchCnpj(cnpj: string): Promise<CnpjResponse | null> {
     // TENTATIVA 2: ReceitaWS (Fallback)
     // Nota: ReceitaWS Free tem limite de 3 requisições por minuto, mas é um bom backup
     try {
-        console.log(`Buscando CNPJ ${cleanCnpj} na ReceitaWS...`)
+
         // Usando JSONP ou Proxy seria ideal, mas o fetch direto funciona em muitos casos se a API permitir CORS ou se for ignorado em dev
         // Para garantir, vamos usar uma alternativa pública que aceita CORS: https://publica.cnpj.ws/cnpj/{cnpj}
 

@@ -57,7 +57,7 @@ export function FinancialClosing() {
                 .order('nome_completo')
 
             if (error) throw error
-            console.log('Technicians loaded:', data)
+
 
             let filtered = data || []
             // If logged in as Technician, ONLY show self

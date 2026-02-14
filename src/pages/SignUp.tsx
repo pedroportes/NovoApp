@@ -12,6 +12,7 @@ export function SignUp() {
     const [password, setPassword] = useState('')
     const [confirmPassword, setConfirmPassword] = useState('')
     const [nomeEmpresa, setNomeEmpresa] = useState('')
+    const [whatsapp, setWhatsapp] = useState('')
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
     const [success, setSuccess] = useState(false)
@@ -23,7 +24,7 @@ export function SignUp() {
         setError('')
 
         // Validation
-        if (!nome || !email || !password || !confirmPassword || !nomeEmpresa) {
+        if (!nome || !email || !password || !confirmPassword || !nomeEmpresa || !whatsapp) {
             setError('Preencha todos os campos')
             return
         }
@@ -46,6 +47,8 @@ export function SignUp() {
         setLoading(true)
 
         try {
+            const affiliateId = localStorage.getItem('flowdrain_affiliate_id')
+
             // 1. Create user in Supabase Auth with metadata for Triggers
             const { data: authData, error: authError } = await supabase.auth.signUp({
                 email,
@@ -54,6 +57,8 @@ export function SignUp() {
                     data: {
                         full_name: nome,
                         nome_empresa: nomeEmpresa,
+                        whatsapp: whatsapp,
+                        referral_code: affiliateId,
                     }
                 }
             })
@@ -140,6 +145,23 @@ export function SignUp() {
                                 value={nomeEmpresa}
                                 onChange={(e) => setNomeEmpresa(e.target.value)}
                                 icon={<Building2 className="h-5 w-5" />}
+                                disabled={loading}
+                                className="h-12"
+                            />
+                        </div>
+
+                        {/* WhatsApp */}
+                        <div className="space-y-2">
+                            <label htmlFor="whatsapp" className="text-sm font-medium text-foreground">
+                                WhatsApp da Empresa
+                            </label>
+                            <Input
+                                id="whatsapp"
+                                type="text"
+                                placeholder="(11) 99999-9999"
+                                value={whatsapp}
+                                onChange={(e) => setWhatsapp(e.target.value)}
+                                icon={<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-phone"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" /></svg>}
                                 disabled={loading}
                                 className="h-12"
                             />

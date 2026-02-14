@@ -344,7 +344,7 @@ export const WebmaniaService = {
             }]
         }
 
-        console.log('PAYLOAD NFS-e WEBMANIA:', JSON.stringify(payload, null, 2))
+
 
         // 8. Enviar para API
         const response = await this.createNFSe(payload, os.empresa_id || undefined)

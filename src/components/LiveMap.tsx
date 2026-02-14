@@ -34,15 +34,14 @@ export const LiveMap = () => {
     // Função para buscar técnicos ativos
     const fetchActiveTechnicians = async () => {
         if (!empresaId) {
-            console.log('[LiveMap] Sem empresaId, não buscando técnicos');
+
             setLoading(false);
             return;
         }
         try {
             // Busca técnicos ativos nos últimos 30 minutos (mais flexível para debug)
             const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
-            console.log('[LiveMap] Buscando técnicos para empresa:', empresaId);
-            console.log('[LiveMap] Filtro de tempo desde:', thirtyMinutesAgo);
+
 
             const { data, error } = await supabase
                 .from('usuarios')
@@ -65,7 +64,7 @@ export const LiveMap = () => {
                 ultimo_update: t.ultimo_update
             })) as TechnicianLocation[];
 
-            console.log('[LiveMap] Técnicos encontrados:', validTechs.length, validTechs);
+
             setTechnicians(validTechs);
         } catch (err) {
             console.error('Erro ao buscar técnicos:', err);

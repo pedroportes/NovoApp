@@ -8,7 +8,7 @@ export const SyncService = {
         if (!navigator.onLine) return; // Can't pull if offline
 
         try {
-            console.log('🔄 Sync: Pulling data...')
+
 
             // 1. Clients
             const { data: clients, error: errClients } = await supabase
@@ -135,7 +135,7 @@ export const SyncService = {
                 await db.usuarios.bulkPut(localUsers)
             }
 
-            console.log('✅ Sync: Pull complete.')
+
 
         } catch (error) {
             console.error('❌ Sync Pull Error:', error)
@@ -146,29 +146,29 @@ export const SyncService = {
 
     async pushQueue() {
         if (!navigator.onLine) {
-            console.log('[SyncService] Offline - skipping pushQueue');
+
             return;
         }
 
         // Get all items in queue
         const queueItems = await db.sync_queue.toArray();
         if (queueItems.length === 0) {
-            console.log('[SyncService] No items in queue to push');
+
             return;
         }
 
-        console.log(`🚀 [SyncService] Pushing ${queueItems.length} changes...`, queueItems);
+
 
         // IMPORTANTE: Processar CLIENTES primeiro para evitar erro de FK nas OS
         const clienteItems = queueItems.filter(item => item.table === 'clientes');
         const osItems = queueItems.filter(item => item.table === 'ordens_servico');
         const orderedItems = [...clienteItems, ...osItems];
 
-        console.log(`[SyncService] Order: ${clienteItems.length} clientes first, then ${osItems.length} OS`);
+
 
         for (const item of orderedItems) {
             try {
-                console.log(`[SyncService] Processing queue item:`, item);
+
 
                 // Process based on table and action
                 if (item.table === 'clientes') {
@@ -179,7 +179,7 @@ export const SyncService = {
 
                 // If successful, remove from queue
                 await db.sync_queue.delete(item.id!);
-                console.log(`[SyncService] ✅ Removed item ${item.id} from queue`);
+
 
             } catch (error) {
                 console.error(`[SyncService] ❌ Failed to sync item ${item.id}:`, error);
@@ -187,13 +187,13 @@ export const SyncService = {
                 // For now, leave in queue.
             }
         }
-        console.log('✅ [SyncService] Push complete.')
+
     },
 
     async processClientSync(item: SyncQueueItem) {
         const { data: payload, action } = item;
 
-        console.log(`[SyncService] processClientSync - Action: ${action}, ID: ${payload.id}`);
+
 
         // Helper: Filter payload to only include valid Supabase columns
         const allowedColumns = [
@@ -219,7 +219,7 @@ export const SyncService = {
             }
         }
 
-        console.log('[SyncService] Client payload final:', finalPayload);
+
 
         if (action === 'create' || action === 'update') {
             const { data, error } = await supabase.from('clientes').upsert(finalPayload).select();
@@ -229,7 +229,7 @@ export const SyncService = {
                 throw error;
             }
 
-            console.log('[SyncService] ✅ Client synced successfully:', data);
+
             await db.clientes.update(payload.id, { synced: 1 });
 
         } else if (action === 'delete') {
@@ -241,7 +241,7 @@ export const SyncService = {
     async processOSSync(item: SyncQueueItem) {
         const { data: payload, action } = item;
 
-        console.log(`[SyncService] processOSSync - Action: ${action}, ID: ${payload.id}`);
+
 
         // Helper: Filter payload to only include valid Supabase columns
         const allowedColumns = [
@@ -277,7 +277,7 @@ export const SyncService = {
             }
         }
 
-        console.log('[SyncService] OS Payload final (Cleaned):', finalPayload);
+
 
         if (action === 'create' || action === 'update') {
             const { data, error } = await supabase.from('ordens_servico').upsert(finalPayload).select();
@@ -287,18 +287,18 @@ export const SyncService = {
                 throw error;
             }
 
-            console.log('[SyncService] ✅ Successfully synced to Supabase:', data);
+
             await db.ordens_servico.update(payload.id, { synced: 1 });
 
         } else if (action === 'delete') {
-            console.log(`[SyncService] Deleting OS ${payload.id} from Supabase...`);
+
             const { error } = await supabase.from('ordens_servico').delete().eq('id', payload.id);
 
             if (error) {
                 console.error('[SyncService] ❌ Supabase delete error:', error);
                 throw error;
             }
-            console.log('[SyncService] ✅ Successfully deleted from Supabase');
+
         }
     },
 

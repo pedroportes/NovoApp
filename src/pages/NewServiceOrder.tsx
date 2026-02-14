@@ -213,9 +213,12 @@ export function NewServiceOrder() {
 
     const services = rawServices || []
 
-    // Filter technicians based on role
+    // Filter technicians based on role and status
     const technicians = useMemo(() => {
         return rawTechnicians ? rawTechnicians.filter((t: any) => {
+            // Only show active technicians
+            if (t.status === false) return false
+
             if (userData?.cargo?.toLowerCase() === 'tecnico') {
                 return t.id === userData.id
             }

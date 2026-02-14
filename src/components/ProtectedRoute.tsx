@@ -7,7 +7,7 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-    const { user, userData, loading } = useAuth()
+    const { user, userData, loading, isSuperAdmin } = useAuth()
 
     if (loading) {
         return (
@@ -20,7 +20,17 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
         )
     }
 
-    if (!user || !userData || !userData.empresa_id) {
+    if (!user || !userData) {
+        return <Navigate to="/login" replace />
+    }
+
+    // Super Admin sem empresa_id → redireciona para painel SA
+    if (!userData.empresa_id && isSuperAdmin) {
+        return <Navigate to="/super-admin" replace />
+    }
+
+    // Usuário comum sem empresa_id → volta pro login
+    if (!userData.empresa_id) {
         return <Navigate to="/login" replace />
     }
 

@@ -67,6 +67,8 @@ export function Settings() {
         estado: ''
     })
 
+    const [userPassword, setUserPassword] = useState('')
+
 
 
     const { setFabAction } = useOutletContext<{ setFabAction: (action: (() => void) | null) => void }>() ?? { setFabAction: () => { } }
@@ -230,6 +232,13 @@ export function Settings() {
 
             if (error) throw error
 
+            // Update Password if provided (Admin)
+            if (userPassword) {
+                const { error: pwdError } = await supabase.auth.updateUser({ password: userPassword })
+                if (pwdError) throw pwdError
+                setUserPassword('') // Clear password field after successful update
+            }
+
             alert('Configurações salvas com sucesso!')
         } catch (error: any) {
             console.error('Erro ao salvar:', error)
@@ -237,7 +246,7 @@ export function Settings() {
         } finally {
             setSaving(false)
         }
-    }, [formData, configs, logoFile, logoPreview, userData, companySignatureBlob, companySignaturePreview])
+    }, [formData, configs, logoFile, logoPreview, userData, companySignatureBlob, companySignaturePreview, userPassword])
 
     // Technician Submit
     const handleTechSubmit = useCallback(async () => {
@@ -724,6 +733,47 @@ export function Settings() {
                             </div>
                         </div>
                     </>
+                )}
+
+
+                {/* ACCESS DATA SECTION - ADMIN ONLY */}
+                {!isTecnico && (
+                    <div className="space-y-6 bg-card p-6 rounded-xl border border-border shadow-sm h-fit md:col-span-2 lg:col-span-1">
+                        <h2 className="text-lg font-semibold flex items-center gap-2">
+                            <div className="p-2 bg-primary/10 rounded-lg">
+                                <Smartphone className="h-5 w-5 text-primary" />
+                            </div>
+                            Meus Dados de Acesso
+                        </h2>
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <Label>E-mail de Acesso</Label>
+                                <Input
+                                    value={userData?.email || ''}
+                                    className="h-10 bg-muted/50"
+                                    readOnly
+                                    disabled
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    O e-mail não pode ser alterado.
+                                </p>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Alterar Senha</Label>
+                                <Input
+                                    type="password"
+                                    value={userPassword}
+                                    onChange={e => setUserPassword(e.target.value)}
+                                    className="h-10 bg-muted/50"
+                                    placeholder="Digite a nova senha"
+                                    autoComplete="new-password"
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    Deixe em branco para manter a senha atual.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
                 )}
 
 

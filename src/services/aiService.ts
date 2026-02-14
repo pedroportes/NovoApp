@@ -200,7 +200,7 @@ Regras de Segurança:
 
                 let functionResult = null;
 
-                console.log(`🤖 IA solicitou função: ${functionName}`, args);
+
 
                 if (functionName === 'search_clients') {
                     functionResult = await this.searchClients(context.empresaId, args.query);

@@ -579,6 +579,7 @@ export type Database = {
                     placa_carro?: string | null
                     avatar?: string | null
                     signature_url?: string | null
+                    status: boolean | null
                 }
                 Insert: {
                     active?: boolean | null

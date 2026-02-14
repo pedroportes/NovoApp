@@ -9,6 +9,7 @@ interface AuthContextType {
     userData: UserData | null
     empresaId: string | null
     loading: boolean
+    isSuperAdmin: boolean
     signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
     signOut: () => Promise<void>
 }
@@ -20,6 +21,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [userData, setUserData] = useState<UserData | null>(null)
     const [empresaId, setEmpresaId] = useState<string | null>(null)
     const [loading, setLoading] = useState(true)
+    const [isSuperAdmin, setIsSuperAdmin] = useState(false)
 
     useEffect(() => {
         // Check active session on mount
@@ -82,6 +84,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
             if (data) {
                 const row = data as Database['public']['Tables']['usuarios']['Row']
+
+                // Verifica se o usuário está ativo
+                if (row.status === false) {
+                    console.warn('Tentativa de acesso com usuário desativado.')
+                    signOut()
+                    return
+                }
+
                 let companyName = ''
                 if (row.empresa_id) {
                     const { data: company } = await supabase
@@ -92,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     if (company) companyName = company.nome
                 }
 
+                const isSA = !!(row as any).is_super_admin
                 const userData: UserData = {
                     id: row.id,
                     empresa_id: row.empresa_id || null,
@@ -100,12 +111,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     email: row.email || '',
                     nome_fantasia: companyName,
                     telefone: row.telefone,
-                    avatar: row.avatar, // Was avatar_url
-                    placa_carro: row.placa_carro, // Was placa
-                    signature_url: row.signature_url // Was assinatura_url
+                    avatar: row.avatar,
+                    placa_carro: row.placa_carro,
+                    signature_url: row.signature_url,
+                    isSuperAdmin: isSA
                 }
                 setUserData(userData)
                 setEmpresaId(row.empresa_id)
+                setIsSuperAdmin(isSA)
                 authStorage.setUserData(userData)
             }
 
@@ -151,6 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 // Se achou dados do usuário, salva. Se não, segue só com o Auth.
                 if (userData) {
                     const userRow = userData as Database['public']['Tables']['usuarios']['Row']
+                    const isSA = !!(userRow as any).is_super_admin
                     const userDataObj: UserData = {
                         id: userRow.id,
                         empresa_id: userRow.empresa_id || null,
@@ -160,10 +174,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         telefone: userRow.telefone,
                         avatar: userRow.avatar,
                         placa_carro: userRow.placa_carro,
-                        signature_url: userRow.signature_url
+                        signature_url: userRow.signature_url,
+                        isSuperAdmin: isSA
                     }
                     setUserData(userDataObj)
                     setEmpresaId(userRow.empresa_id)
+                    setIsSuperAdmin(isSA)
                     authStorage.setUserData(userDataObj)
                 }
 
@@ -191,11 +207,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null)
         setUserData(null)
         setEmpresaId(null)
+        setIsSuperAdmin(false)
         authStorage.clearAll()
     }
 
     return (
-        <AuthContext.Provider value={{ user, userData, empresaId, loading, signIn, signOut }}>
+        <AuthContext.Provider value={{ user, userData, empresaId, loading, isSuperAdmin, signIn, signOut }}>
             {children}
         </AuthContext.Provider>
     )

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Users, ClipboardList, Settings, Menu, LogOut, Plus, Wrench, Wallet, FileText, Bot, Calendar } from 'lucide-react'
+import { LayoutDashboard, Users, ClipboardList, Settings, Menu, LogOut, Plus, Wrench, Wallet, FileText, Bot, Calendar, Shield } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from './ui/button'
@@ -10,7 +10,7 @@ import { AdminAlerts } from './AdminAlerts'
 export function MainLayout() {
     const location = useLocation()
     const navigate = useNavigate()
-    const { signOut, userData } = useAuth()
+    const { signOut, userData, isSuperAdmin } = useAuth()
     const [sidebarOpen, setSidebarOpen] = useState(false)
 
     const handleSignOut = async () => {
@@ -41,6 +41,7 @@ export function MainLayout() {
             { icon: FileText, label: 'Não Feitos', path: '/unfinished-services' },
             { icon: Bot, label: 'IA', path: '/ai-chatbot' },
             { icon: Settings, label: 'Configurações', path: '/settings' },
+            ...(isSuperAdmin ? [{ icon: Shield, label: 'Super Admin', path: '/super-admin' }] : []),
         ]
 
     // Determine Page Title
@@ -114,7 +115,7 @@ export function MainLayout() {
             </aside>
 
             {/* Mobile / Main Content Area */}
-            <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
+            <div className="flex-1 flex flex-col min-h-screen relative">
 
                 {/* Mobile Header Gradient */}
                 {/* Mobile Header Gradient */}
@@ -209,7 +210,7 @@ export function MainLayout() {
                 )}
 
                 {/* Main Content Scrollable */}
-                <main className="flex-1 overflow-y-auto overflow-x-hidden bg-transparent z-10 -mt-8 md:mt-0 md:p-8 px-4 pb-32 pt-4 md:bg-[#f3f4f6]">
+                <main className="flex-1 overflow-x-hidden bg-transparent z-10 -mt-8 md:mt-0 md:p-8 px-4 pb-32 pt-4 md:bg-[#f3f4f6]">
                     {/* Desktop Header */}
                     <header className="hidden md:flex h-20 items-center justify-between mb-8">
                         <div>

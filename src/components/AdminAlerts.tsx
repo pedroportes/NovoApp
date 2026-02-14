@@ -27,7 +27,7 @@ export function AdminAlerts() {
         // Only admins should hear this
         if (userData?.cargo !== 'admin') return
 
-        console.log('AdminAlerts: Listening for updates...')
+
 
         const channel = supabase
             .channel('admin-alerts')

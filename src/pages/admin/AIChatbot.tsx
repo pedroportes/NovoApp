@@ -53,10 +53,25 @@ export function AIChatbot() {
         try {
             setLoading(true)
 
+            const { data: { user } } = await supabase.auth.getUser()
+            if (!user) return
+
+            // Get empresa_id
+            const { data: userData, error: userError } = await supabase
+                .from('usuarios')
+                .select('empresa_id')
+                .eq('id', user.id)
+                .single()
+
+            if (userError || !userData) throw new Error('Empresa não encontrada')
+
             // 1. Fetch Bot Config
             const { data: configData, error: configError } = await supabase
                 .from('configuracoes_bot')
                 .select('*')
+                .eq('empresa_id', userData.empresa_id)
+                .order('created_at', { ascending: false })
+                .limit(1)
                 .maybeSingle()
 
             if (configError) throw configError
@@ -84,7 +99,12 @@ export function AIChatbot() {
                     setInstanceId(configData.instance_id || '')
                 }
 
-                fetchDocuments(configData.empresa_id)
+                fetchDocuments(userData.empresa_id)
+            } else {
+                // If no config exists, we still need to set the empresa_id for saving later
+                // But since we use userData.empresa_id in handleSave, we are good.
+                // We should just ensure fetchDocuments is called if we want to show empty list
+                fetchDocuments(userData.empresa_id)
             }
 
         } catch (error: any) {
@@ -330,7 +350,7 @@ export function AIChatbot() {
                                 </div>
                                 <div className="p-3 bg-white rounded border text-xs font-mono break-all text-muted-foreground mt-2">
                                     <p className="font-bold mb-1">Webhook URL:</p>
-                                    {`https://dltqxfyrltgbudtzxzot.supabase.co/functions/v1/z-api-webhook?client_token=${zApiClientToken || 'SENHA'}`}
+                                    {`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/z-api-webhook?client_token=${zApiClientToken || 'SENHA'}`}
                                 </div>
                             </div>
                         ) : (
@@ -352,7 +372,7 @@ export function AIChatbot() {
                                 </div>
                                 <div className="p-3 bg-white rounded border text-xs font-mono break-all text-muted-foreground mt-2">
                                     <p className="font-bold mb-1">Webhook URL:</p>
-                                    {`https://dltqxfyrltgbudtzxzot.supabase.co/functions/v1/evolution-webhook`}
+                                    {`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/evolution-webhook`}
                                 </div>
                             </div>
                         )}

@@ -62,7 +62,9 @@ const ReceiptLayout = ({ os, company, title }: { os: any, company: any, title: s
                                     className="max-w-[140px] max-h-[100px] object-contain"
                                     onError={(e) => {
                                         e.currentTarget.style.display = 'none'
-                                        e.currentTarget.parentElement!.innerHTML = '<span class="text-4xl text-gray-300">🏢</span>'
+                                        const parent = e.currentTarget.parentElement!
+                                        parent.textContent = '🏢'
+                                        parent.classList.add('text-4xl', 'text-gray-300')
                                     }}
                                 />
                             </div>

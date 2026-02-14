@@ -12,7 +12,6 @@ import {
     DialogDescription,
     DialogHeader,
     DialogTitle,
-    DialogTrigger,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { SignaturePad } from '@/components/ui/signature-pad'
@@ -30,11 +29,13 @@ interface Technician {
     avatar?: string
     signature_url?: string
     placa_carro?: string
+    status?: boolean
 }
 
 export function Technicians() {
     const { userData } = useAuth()
     const [techs, setTechs] = useState<Technician[]>([])
+    const [showInactive, setShowInactive] = useState(false)
     const [loading, setLoading] = useState(true)
     const navigate = useNavigate()
 
@@ -52,27 +53,6 @@ export function Technicians() {
     const [showUpgradeModal, setShowUpgradeModal] = useState(false)
     const [upgradeMessage, setUpgradeMessage] = useState('')
 
-    // Moved openNewTechDialog definition here to be used by handle
-    const openNewTechDialog = useCallback(() => {
-        setEditingTechId(null)
-        resetForm()
-        setIsDialogOpen(true)
-    }, [])
-
-    const handleNewTechClick = useCallback(() => {
-        if (!canAddTeamMember) {
-            if (isTrialExpired) {
-                setUpgradeMessage("Seu período de teste expirou. Assine um plano para adicionar membros à equipe.")
-            } else {
-                let limitMsg = `${limits.team}`
-                if (limits.team === 'unlimited') limitMsg = 'ilimitados'
-                setUpgradeMessage(`Seu plano atual (${plan.toUpperCase()}) permite apenas ${limitMsg} membro(s) na equipe. Faça um upgrade para adicionar mais.`)
-            }
-            setShowUpgradeModal(true)
-            return
-        }
-        openNewTechDialog()
-    }, [canAddTeamMember, isTrialExpired, limits.team, plan, openNewTechDialog])
     const [isDialogOpen, setIsDialogOpen] = useState(false)
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [editingTechId, setEditingTechId] = useState<string | null>(null)
@@ -98,18 +78,39 @@ export function Technicians() {
     const [signatureBlob, setSignatureBlob] = useState<Blob | null>(null)
     const [currentSignatureUrl, setCurrentSignatureUrl] = useState<string | null>(null)
 
-    useEffect(() => {
-        if (userData?.empresa_id) {
-            fetchTechs()
-        }
-    }, [userData?.empresa_id])
+    const resetForm = useCallback(() => {
+        setFormData(initialFormState)
+        setAvatarFile(null)
+        setAvatarPreview(null)
+        setSignatureBlob(null)
+        setCurrentSignatureUrl(null)
+    }, [])
 
-    // openNewTechDialog removed from here (moved up)
+    const openNewTechDialog = useCallback(() => {
+        setEditingTechId(null)
+        resetForm()
+        setIsDialogOpen(true)
+    }, [resetForm])
+
+    const handleNewTechClick = useCallback(() => {
+        if (!canAddTeamMember) {
+            if (isTrialExpired) {
+                setUpgradeMessage("Seu período de teste expirou. Assine um plano para adicionar membros à equipe.")
+            } else {
+                let limitMsg = `${limits.team}`
+                if (limits.team === 'unlimited') limitMsg = 'ilimitados'
+                setUpgradeMessage(`Seu plano atual (${plan.toUpperCase()}) permite apenas ${limitMsg} membro(s) na equipe. Faça um upgrade para adicionar mais.`)
+            }
+            setShowUpgradeModal(true)
+            return
+        }
+        openNewTechDialog()
+    }, [canAddTeamMember, isTrialExpired, limits.team, plan, openNewTechDialog])
 
     const { setFabAction } = useOutletContext<{ setFabAction: (action: (() => void) | null) => void }>() ?? { setFabAction: () => { } }
 
     useEffect(() => {
-        setFabAction(handleNewTechClick)
+        setFabAction(() => handleNewTechClick)
         return () => setFabAction(null)
     }, [handleNewTechClick, setFabAction])
 
@@ -117,26 +118,23 @@ export function Technicians() {
         if (isDialogOpen && !editingTechId) {
             resetForm()
         }
-    }, [isDialogOpen, editingTechId])
+    }, [isDialogOpen, editingTechId, resetForm])
 
-    const resetForm = () => {
-        setFormData(initialFormState)
-        setAvatarFile(null)
-        setAvatarPreview(null)
-        setSignatureBlob(null)
-        setCurrentSignatureUrl(null)
-    }
 
-    const fetchTechs = async () => {
+    const fetchTechs = useCallback(async () => {
         if (!userData?.empresa_id) return
 
         try {
-            const { data, error } = await supabase
+            let query = supabase
                 .from('usuarios')
                 .select('*')
                 .eq('empresa_id', userData.empresa_id)
-            // Removed strict cargo filter to allow Admin to see themselves and other admins in the list
-            // .eq('cargo', 'tecnico')
+
+            if (!showInactive) {
+                query = query.eq('status', true) // Filtra apenas técnicos ativos por padrão
+            }
+
+            const { data, error } = await query
 
             if (error) throw error
             // Allow all users to be seen by Admin
@@ -146,7 +144,13 @@ export function Technicians() {
         } finally {
             setLoading(false)
         }
-    }
+    }, [userData?.empresa_id, showInactive])
+
+    useEffect(() => {
+        if (userData?.empresa_id) {
+            fetchTechs()
+        }
+    }, [userData?.empresa_id, showInactive, fetchTechs])
 
 
     const handleEdit = (tech: Technician) => {
@@ -167,7 +171,7 @@ export function Technicians() {
     }
 
     const handleDelete = async (id: string, name: string) => {
-        if (!confirm(`Tem certeza que deseja excluir o técnico ${name}?`)) return
+        if (!confirm(`O técnico ${name} não terá mais acesso, mas as informações serão mantidas. Deseja desativar?`)) return
 
         try {
             const { data, error } = await (supabase.rpc as any)('delete_technician', {
@@ -177,10 +181,28 @@ export function Technicians() {
             if (error) throw error
             if (data && !data.success) throw new Error(data.error)
 
-            alert('Técnico excluído com sucesso.')
+            alert('Técnico desativado com sucesso.')
             fetchTechs()
         } catch (error: any) {
-            alert('Erro ao excluir: ' + error.message)
+            alert('Erro ao desativar: ' + error.message)
+        }
+    }
+
+    const handleReactivate = async (id: string, name: string) => {
+        if (!confirm(`Deseja reativar o técnico ${name}? Ele voltará a ter acesso ao sistema.`)) return
+
+        try {
+            const { data, error } = await (supabase.rpc as any)('reactivate_technician', {
+                target_user_id: id
+            })
+
+            if (error) throw error
+            if (data && !data.success) throw new Error(data.error)
+
+            alert('Técnico reativado com sucesso.')
+            fetchTechs()
+        } catch (error: any) {
+            alert('Erro ao reativar: ' + error.message)
         }
     }
 
@@ -318,182 +340,199 @@ export function Technicians() {
 
     return (
         <div className="space-y-6 pb-20 md:pb-0 mt-6 md:mt-0">
-            <div className="flex justify-end mb-4">
+            <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center gap-2">
+                    <input
+                        type="checkbox"
+                        id="showInactive"
+                        checked={showInactive}
+                        onChange={(e) => {
+                            setShowInactive(e.target.checked)
+                        }}
+                        className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <label htmlFor="showInactive" className="text-sm text-gray-600 cursor-pointer select-none">
+                        Mostrar inativos
+                    </label>
+                </div>
 
-                <UpgradeModal
-                    isOpen={showUpgradeModal}
-                    onClose={() => setShowUpgradeModal(false)}
-                    description={upgradeMessage}
-                />
+                <div className="flex gap-2">
 
-                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                    {userData?.cargo?.toLowerCase() === 'admin' && (
-                        <Button className="hidden md:flex h-14 text-base md:w-auto w-full shadow-lg" onClick={handleNewTechClick}>
-                            <Plus className="mr-2 h-5 w-5" />
-                            Novo Técnico
-                        </Button>
-                    )}
-                    <DialogContent className="w-[95%] max-w-[600px] h-[90vh] overflow-y-auto rounded-xl">
-                        <DialogHeader>
-                            <DialogTitle>{editingTechId ? 'Editar Técnico' : 'Novo Técnico'}</DialogTitle>
-                            <DialogDescription>
-                                Preencha os dados e assine na tela.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <form onSubmit={handleSubmit} className="space-y-6 py-4 pb-24" autoComplete="off">
-                            <input autoComplete="false" name="hidden" type="text" style={{ display: 'none' }} />
+                    <UpgradeModal
+                        isOpen={showUpgradeModal}
+                        onClose={() => setShowUpgradeModal(false)}
+                        description={upgradeMessage}
+                    />
 
-                            {/* FOTO (Avatar) - Mantido input file escondido */}
-                            <div className="flex flex-col items-center gap-4 mb-4">
-                                <div className="relative">
-                                    <div className="h-24 w-24 rounded-full bg-muted flex items-center justify-center overflow-hidden border-2 border-border">
-                                        {avatarPreview ? (
-                                            <img src={avatarPreview} alt="Avatar" className="h-full w-full object-cover" />
-                                        ) : (
-                                            <UserIcon className="h-10 w-10 text-muted-foreground opacity-50" />
-                                        )}
-                                    </div>
-                                    <Label htmlFor="avatar-upload" className="absolute bottom-0 right-0 bg-primary text-primary-foreground p-2 rounded-full cursor-pointer shadow-md hover:bg-primary/90">
-                                        <Pencil className="h-4 w-4" />
-                                        <Input
-                                            id="avatar-upload"
-                                            type="file"
-                                            accept="image/*"
-                                            className="hidden"
-                                            onChange={(e) => {
-                                                const file = e.target.files?.[0]
-                                                if (file) {
-                                                    setAvatarFile(file)
-                                                    setAvatarPreview(URL.createObjectURL(file))
-                                                }
-                                            }}
-                                        />
-                                    </Label>
-                                </div>
-                                <p className="text-sm text-muted-foreground">Foto de Perfil</p>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="name">Nome Completo</Label>
-                                    <Input
-                                        id="name"
-                                        required
-                                        className="h-12 text-lg"
-                                        placeholder="Ex: João da Silva"
-                                        value={formData.name}
-                                        onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                        autoComplete="off"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="phone">Celular (WhatsApp)</Label>
-                                    <Input
-                                        id="phone"
-                                        className="h-12 text-lg"
-                                        placeholder="(11) 99999-9999"
-                                        value={formData.phone}
-                                        onChange={e => setFormData({ ...formData, phone: e.target.value })}
-                                        autoComplete="off"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="placa">Placa do Carro (Opcional)</Label>
-                                <Input
-                                    id="placa"
-                                    className="h-12 text-lg"
-                                    value={formData.placa_carro}
-                                    onChange={(e) => setFormData({ ...formData, placa_carro: e.target.value })}
-                                    placeholder="ABC-1234"
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="email">E-mail de Acesso</Label>
-                                    <Input
-                                        id="email"
-                                        type="email"
-                                        required={!editingTechId}
-                                        disabled={!!editingTechId}
-                                        className="h-12"
-                                        placeholder="joao@empresa.com"
-                                        value={formData.email}
-                                        onChange={e => setFormData({ ...formData, email: e.target.value })}
-                                        autoComplete="new-password"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="password">{editingTechId ? 'Nova Senha (Opcional)' : 'Senha Inicial'}</Label>
-                                    <Input
-                                        id="password"
-                                        type="password"
-                                        required={!editingTechId}
-                                        className="h-12"
-                                        placeholder={editingTechId ? "Em branco para manter" : "Min. 6 caracteres"}
-                                        value={formData.password}
-                                        onChange={e => setFormData({ ...formData, password: e.target.value })}
-                                        autoComplete="new-password"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="border-t pt-4 mt-4">
-                                <h3 className="text-sm font-medium mb-3 text-muted-foreground">Dados Financeiros</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="salary">Salário Base (R$)</Label>
-                                        <Input
-                                            id="salary"
-                                            type="number"
-                                            step="0.01"
-                                            className="h-12"
-                                            value={formData.base_salary}
-                                            onChange={e => setFormData({ ...formData, base_salary: e.target.value })}
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="commission">Comissão (%)</Label>
-                                        <Input
-                                            id="commission"
-                                            type="number"
-                                            step="0.1"
-                                            className="h-12"
-                                            value={formData.commission_rate}
-                                            onChange={e => setFormData({ ...formData, commission_rate: e.target.value })}
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="pix">Chave PIX</Label>
-                                        <Input
-                                            id="pix"
-                                            className="h-12"
-                                            value={formData.pix_key}
-                                            onChange={e => setFormData({ ...formData, pix_key: e.target.value })}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* ASSINATURA NA TELA */}
-                            <div className="space-y-2 pt-2">
-                                <Label className="text-base font-semibold">Assinatura Digital (Desenhe na tela)</Label>
-                                <p className="text-xs text-muted-foreground mb-2">Use o dedo ou mouse para assinar abaixo.</p>
-
-                                <SignaturePad
-                                    onSignatureChange={setSignatureBlob}
-                                    initialImage={currentSignatureUrl}
-                                />
-                            </div>
-
-                            <Button type="submit" className="w-full h-14 text-lg font-semibold mt-4 shadow-md" disabled={isSubmitting}>
-                                {isSubmitting ? 'Salvando...' : (editingTechId ? 'Atualizar Técnico' : 'Cadastrar Técnico')}
+                    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                        {userData?.cargo?.toLowerCase() === 'admin' && (
+                            <Button className="hidden md:flex h-14 text-base md:w-auto w-full shadow-lg" onClick={handleNewTechClick}>
+                                <Plus className="mr-2 h-5 w-5" />
+                                Novo Técnico
                             </Button>
-                        </form>
-                    </DialogContent>
-                </Dialog>
+                        )}
+                        <DialogContent className="w-[95%] max-w-[600px] h-[90vh] overflow-y-auto rounded-xl">
+                            <DialogHeader>
+                                <DialogTitle>{editingTechId ? 'Editar Técnico' : 'Novo Técnico'}</DialogTitle>
+                                <DialogDescription>
+                                    Preencha os dados e assine na tela.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <form onSubmit={handleSubmit} className="space-y-6 py-4 pb-24" autoComplete="off">
+                                <input autoComplete="false" name="hidden" type="text" style={{ display: 'none' }} />
+
+                                {/* FOTO (Avatar) - Mantido input file escondido */}
+                                <div className="flex flex-col items-center gap-4 mb-4">
+                                    <div className="relative">
+                                        <div className="h-24 w-24 rounded-full bg-muted flex items-center justify-center overflow-hidden border-2 border-border">
+                                            {avatarPreview ? (
+                                                <img src={avatarPreview} alt="Avatar" className="h-full w-full object-cover" />
+                                            ) : (
+                                                <UserIcon className="h-10 w-10 text-muted-foreground opacity-50" />
+                                            )}
+                                        </div>
+                                        <Label htmlFor="avatar-upload" className="absolute bottom-0 right-0 bg-primary text-primary-foreground p-2 rounded-full cursor-pointer shadow-md hover:bg-primary/90">
+                                            <Pencil className="h-4 w-4" />
+                                            <Input
+                                                id="avatar-upload"
+                                                type="file"
+                                                accept="image/*"
+                                                className="hidden"
+                                                onChange={(e) => {
+                                                    const file = e.target.files?.[0]
+                                                    if (file) {
+                                                        setAvatarFile(file)
+                                                        setAvatarPreview(URL.createObjectURL(file))
+                                                    }
+                                                }}
+                                            />
+                                        </Label>
+                                    </div>
+                                    <p className="text-sm text-muted-foreground">Foto de Perfil</p>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="name">Nome Completo</Label>
+                                        <Input
+                                            id="name"
+                                            required
+                                            className="h-12 text-lg"
+                                            placeholder="Ex: João da Silva"
+                                            value={formData.name}
+                                            onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                            autoComplete="off"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="phone">Celular (WhatsApp)</Label>
+                                        <Input
+                                            id="phone"
+                                            className="h-12 text-lg"
+                                            placeholder="(11) 99999-9999"
+                                            value={formData.phone}
+                                            onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                                            autoComplete="off"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="placa">Placa do Carro (Opcional)</Label>
+                                    <Input
+                                        id="placa"
+                                        className="h-12 text-lg"
+                                        value={formData.placa_carro}
+                                        onChange={(e) => setFormData({ ...formData, placa_carro: e.target.value })}
+                                        placeholder="ABC-1234"
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="email">E-mail de Acesso</Label>
+                                        <Input
+                                            id="email"
+                                            type="email"
+                                            required={!editingTechId}
+                                            disabled={!!editingTechId}
+                                            className="h-12"
+                                            placeholder="joao@empresa.com"
+                                            value={formData.email}
+                                            onChange={e => setFormData({ ...formData, email: e.target.value })}
+                                            autoComplete="new-password"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="password">{editingTechId ? 'Nova Senha (Opcional)' : 'Senha Inicial'}</Label>
+                                        <Input
+                                            id="password"
+                                            type="password"
+                                            required={!editingTechId}
+                                            className="h-12"
+                                            placeholder={editingTechId ? "Em branco para manter" : "Min. 6 caracteres"}
+                                            value={formData.password}
+                                            onChange={e => setFormData({ ...formData, password: e.target.value })}
+                                            autoComplete="new-password"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="border-t pt-4 mt-4">
+                                    <h3 className="text-sm font-medium mb-3 text-muted-foreground">Dados Financeiros</h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="salary">Salário Base (R$)</Label>
+                                            <Input
+                                                id="salary"
+                                                type="number"
+                                                step="0.01"
+                                                className="h-12"
+                                                value={formData.base_salary}
+                                                onChange={e => setFormData({ ...formData, base_salary: e.target.value })}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="commission">Comissão (%)</Label>
+                                            <Input
+                                                id="commission"
+                                                type="number"
+                                                step="0.1"
+                                                className="h-12"
+                                                value={formData.commission_rate}
+                                                onChange={e => setFormData({ ...formData, commission_rate: e.target.value })}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="pix">Chave PIX</Label>
+                                            <Input
+                                                id="pix"
+                                                className="h-12"
+                                                value={formData.pix_key}
+                                                onChange={e => setFormData({ ...formData, pix_key: e.target.value })}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* ASSINATURA NA TELA */}
+                                <div className="space-y-2 pt-2">
+                                    <Label className="text-base font-semibold">Assinatura Digital (Desenhe na tela)</Label>
+                                    <p className="text-xs text-muted-foreground mb-2">Use o dedo ou mouse para assinar abaixo.</p>
+
+                                    <SignaturePad
+                                        onSignatureChange={setSignatureBlob}
+                                        initialImage={currentSignatureUrl}
+                                    />
+                                </div>
+
+                                <Button type="submit" className="w-full h-14 text-lg font-semibold mt-4 shadow-md" disabled={isSubmitting}>
+                                    {isSubmitting ? 'Salvando...' : (editingTechId ? 'Atualizar Técnico' : 'Cadastrar Técnico')}
+                                </Button>
+                            </form>
+                        </DialogContent>
+                    </Dialog>
+                </div>
             </div>
 
             <div className="relative">
@@ -535,6 +574,11 @@ export function Technicians() {
                                                 <Phone className="h-3 w-3" /> {tech.telefone}
                                             </p>
                                         )}
+                                        {tech.status === false && (
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 mt-1">
+                                                Inativo
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -553,10 +597,18 @@ export function Technicians() {
                                         <Pencil className="mr-2 h-3 w-3" />
                                         Editar
                                     </Button>
-                                    <Button variant="destructive" className="flex-1 h-10 text-sm font-medium rounded-xl bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 border border-red-100 shadow-none transition-colors" onClick={() => handleDelete(tech.id, tech.nome_completo)}>
-                                        <Trash2 className="mr-2 h-3 w-3" />
-                                        Excluir
-                                    </Button>
+
+                                    {tech.status === false ? (
+                                        <Button variant="outline" className="flex-1 h-10 text-sm font-medium rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 border border-emerald-100 shadow-none transition-colors" onClick={() => handleReactivate(tech.id, tech.nome_completo)}>
+                                            <UserIcon className="mr-2 h-3 w-3" />
+                                            Reativar
+                                        </Button>
+                                    ) : (
+                                        <Button variant="destructive" className="flex-1 h-10 text-sm font-medium rounded-xl bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 border border-red-100 shadow-none transition-colors" onClick={() => handleDelete(tech.id, tech.nome_completo)}>
+                                            <Trash2 className="mr-2 h-3 w-3" />
+                                            Desativar
+                                        </Button>
+                                    )}
                                 </div>
                             )}
                         </div>

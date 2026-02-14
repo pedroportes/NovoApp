@@ -104,9 +104,9 @@ export function Login() {
                 // Check role to redirect and validate correct login type
                 let { data: userProfile, error: profileError } = await supabase
                     .from('usuarios')
-                    .select('id, cargo, empresa_id, empresas(nome)')
+                    .select('id, cargo, empresa_id, is_super_admin, empresas(nome)')
                     .eq('id', authUser.id)
-                    .single() as unknown as { data: { id: string; cargo: string; empresa_id: string | null; empresas: { nome: string } | null } | null; error: any }
+                    .single() as unknown as { data: { id: string; cargo: string; empresa_id: string | null; is_super_admin?: boolean; empresas: { nome: string } | null } | null; error: any }
 
                 if (profileError || !userProfile) {
                     // TENTATIVA DE AUTO-RECUPERAÇÃO (Self-Healing)
@@ -141,18 +141,19 @@ export function Login() {
                     userProfile = retryProfile
                 }
 
-                console.log('Login Info:', {
-                    authId: authUser.id,
-                    profileId: userProfile?.id, // check if this field exists in response if selected ?
-                    // actually .select('cargo...') didn't select id, relying on single() returning the object
-                    role: userProfile.cargo,
-                    empresaId: userProfile.empresa_id
-                })
+                const userRole = userProfile?.cargo?.toLowerCase()
+                const userIsSuperAdmin = !!(userProfile as any)?.is_super_admin
 
-                const userRole = userProfile.cargo?.toLowerCase()
+                // Se for Super Admin SEM empresa, redireciona direto para painel SA
+                if (userIsSuperAdmin && !userProfile?.empresa_id) {
+                    navigate('/super-admin', { replace: true })
+                    return
+                }
 
                 // Validação Cruzada: Impede técnico de logar na aba Admin e vice-versa
                 if (loginType === 'tecnico' && userRole !== 'tecnico') {
+
+
                     setError('Esta conta não é de técnico. Use a aba "Sou Dono / Admin".')
                     await supabase.auth.signOut()
                     setLoading(false)
@@ -167,7 +168,6 @@ export function Login() {
                 }
 
                 // Redirecionamento correto
-                // Redirecionamento correto conforme solicitado
                 if (userRole === 'tecnico') {
                     navigate('/tecnico/dashboard')
                 } else if (userRole === 'admin') {
@@ -399,10 +399,10 @@ export function Login() {
                     </div> */}
                 </div>
 
-                {/* DEBUG: Project ID */}
+                {/* Version Info */}
                 <div className="mt-4 text-center">
-                    <p className="text-xs text-muted-foreground/50">
-                        Project: {import.meta.env.VITE_SUPABASE_URL?.split('.')[0].replace('https://', '')}
+                    <p className="text-xs text-muted-foreground/30">
+                        FlowDrain v1.0
                     </p>
                 </div>
             </div>

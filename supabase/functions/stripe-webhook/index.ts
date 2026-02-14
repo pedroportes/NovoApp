@@ -23,17 +23,20 @@ serve(async (req) => {
         const body = await req.text()
         let event
 
-        // Verify signature if secret is provided
-        if (ENDPOINT_SECRET !== 'whsec_REPLACE_ME') {
-            try {
-                // Use async methods for Edge Runtime compatibility
-                event = await stripe.webhooks.constructEventAsync(body, signature!, ENDPOINT_SECRET)
-            } catch (err) {
-                console.error(`⚠️  Webhook signature verification failed.`, err.message)
-                return new Response(err.message, { status: 400 })
-            }
-        } else {
-            event = JSON.parse(body)
+        // SECURITY FIX: Fail-closed instead of fail-open
+        // Always require webhook secret to be configured
+        if (!ENDPOINT_SECRET || ENDPOINT_SECRET === 'whsec_REPLACE_ME' || ENDPOINT_SECRET === '') {
+            console.error('🔴 STRIPE_WEBHOOK_SECRET not configured!')
+            return new Response('Webhook secret not configured', { status: 500 })
+        }
+
+        // Always verify signature
+        try {
+            // Use async methods for Edge Runtime compatibility
+            event = await stripe.webhooks.constructEventAsync(body, signature!, ENDPOINT_SECRET)
+        } catch (err) {
+            console.error(`⚠️  Webhook signature verification failed.`, (err as Error).message)
+            return new Response((err as Error).message, { status: 400 })
         }
 
         console.log(`🔔  Event received: ${event.type}`)
@@ -41,10 +44,8 @@ serve(async (req) => {
         switch (event.type) {
             case 'checkout.session.completed': {
                 const session = event.data.object
-                const customerId = session.customer
-                const subscriptionId = session.subscription
-                // Metadata contains empresa_id if passed during checkout creation
-                // But better to look up by stripe_customer_id
+                const customerId = session.customer as string
+                const subscriptionId = session.subscription as string
 
                 console.log(`💰 Checkout session completed for customer ${customerId}`)
 
@@ -91,14 +92,92 @@ serve(async (req) => {
 
                 console.log(`❌ Subscription canceled: ${customerId}`)
 
-                const { error } = await supabase
+                // Update company status
+                await supabase
                     .from('empresas')
                     .update({
                         subscription_status: 'canceled',
                     })
                     .eq('stripe_customer_id', customerId)
 
-                if (error) console.error('Error updating DB:', error)
+                // Mark affiliate sale as canceled
+                await supabase.rpc('marcar_venda_cancelada', {
+                    p_stripe_subscription_id: subscription.id
+                })
+
+                break
+            }
+
+            case 'invoice.payment_succeeded': {
+                const invoice = event.data.object
+                const customerId = invoice.customer
+                const subscriptionId = invoice.subscription
+                const valorPago = invoice.amount_paid / 100
+
+                if (!subscriptionId) break;
+
+                console.log(`💳 Payment succeeded for customer ${customerId}: $${valorPago}`)
+
+                // 1. Get company and its affiliate
+                const { data: empresa } = await supabase
+                    .from('empresas')
+                    .select('id, afiliado_id')
+                    .eq('stripe_customer_id', customerId)
+                    .single()
+
+                if (empresa?.afiliado_id) {
+                    // 2. Check if this sale record already exists in afiliados_vendas
+                    const { data: existingVenda } = await supabase
+                        .from('afiliados_vendas')
+                        .select('id, total_meses_ativos')
+                        .eq('stripe_subscription_id', subscriptionId)
+                        .single()
+
+                    if (!existingVenda) {
+                        // NEW SALE: First payment
+                        const { data: afiliado } = await supabase
+                            .from('afiliados')
+                            .select('percentual_comissao, tipo_comissao')
+                            .eq('id', empresa.afiliado_id)
+                            .single()
+
+                        if (afiliado) {
+                            const valorComissao = (valorPago * afiliado.percentual_comissao) / 100
+                            
+                            const { error: insertError } = await supabase.from('afiliados_vendas').insert({
+                                afiliado_id: empresa.afiliado_id,
+                                empresa_id: empresa.id,
+                                stripe_subscription_id: subscriptionId,
+                                stripe_customer_id: customerId,
+                                valor_assinatura: valorPago,
+                                valor_comissao: valorComissao,
+                                tipo_comissao: afiliado.tipo_comissao,
+                                status: 'ativa'
+                            })
+
+                            if (insertError) console.error('Error inserting affiliate sale:', insertError)
+                        }
+                    } else {
+                        // RECURRING PAYMENT: Update existing record
+                        const { data: afiliado } = await supabase
+                            .from('afiliados')
+                            .select('percentual_comissao, tipo_comissao')
+                            .eq('id', empresa.afiliado_id)
+                            .single()
+
+                        if (afiliado && afiliado.tipo_comissao === 'recorrente') {
+                            const valorComissao = (valorPago * afiliado.percentual_comissao) / 100
+                            
+                            const { error: rpcError } = await supabase.rpc('registrar_comissao_recorrente', {
+                                p_stripe_subscription_id: subscriptionId,
+                                p_valor_assinatura: valorPago,
+                                p_valor_comissao: valorComissao
+                            })
+
+                            if (rpcError) console.error('Error calling registrar_comissao_recorrente:', rpcError)
+                        }
+                    }
+                }
                 break
             }
         }

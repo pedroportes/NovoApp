@@ -18,6 +18,7 @@ export interface UserData {
     avatar?: string | null
     placa_carro?: string | null
     signature_url?: string | null
+    isSuperAdmin?: boolean
 }
 
 export const authStorage = {
