@@ -99,11 +99,14 @@ serve(async (req) => {
             client_reference_id: affiliate_id || undefined,
             line_items: [{ price: price_id, quantity: 1 }],
             mode: 'subscription',
-            success_url: user ? `${success_url}?email=${user.email}` : success_url,
+            success_url: user 
+                ? `${success_url}?session_id={CHECKOUT_SESSION_ID}&email=${user.email}` 
+                : `${success_url}?session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: cancel_url,
             metadata: {
                 empresa_id: empresaId,
-                price_id: price_id
+                price_id: price_id,
+                ref: affiliate_id // Redundant backup for client_reference_id
             }
         })
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Lock, Loader2, CheckCircle } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -16,8 +16,13 @@ export function UpdatePassword() {
     const [verifyingError, setVerifyingError] = useState<string | null>(null)
     const navigate = useNavigate()
 
+    const verificationAttempted = useRef(false)
+
     useEffect(() => {
         const handleAuth = async () => {
+            if (verificationAttempted.current) return
+            verificationAttempted.current = true
+
             const urlParams = new URLSearchParams(window.location.search)
             const tokenHash = urlParams.get('token_hash')
             const type = urlParams.get('type')
