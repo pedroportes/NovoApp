@@ -28,8 +28,9 @@ async function checkAndResetUser() {
 
         // 2. Trigger Password Reset
         console.log('Tentando enviar e-mail de redefinição de senha...');
+        const redirectTo = `https://app.gerenciaservicos.com.br/update-password?email=${encodeURIComponent(email)}`;
         const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-            redirectTo: 'https://app.gerenciaservicos.com.br/update-password',
+            redirectTo,
         });
 
         if (error) {

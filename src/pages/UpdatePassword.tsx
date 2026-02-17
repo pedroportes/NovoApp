@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Toaster, toast } from 'sonner'
 
 export function UpdatePassword() {
+    const [email, setEmail] = useState<string | null>(null)
     const [password, setPassword] = useState('')
     const [confirmPassword, setConfirmPassword] = useState('')
     const [loading, setLoading] = useState(false)
@@ -17,41 +18,42 @@ export function UpdatePassword() {
 
     useEffect(() => {
         const handleAuth = async () => {
+            const urlParams = new URLSearchParams(window.location.search)
+            const tokenHash = urlParams.get('token_hash')
+            const type = urlParams.get('type')
+            const emailParam = urlParams.get('email')
+
+            if (emailParam) setEmail(emailParam)
+
             // Se já tem sessão, ok
             const { data: { session } } = await supabase.auth.getSession()
             if (session) {
+                console.log('Sessão já existente detectada.')
                 setVerifying(false)
                 return
             }
 
-            // Se não tem sessão, tenta extrair token da URL
-            const urlParams = new URLSearchParams(window.location.search)
-            const tokenHash = urlParams.get('token_hash')
-            const type = urlParams.get('type')
-
+            // Se não tem sessão, PRECISA ter token_hash
             if (tokenHash && type === 'recovery') {
-                const { error } = await supabase.auth.verifyOtp({
+                console.log('Tentando trocar token de recuperação por sessão...', { type })
+
+                const { data, error } = await supabase.auth.verifyOtp({
                     token_hash: tokenHash,
                     type: 'recovery'
                 })
 
                 if (error) {
                     console.error('Erro ao verificar token:', error)
-                    setVerifyingError('O link de recuperação parece inválido ou expirou.')
+                    setVerifyingError('O link de recuperação parece inválido ou expirou. Solicite um novo.')
+                } else if (!data.session) {
+                    console.error('verifyOtp sucesso mas sem sessão retornada.')
+                    setVerifyingError('Falha ao estabelecer sessão segura. Tente novamente.')
                 } else {
-                    // Verificar se a sessão foi realmente estabelecida
-                    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-
-                    if (sessionError || !session) {
-                        console.error('Erro: Sessão não estabelecida após verifyOtp', sessionError)
-                        setVerifyingError('Falha ao autenticar sessão. Tente solicitar o link novamente.')
-                    } else {
-                        console.log('Sessão estabelecida com sucesso:', session.user.email)
-                        toast.success('Sessão validada com sucesso!')
-                    }
+                    console.log('Sessão de recuperação estabelecida com sucesso!')
+                    toast.success('Acesso verificado via link seguro.')
                 }
             } else {
-                setVerifyingError('Sessão de autenticação ausente ou link inválido.')
+                setVerifyingError('Link inválido. Verifique se copiou corretamente.')
             }
             setVerifying(false)
         }
@@ -75,39 +77,27 @@ export function UpdatePassword() {
         setLoading(true)
 
         try {
-            console.log('--- Início da Atualização de Senha ---')
-            const { data: { session }, error: sessionCheckError } = await supabase.auth.getSession()
-            console.log('Session Check Result:', {
-                hasSession: !!session,
-                userEmail: session?.user?.email,
-                expiresAt: session?.expires_at,
-                error: sessionCheckError
-            })
+            // Verificar sessão explicitamente
+            const { data: { session } } = await supabase.auth.getSession()
 
             if (!session) {
-                console.error('ERRO CRÍTICO: Sessão nula antes do update.')
-                throw new Error('Sessão expirada. Recarregue a página ou solicite novo link.')
+                throw new Error('Sessão perdida. Por favor, recarregue a página e tente novamente.')
             }
 
-            console.log('Chamando supabase.auth.updateUser...')
-            const { data: updateData, error } = await supabase.auth.updateUser({
+            const { error } = await supabase.auth.updateUser({
                 password: password
             })
-            console.log('Resultado updateUser:', { success: !error, error, data: updateData })
 
             if (error) throw error
 
-            // Se for troca forçada, atualiza o perfil na tabela usuarios
+            // Atualiza flag must_change_password se existir usuário
             const { data: { user } } = await supabase.auth.getUser()
-            console.log('User após update:', user?.id)
 
             if (user) {
-                const { error: profileError } = await supabase
+                await supabase
                     .from('usuarios')
                     .update({ must_change_password: false })
                     .eq('id', user.id)
-
-                if (profileError) console.error('Erro ao atualizar must_change_password:', profileError)
             }
 
             setSuccess(true)
@@ -134,7 +124,7 @@ export function UpdatePassword() {
                     </div>
                     <h2 className="text-2xl font-bold text-slate-800 mb-2">Senha Atualizada!</h2>
                     <p className="text-slate-600 mb-6">
-                        Sua senha foi redefinida com sucesso. Você será redirecionado para o login em instantes.
+                        Sua senha foi redefinida com sucesso.{email ? ` (Conta: ${email})` : ''}
                     </p>
                     <Button onClick={() => navigate('/login')} className="w-full">
                         Ir para Login agora

@@ -52,8 +52,10 @@ export function Login() {
         setError('')
 
         try {
+            const redirectTo = `${window.location.origin}/update-password?email=${encodeURIComponent(email)}`
+            console.log('Enviando password reset para:', email, 'Redirect:', redirectTo)
             const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                redirectTo: `${window.location.origin}/update-password`,
+                redirectTo,
             })
 
             if (error) {
