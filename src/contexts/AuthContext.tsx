@@ -68,7 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const recoveryData = recovery as any
 
-                if (recoveryData?.success) {
+                if (!recoveryError) {
                     // Tenta buscar novamente após recuperação
                     const { data: retryData } = await supabase
                         .from('usuarios')
@@ -114,7 +114,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     avatar: row.avatar,
                     placa_carro: row.placa_carro,
                     signature_url: row.signature_url,
-                    isSuperAdmin: isSA
+                    isSuperAdmin: isSA,
+                    must_change_password: !!row.must_change_password
                 }
                 setUserData(userData)
                 setEmpresaId(row.empresa_id)
@@ -175,7 +176,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         avatar: userRow.avatar,
                         placa_carro: userRow.placa_carro,
                         signature_url: userRow.signature_url,
-                        isSuperAdmin: isSA
+                        isSuperAdmin: isSA,
+                        must_change_password: !!userRow.must_change_password
                     }
                     setUserData(userDataObj)
                     setEmpresaId(userRow.empresa_id)

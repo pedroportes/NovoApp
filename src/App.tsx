@@ -67,6 +67,9 @@ function App() {
                                 <Route path="/login" element={<Login />} />
                                 <Route path="/signup" element={<SignUp />} />
                                 <Route path="/update-password" element={<UpdatePassword />} />
+                                <Route path="/plans/success" element={<PlansSuccess />} />
+                                <Route path="/sucesso" element={<PlansSuccess />} />
+                                <Route path="/plans" element={<Plans />} />
                                 <Route path="/super-admin/login" element={<SuperAdminLogin />} />
 
                                 {/* Public Print Routes (Access via Link) */}
@@ -93,10 +96,7 @@ function App() {
                                     <Route path="/tech-dashboard" element={<TechnicianDashboard />} />
                                     <Route path="/tecnico/financeiro" element={<TechnicianFinancial />} />
                                     <Route path="/tecnico/financeiro" element={<TechnicianFinancial />} />
-                                    <Route path="/expenses" element={<TechnicianExpenses />} />
                                     <Route path="/experiments" element={<TechnicianExpenses />} />
-                                    <Route path="/plans" element={<Plans />} />
-                                    <Route path="/plans/success" element={<PlansSuccess />} />
                                     <Route path="/unfinished-services" element={<UnfinishedServices />} />
                                     <Route path="/ai-chatbot" element={<AIChatbot />} />
                                     {/* (Super Admin routes movidas para fora do ProtectedRoute) */}

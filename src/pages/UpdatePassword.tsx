@@ -11,17 +11,52 @@ export function UpdatePassword() {
     const [confirmPassword, setConfirmPassword] = useState('')
     const [loading, setLoading] = useState(false)
     const [success, setSuccess] = useState(false)
+    const [verifying, setVerifying] = useState(true)
+    const [verifyingError, setVerifyingError] = useState<string | null>(null)
     const navigate = useNavigate()
 
     useEffect(() => {
-        // Verifica se existe uma sessão (o link mágico já deve ter logado o usuário)
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            if (!session) {
-                // Se não tiver sessão, pode ser que o link expirou ou é inválido
-                // Mas as vezes o hash ainda está na URL e o Auth listener vai pegar
-                console.warn('Sessão não detectada no carregamento inicial da página de update.')
+        const handleAuth = async () => {
+            // Se já tem sessão, ok
+            const { data: { session } } = await supabase.auth.getSession()
+            if (session) {
+                setVerifying(false)
+                return
             }
-        })
+
+            // Se não tem sessão, tenta extrair token da URL
+            const urlParams = new URLSearchParams(window.location.search)
+            const tokenHash = urlParams.get('token_hash')
+            const type = urlParams.get('type')
+
+            if (tokenHash && type === 'recovery') {
+                const { error } = await supabase.auth.verifyOtp({
+                    token_hash: tokenHash,
+                    type: 'recovery'
+                })
+
+                if (error) {
+                    console.error('Erro ao verificar token:', error)
+                    setVerifyingError('O link de recuperação parece inválido ou expirou.')
+                } else {
+                    // Verificar se a sessão foi realmente estabelecida
+                    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+
+                    if (sessionError || !session) {
+                        console.error('Erro: Sessão não estabelecida após verifyOtp', sessionError)
+                        setVerifyingError('Falha ao autenticar sessão. Tente solicitar o link novamente.')
+                    } else {
+                        console.log('Sessão estabelecida com sucesso:', session.user.email)
+                        toast.success('Sessão validada com sucesso!')
+                    }
+                }
+            } else {
+                setVerifyingError('Sessão de autenticação ausente ou link inválido.')
+            }
+            setVerifying(false)
+        }
+
+        handleAuth()
     }, [])
 
     const handleUpdatePassword = async (e: React.FormEvent) => {
@@ -40,11 +75,40 @@ export function UpdatePassword() {
         setLoading(true)
 
         try {
-            const { error } = await supabase.auth.updateUser({
-                password: password
+            console.log('--- Início da Atualização de Senha ---')
+            const { data: { session }, error: sessionCheckError } = await supabase.auth.getSession()
+            console.log('Session Check Result:', {
+                hasSession: !!session,
+                userEmail: session?.user?.email,
+                expiresAt: session?.expires_at,
+                error: sessionCheckError
             })
 
+            if (!session) {
+                console.error('ERRO CRÍTICO: Sessão nula antes do update.')
+                throw new Error('Sessão expirada. Recarregue a página ou solicite novo link.')
+            }
+
+            console.log('Chamando supabase.auth.updateUser...')
+            const { data: updateData, error } = await supabase.auth.updateUser({
+                password: password
+            })
+            console.log('Resultado updateUser:', { success: !error, error, data: updateData })
+
             if (error) throw error
+
+            // Se for troca forçada, atualiza o perfil na tabela usuarios
+            const { data: { user } } = await supabase.auth.getUser()
+            console.log('User após update:', user?.id)
+
+            if (user) {
+                const { error: profileError } = await supabase
+                    .from('usuarios')
+                    .update({ must_change_password: false })
+                    .eq('id', user.id)
+
+                if (profileError) console.error('Erro ao atualizar must_change_password:', profileError)
+            }
 
             setSuccess(true)
             toast.success('Senha atualizada com sucesso!')
@@ -85,59 +149,79 @@ export function UpdatePassword() {
             <Toaster richColors position="top-right" />
             <div className="w-full max-w-md">
                 <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden p-8">
-                    <div className="text-center mb-8">
-                        <h1 className="text-xl font-bold text-slate-900">Redefinir Senha</h1>
-                        <p className="text-sm text-slate-500 mt-2">
-                            Digite sua nova senha abaixo.
-                        </p>
-                    </div>
-
-                    <form onSubmit={handleUpdatePassword} className="space-y-4">
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-slate-700">Nova Senha</label>
-                            <div className="relative">
-                                <Lock className="absolute left-3 top-3 h-5 w-5 text-slate-400" />
-                                <Input
-                                    type="password"
-                                    placeholder="••••••"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    className="pl-10 h-11"
-                                    required
-                                />
-                            </div>
+                    {verifying ? (
+                        <div className="text-center py-8">
+                            <Loader2 className="h-8 w-8 animate-spin text-emerald-600 mx-auto mb-4" />
+                            <p className="text-slate-600 font-medium">Validando seu link de acesso...</p>
                         </div>
-
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-slate-700">Confirmar Nova Senha</label>
-                            <div className="relative">
-                                <Lock className="absolute left-3 top-3 h-5 w-5 text-slate-400" />
-                                <Input
-                                    type="password"
-                                    placeholder="••••••"
-                                    value={confirmPassword}
-                                    onChange={(e) => setConfirmPassword(e.target.value)}
-                                    className="pl-10 h-11"
-                                    required
-                                />
+                    ) : verifyingError ? (
+                        <div className="text-center py-8">
+                            <div className="bg-red-100 p-3 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-4 text-red-600">
+                                <Lock className="h-6 w-6" />
                             </div>
+                            <h2 className="text-lg font-bold text-slate-900 mb-2">Acesso Negado</h2>
+                            <p className="text-slate-600 mb-6 text-sm">{verifyingError}</p>
+                            <Button variant="outline" onClick={() => navigate('/login')} className="w-full">
+                                Voltar para Login
+                            </Button>
                         </div>
+                    ) : (
+                        <>
+                            <div className="text-center mb-8">
+                                <h1 className="text-xl font-bold text-slate-900">Redefinir Senha</h1>
+                                <p className="text-sm text-slate-500 mt-2">
+                                    Digite sua nova senha abaixo.
+                                </p>
+                            </div>
 
-                        <Button
-                            type="submit"
-                            className="w-full h-11 text-base font-semibold mt-4"
-                            disabled={loading}
-                        >
-                            {loading ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Atualizando...
-                                </>
-                            ) : (
-                                'Redefinir Senha'
-                            )}
-                        </Button>
-                    </form>
+                            <form onSubmit={handleUpdatePassword} className="space-y-4">
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-slate-700">Nova Senha</label>
+                                    <div className="relative">
+                                        <Lock className="absolute left-3 top-3 h-5 w-5 text-slate-400" />
+                                        <Input
+                                            type="password"
+                                            placeholder="••••••"
+                                            value={password}
+                                            onChange={(e) => setPassword(e.target.value)}
+                                            className="pl-10 h-11"
+                                            required
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-slate-700">Confirmar Nova Senha</label>
+                                    <div className="relative">
+                                        <Lock className="absolute left-3 top-3 h-5 w-5 text-slate-400" />
+                                        <Input
+                                            type="password"
+                                            placeholder="••••••"
+                                            value={confirmPassword}
+                                            onChange={(e) => setConfirmPassword(e.target.value)}
+                                            className="pl-10 h-11"
+                                            required
+                                        />
+                                    </div>
+                                </div>
+
+                                <Button
+                                    type="submit"
+                                    className="w-full h-11 text-base font-semibold mt-4"
+                                    disabled={loading}
+                                >
+                                    {loading ? (
+                                        <>
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            Atualizando...
+                                        </>
+                                    ) : (
+                                        'Redefinir Senha'
+                                    )}
+                                </Button>
+                            </form>
+                        </>
+                    )}
                 </div>
             </div>
         </div>

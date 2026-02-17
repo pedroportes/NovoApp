@@ -1,11 +1,14 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CheckCircle2, Home, ArrowRight } from 'lucide-react'
+import { CheckCircle2, Home, ArrowRight, Lock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { confetti } from 'https://esm.sh/canvas-confetti@1.6.0'
 
 export function PlansSuccess() {
     const navigate = useNavigate()
+
+    const searchParams = new URLSearchParams(window.location.search)
+    const sessionEmail = searchParams.get('email')
 
     useEffect(() => {
         // Disparar confetes ao carregar
@@ -43,21 +46,42 @@ export function PlansSuccess() {
                 </p>
 
                 <div className="space-y-3">
+                    <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-6 mb-6">
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Seu Acesso</p>
+
+                        {sessionEmail && (
+                            <div className="mb-4">
+                                <p className="text-sm text-slate-500 mb-1">E-mail registrado:</p>
+                                <p className="text-lg font-bold text-slate-900">{sessionEmail}</p>
+                            </div>
+                        )}
+
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Senha Temporária</p>
+                        <div className="flex items-center justify-center gap-2 mb-2">
+                            <Lock className="w-4 h-4 text-emerald-600" />
+                            <span className="text-xl font-mono font-black text-slate-800 tracking-tight">FlowDrain 123</span>
+                        </div>
+                        <p className="text-sm text-slate-500 leading-relaxed">
+                            Use esta senha para seu primeiro acesso. <br />
+                            <span className="font-bold text-slate-700">O sistema solicitará a troca imediata.</span>
+                        </p>
+                    </div>
+
                     <Button
-                        onClick={() => navigate('/')}
+                        onClick={() => navigate(`/login?email=${sessionEmail || ''}`)}
                         className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl gap-2 shadow-lg shadow-emerald-500/20"
                     >
-                        Ir para o Dashboard
-                        <Home className="w-4 h-4" />
+                        Fazer Login Agora
+                        <ArrowRight className="w-4 h-4" />
                     </Button>
 
                     <Button
                         variant="ghost"
-                        onClick={() => navigate('/service-orders/new')}
+                        onClick={() => navigate('/')}
                         className="w-full h-12 text-slate-600 font-bold rounded-2xl gap-2 hover:bg-slate-50"
                     >
-                        Criar Nova OS
-                        <ArrowRight className="w-4 h-4" />
+                        Página Inicial
+                        <Home className="w-4 h-4" />
                     </Button>
                 </div>
 

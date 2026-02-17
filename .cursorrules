@@ -1,0 +1,22 @@
+# REGRAS DE BANCO DE DADOS (CRÍTICO)
+
+## 🔒 Regras de Integridade (IMUTÁVEIS)
+
+### 1. A Regra do "Pai Único"
+*   **Proibido**: Criar qualquer tabela operacional (clientes, ordens, despesas, comissões) sem a coluna `empresa_id`.
+*   **Obrigatório**: Toda `empresa_id` deve ter a cláusula `ON DELETE CASCADE`.
+
+### 2. Unificação de Idioma
+*   **Tabela de Empresas**: O nome oficial e único é `empresas` (plural).
+*   **Tabela de Técnicos**: O nome oficial e único é `tecnicos`.
+*   **Proibido**: Uso de `company`, `companies` ou `technicians`.
+
+### 3. Nomes Oficiais de Colunas
+*   **Clientes**: `nome_razao` (não `nome`), `whatsapp` (não `telefone`), `cpf_cnpj` (não `documento`).
+*   **Usuários**: `nome_completo` (não `nome`), `placa_carro` (não `placa`), `avatar` (não `avatar_url`).
+*   **Serviços**: `preco_padrao` (não `valor_padrao` ou `preco`). *Nota: Atualizado conforme base atual.*
+
+## ❌ Ações TERMINANTEMENTE PROIBIDAS
+*   ❌ Queries "Cegas" (sem `WHERE empresa_id`).
+*   ❌ Criar tabelas órfãs.
+*   ❌ Ignorar schema de documentos em uploads.

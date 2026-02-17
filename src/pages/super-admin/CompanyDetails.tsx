@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import {
     ArrowLeft, Building2, Users, FileText, DollarSign,
     Trash2, KeyRound, Save, Pencil, X, UserX, UserCheck,
-    AlertTriangle, Shield, Loader2
+    AlertTriangle, Shield, Loader2, Eye, EyeOff
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -22,15 +22,39 @@ interface CompanyInfo {
     created_at: string
     plano: string | null
     status_assinatura: string | null
+    current_period_end: string | null
 }
 
 interface UserInfo {
     id: string
-    nome_completo: string | null
+    nome: string | null
     email: string | null
     cargo: string | null
     status: boolean | null
     created_at: string
+}
+
+const PLAN_NAMES: Record<string, string> = {
+    'price_1T02TLC2SBfOxdrqrdbCvFEQ': 'Plano Solo',
+    'price_1T02Y8C2SBfOxdrqfPf01e1C': 'Essencial',
+    'price_1SsUaDC2SBfOxdrq9LBbQkcl': 'Pro Fluxo',
+    'price_1SsUe8C2SBfOxdrqRMtj4wjh': 'Operacional',
+    'price_1SsUkBC2SBfOxdrqofDd7Euj': 'Prime Fleet',
+    'price_1SsN4HC2SBfOxdrq13q2V5ga': 'Plano Teste',
+    'price_1SsOJhC2SBfOxdrqy7Jf2xNO': 'Pro Fluxo (Promo)',
+    'solo': 'Plano Solo',
+    'essencial': 'Essencial',
+    'pro': 'Pro Fluxo',
+    'operacional': 'Operacional',
+    'prime': 'Prime Fleet',
+    'teste': 'Plano Teste',
+    '5990': 'Plano Solo (R$ 59,90)',
+    '9890': 'Essencial (R$ 98,90)',
+    '12990': 'Pro Fluxo (R$ 129,90)',
+    '24990': 'Operacional (R$ 249,90)',
+    '49990': 'Prime Fleet (R$ 499,90)',
+    'free': 'Gratuito',
+    'active': 'Ativo'
 }
 
 export function CompanyDetails() {
@@ -54,14 +78,20 @@ export function CompanyDetails() {
     // Password reset state  
     const [resetUserId, setResetUserId] = useState<string | null>(null)
     const [newPassword, setNewPassword] = useState('')
+    const [showNewPassword, setShowNewPassword] = useState(false)
     const [resettingPassword, setResettingPassword] = useState(false)
+
+    // User editing state
+    const [userEditId, setUserEditId] = useState<string | null>(null)
+    const [userEditName, setUserEditName] = useState('')
+    const [savingUserEdit, setSavingUserEdit] = useState(false)
 
     const loadCompanyData = useCallback(async (id: string) => {
         setLoading(true)
 
         const [companyRes, usersRes, ordensRes, clientesRes, financeiroRes] = await Promise.all([
             supabase.from('empresas').select('*').eq('id', id).single(),
-            supabase.from('usuarios').select('id, nome_completo, email, cargo, status, created_at').eq('empresa_id', id),
+            supabase.from('usuarios').select('id, nome, email, cargo, status, created_at').eq('empresa_id', id),
             supabase.from('ordens_servico').select('*', { count: 'exact', head: true }).eq('empresa_id', id),
             supabase.from('clientes').select('*', { count: 'exact', head: true }).eq('empresa_id', id),
             supabase.from('financeiro_fluxo').select('valor').eq('empresa_id', id).eq('tipo', 'receita')
@@ -78,7 +108,8 @@ export function CompanyDetails() {
                 endereco: emp.endereco,
                 created_at: emp.created_at || new Date().toISOString(),
                 plano: emp.subscription_price_id,
-                status_assinatura: emp.subscription_status
+                status_assinatura: emp.subscription_status,
+                current_period_end: emp.current_period_end
             }
             setCompany(info)
             setEditForm({
@@ -202,11 +233,41 @@ export function CompanyDetails() {
                 toast.success('Senha alterada com sucesso!')
                 setResetUserId(null)
                 setNewPassword('')
+                setShowNewPassword(false)
             }
+        } finally {
+            setResettingPassword(false)
+        }
+    }
+
+    // =============== SAVE USER EDIT ===============
+    async function handleSaveUserEdit() {
+        if (!userEditId) return
+        if (!userEditName.trim()) {
+            toast.error('O nome completo é obrigatório')
+            return
+        }
+
+        setSavingUserEdit(true)
+        try {
+            const { error } = await supabase
+                .from('usuarios')
+                .update({ nome: userEditName })
+                .eq('id', userEditId)
+
+            if (error) {
+                toast.error('Erro ao atualizar usuário: ' + error.message)
+                return
+            }
+
+            toast.success('Usuário atualizado com sucesso!')
+            setUsers(prev => prev.map(u => u.id === userEditId ? { ...u, nome: userEditName } : u))
+            setUserEditId(null)
+            setUserEditName('')
         } catch (err: any) {
             toast.error('Erro: ' + err.message)
         } finally {
-            setResettingPassword(false)
+            setSavingUserEdit(false)
         }
     }
 
@@ -415,12 +476,20 @@ export function CompanyDetails() {
                                 <p className="font-medium">{company.telefone || '—'}</p>
                             </div>
                             <div>
-                                <p className="text-sm text-muted-foreground">Endereço</p>
-                                <p className="font-medium">{company.endereco || '—'}</p>
+                                <p className="text-sm text-muted-foreground">Plano</p>
+                                <p className="font-medium">
+                                    {company.plano ? (PLAN_NAMES[company.plano] || company.plano) :
+                                        (company.status_assinatura === 'free' ? 'Gratuito' :
+                                            company.status_assinatura === 'active' ? 'Assinatura Ativa (Manual)' : '—')}
+                                </p>
                             </div>
                             <div>
-                                <p className="text-sm text-muted-foreground">Plano</p>
-                                <p className="font-medium">{company.plano || '—'}</p>
+                                <p className="text-sm text-muted-foreground">Expira em</p>
+                                <p className="font-medium">
+                                    {company.current_period_end
+                                        ? new Date(company.current_period_end).toLocaleDateString('pt-BR')
+                                        : 'Permanente / Manual'}
+                                </p>
                             </div>
                         </>
                     )}
@@ -441,7 +510,7 @@ export function CompanyDetails() {
                             <div key={user.id} className="flex items-center justify-between border-b pb-3 last:border-0 last:pb-0">
                                 <div className="flex-1">
                                     <div className="flex items-center gap-2">
-                                        <p className="font-medium">{user.nome_completo || 'Sem nome'}</p>
+                                        <p className="font-medium">{user.nome || 'Sem nome'}</p>
                                         {user.status === false && (
                                             <Badge variant="destructive" className="text-xs">Inativo</Badge>
                                         )}
@@ -476,11 +545,24 @@ export function CompanyDetails() {
                                         )}
                                     </Button>
 
+                                    {/* Edit user */}
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => {
+                                            setUserEditId(user.id)
+                                            setUserEditName(user.nome_completo || '')
+                                        }}
+                                        title="Editar usuário"
+                                    >
+                                        <Pencil className="h-4 w-4 text-emerald-500" />
+                                    </Button>
+
                                     {/* Reset password */}
                                     <Button
                                         variant="ghost"
                                         size="icon"
-                                        onClick={() => { setResetUserId(user.id); setNewPassword('') }}
+                                        onClick={() => { setResetUserId(user.id); setNewPassword(''); setShowNewPassword(false) }}
                                         title="Resetar senha"
                                     >
                                         <KeyRound className="h-4 w-4 text-blue-500" />
@@ -490,7 +572,7 @@ export function CompanyDetails() {
                                     <Button
                                         variant="ghost"
                                         size="icon"
-                                        onClick={() => handleRemoveUser(user.id, user.nome_completo)}
+                                        onClick={() => handleRemoveUser(user.id, user.nome)}
                                         title="Remover da empresa"
                                     >
                                         <Trash2 className="h-4 w-4 text-red-400" />
@@ -516,14 +598,24 @@ export function CompanyDetails() {
                         <p className="text-sm text-muted-foreground">
                             Usuário: <strong>{users.find(u => u.id === resetUserId)?.email}</strong>
                         </p>
-                        <Input
-                            type="password"
-                            placeholder="Nova senha (mínimo 6 caracteres)"
-                            value={newPassword}
-                            onChange={e => setNewPassword(e.target.value)}
-                        />
+                        <div className="relative">
+                            <Input
+                                type={showNewPassword ? 'text' : 'password'}
+                                placeholder="Nova senha (mínimo 6 caracteres)"
+                                value={newPassword}
+                                onChange={e => setNewPassword(e.target.value)}
+                                className="pr-10"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowNewPassword(!showNewPassword)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                                {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                            </button>
+                        </div>
                         <div className="flex gap-2 justify-end">
-                            <Button variant="outline" onClick={() => { setResetUserId(null); setNewPassword('') }}>
+                            <Button variant="outline" onClick={() => { setResetUserId(null); setNewPassword(''); setShowNewPassword(false) }}>
                                 Cancelar
                             </Button>
                             <Button onClick={handleResetPassword} disabled={resettingPassword || newPassword.length < 6}>
@@ -580,6 +672,42 @@ export function CompanyDetails() {
                             >
                                 {deleting && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
                                 Excluir Permanentemente
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ======== MODAL: EDIT USER ======== */}
+            {userEditId && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+                    <div className="bg-card rounded-xl border shadow-2xl w-full max-w-md p-6 space-y-4">
+                        <div className="flex items-center gap-2">
+                            <Pencil className="h-5 w-5 text-emerald-500" />
+                            <h3 className="text-lg font-bold">Editar Usuário</h3>
+                        </div>
+                        <div className="space-y-4">
+                            <div className="space-y-1">
+                                <label className="text-xs font-semibold text-muted-foreground uppercase">Email</label>
+                                <Input value={users.find(u => u.id === userEditId)?.email || ''} disabled className="bg-muted" />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs font-semibold text-muted-foreground uppercase">Nome Completo</label>
+                                <Input
+                                    value={userEditName}
+                                    onChange={e => setUserEditName(e.target.value)}
+                                    placeholder="Nome completo do usuário"
+                                    autoFocus
+                                />
+                            </div>
+                        </div>
+                        <div className="flex gap-2 justify-end pt-2">
+                            <Button variant="outline" onClick={() => { setUserEditId(null); setUserEditName('') }}>
+                                Cancelar
+                            </Button>
+                            <Button onClick={handleSaveUserEdit} disabled={savingUserEdit || !userEditName.trim()}>
+                                {savingUserEdit && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+                                Salvar Alterações
                             </Button>
                         </div>
                     </div>

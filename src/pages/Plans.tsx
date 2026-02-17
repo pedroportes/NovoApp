@@ -13,18 +13,28 @@ export function Plans() {
     // TODO: Substitua pelos IDs REAIS do seu Stripe (copie do painel)
     const PLANS = [
         {
-            id: 'essencial', // ID INTERNO PARA CONTROLE VISUAL
-            stripe_price_id: 'price_1SsUSMC2SBfOxdrqfHxP7H4q', // Atualizado com ID real
-            name: 'Essencial',
+            id: 'solo',
+            stripe_price_id: 'price_1T02TLC2SBfOxdrqrdbCvFEQ',
+            name: 'Plano Solo',
             price: 'R$ 59,90',
             period: '/mês',
-            features: ['Até 2 técnicos', 'Gestão de Clientes', 'Ordens de Serviço Simples', 'Suporte por Email'],
+            features: ['1 Usuário (Apenas Dono)', 'Sem acesso para técnicos', 'Gestão de Clientes', 'Ordens de Serviço Simples', 'Suporte por Email'],
+            recommended: false,
+            icon: Star
+        },
+        {
+            id: 'essencial',
+            stripe_price_id: 'price_1T02Y8C2SBfOxdrqfPf01e1C',
+            name: 'Essencial',
+            price: 'R$ 98,90',
+            period: '/mês',
+            features: ['Até 3 técnicos', 'Gestão Financeira Básica', 'Relatórios Simples', 'Suporte Horário Comercial'],
             recommended: false,
             icon: Star
         },
         {
             id: 'pro',
-            stripe_price_id: 'price_1SsUaDC2SBfOxdrq9LBbQkcl', // Pro Fluxo
+            stripe_price_id: 'price_1SsUaDC2SBfOxdrq9LBbQkcl',
             name: 'Pro Fluxo',
             price: 'R$ 129,90',
             period: '/mês',
@@ -34,7 +44,7 @@ export function Plans() {
         },
         {
             id: 'operacional',
-            stripe_price_id: 'price_1SsUe8C2SBfOxdrqRMtj4wjh', // Operacional
+            stripe_price_id: 'price_1SsUe8C2SBfOxdrqRMtj4wjh',
             name: 'Operacional',
             price: 'R$ 249,90',
             period: '/mês',
@@ -44,7 +54,7 @@ export function Plans() {
         },
         {
             id: 'prime',
-            stripe_price_id: 'price_1SsUkBC2SBfOxdrqofDd7Euj', // Prime Fleet
+            stripe_price_id: 'price_1SsUkBC2SBfOxdrqofDd7Euj',
             name: 'Prime Fleet',
             price: 'R$ 499,90',
             period: '/mês',
@@ -54,11 +64,11 @@ export function Plans() {
         },
         {
             id: 'teste',
-            stripe_price_id: 'price_1SsOJhC2SBfOxdrqy7Jf2xNO',
-            name: 'Plano de Teste (Live)',
+            stripe_price_id: 'price_1SsN4HC2SBfOxdrq13q2V5ga',
+            name: 'Plano Teste',
             price: 'R$ 1,99',
             period: '/mês',
-            features: ['Plano para validação de cartão real', 'Acesso total por 30 dias', 'Suporte direto'],
+            features: ['Plano para testes', 'Validação de comissão', 'Acesso completo (demo)', 'Cancelamento automático'],
             recommended: false,
             icon: Check
         }
@@ -69,10 +79,12 @@ export function Plans() {
             setLoading(priceId)
 
             // Call Edge Function
+            const affiliateId = localStorage.getItem('flowdrain_affiliate_id')
             const { data, error } = await supabase.functions.invoke('create-checkout-session', {
                 body: {
                     price_id: priceId,
-                    success_url: `${window.location.origin}/plans/success`,
+                    affiliate_id: affiliateId,
+                    success_url: `${window.location.origin}/sucesso`,
                     cancel_url: `${window.location.origin}/plans`,
                 }
             })

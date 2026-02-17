@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from './ui/button'
 import { AdminAlerts } from './AdminAlerts'
+import { SubscriptionBanner } from './subscription/SubscriptionBanner'
 
 
 export function MainLayout() {
@@ -47,13 +48,17 @@ export function MainLayout() {
     // Determine Page Title
     const getPageTitle = () => {
         switch (location.pathname) {
-            case '/': return `Olá, ${userData?.nome?.split(' ')[0] || 'Visitante'}`;
+            case '/': {
+                const firstName = userData?.nome?.trim().split(' ')[0]
+                return `Olá, ${firstName || 'Visitante'}`
+            }
             case '/service-orders': return 'Ordens de Serviço';
             case '/services': return 'Catálogo de Serviços';
             case '/clients': return 'Carteira de Clientes';
             case '/technicians': return 'Equipe Técnica';
             case '/settings': return 'Configurações';
-            case '/tech-dashboard': return 'Painel do Técnico';
+            case '/tecnico/dashboard': return 'Painel do Técnico';
+            case '/super-admin': return 'Super Admin';
             default: return 'FlowDrain';
         }
     }
@@ -77,207 +82,210 @@ export function MainLayout() {
     // ... (render logic)
 
     return (
-        <div className="min-h-screen bg-background text-foreground flex flex-col md:flex-row font-sans">
-            <AdminAlerts />
-            {/* Desktop Sidebar (Kept functional but styled) */}
-            <aside className="hidden md:flex w-72 flex-col border-r border-border bg-white shadow-xl z-20">
-                <div className="h-20 flex items-center px-8 border-b border-gray-100">
-                    <span className="text-2xl font-bold bg-gradient-to-r from-emerald-500 to-sky-500 bg-clip-text text-transparent transform hover:scale-105 transition-transform">
-                        FlowDrain
-                    </span>
-                </div>
-                <nav className="flex-1 p-6 space-y-3">
-                    {navItems.map((item) => (
-                        <Link
-                            key={item.path}
-                            to={item.path}
-                            className={cn(
-                                "flex items-center gap-4 px-6 py-4 rounded-2xl transition-all duration-300 group",
-                                location.pathname === item.path
-                                    ? "bg-slate-900 text-white shadow-lg shadow-slate-900/20 translate-x-1"
-                                    : "hover:bg-gray-50 text-gray-500 hover:text-slate-900"
-                            )}
+        <div className="min-h-screen flex flex-col font-sans">
+            <SubscriptionBanner />
+            <div className="flex-1 bg-background text-foreground flex flex-col md:flex-row relative">
+                <AdminAlerts />
+                {/* Desktop Sidebar (Kept functional but styled) */}
+                <aside className="hidden md:flex w-72 flex-col border-r border-border bg-white shadow-xl z-20">
+                    <div className="h-20 flex items-center px-8 border-b border-gray-100">
+                        <span className="text-2xl font-bold bg-gradient-to-r from-emerald-500 to-sky-500 bg-clip-text text-transparent transform hover:scale-105 transition-transform">
+                            FlowDrain
+                        </span>
+                    </div>
+                    <nav className="flex-1 p-6 space-y-3">
+                        {navItems.map((item) => (
+                            <Link
+                                key={item.path}
+                                to={item.path}
+                                className={cn(
+                                    "flex items-center gap-4 px-6 py-4 rounded-2xl transition-all duration-300 group",
+                                    location.pathname === item.path
+                                        ? "bg-slate-900 text-white shadow-lg shadow-slate-900/20 translate-x-1"
+                                        : "hover:bg-gray-50 text-gray-500 hover:text-slate-900"
+                                )}
+                            >
+                                <item.icon className={cn("h-5 w-5 transition-transform group-hover:scale-110", location.pathname === item.path ? "text-emerald-400" : "")} />
+                                <span className="font-medium">{item.label}</span>
+                            </Link>
+                        ))}
+                    </nav>
+                    <div className="p-6 border-t border-gray-100">
+                        <button
+                            onClick={handleSignOut}
+                            className="flex w-full items-center gap-3 px-6 py-4 text-sm font-medium text-red-500 hover:bg-red-50 rounded-2xl transition-colors"
                         >
-                            <item.icon className={cn("h-5 w-5 transition-transform group-hover:scale-110", location.pathname === item.path ? "text-emerald-400" : "")} />
-                            <span className="font-medium">{item.label}</span>
-                        </Link>
-                    ))}
-                </nav>
-                <div className="p-6 border-t border-gray-100">
-                    <button
-                        onClick={handleSignOut}
-                        className="flex w-full items-center gap-3 px-6 py-4 text-sm font-medium text-red-500 hover:bg-red-50 rounded-2xl transition-colors"
-                    >
-                        <LogOut className="h-5 w-5" />
-                        Sair do Sistema
-                    </button>
-                </div>
-            </aside>
-
-            {/* Mobile / Main Content Area */}
-            <div className="flex-1 flex flex-col min-h-screen relative">
-
-                {/* Mobile Header Gradient */}
-                {/* Mobile Header Gradient */}
-                <header className="md:hidden min-h-[140px] banking-gradient rounded-b-[30px] px-6 pt-[calc(3rem+env(safe-area-inset-top))] pb-8 flex flex-col justify-between shadow-2xl relative z-0 shrink-0">
-                    <div className="flex items-center justify-between text-white">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border border-white/30">
-                                <span className="font-bold text-lg">{userData?.nome?.[0] || 'F'}</span>
-                            </div>
-                            <div>
-                                <p className="text-xs text-emerald-100 font-medium opacity-90">
-                                    {location.pathname === '/' ? 'Bem-vindo de volta,' : 'Gerenciamento'}
-                                </p>
-                                <h1 className="text-xl font-bold leading-tight">{getPageTitle()}</h1>
-                            </div>
-                        </div>
-                        <button onClick={() => setSidebarOpen(true)} className="p-2 bg-white/10 rounded-full hover:bg-white/20 backdrop-blur-sm transition-colors">
-                            <Menu className="h-5 w-5 text-white" />
+                            <LogOut className="h-5 w-5" />
+                            Sair do Sistema
                         </button>
                     </div>
+                </aside>
 
-                    {/* Decorative Elements */}
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none" />
-                    <div className="absolute bottom-0 left-0 w-24 h-24 bg-emerald-400/20 rounded-full blur-2xl -ml-10 -mb-5 pointer-events-none" />
-                </header>
+                {/* Mobile / Main Content Area */}
+                <div className="flex-1 flex flex-col min-h-screen relative">
 
-                {/* Mobile Sidebar Overlay */}
-                {sidebarOpen && (
-                    <div className="md:hidden fixed inset-0 z-[100]">
-                        {/* Backdrop */}
-                        <div
-                            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-                            onClick={() => setSidebarOpen(false)}
-                        />
-
-                        {/* Sidebar */}
-                        <aside className="absolute right-0 top-0 h-full w-72 bg-white shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
-                            <div className="h-20 flex items-center justify-between px-6 border-b border-gray-100">
-                                <span className="text-2xl font-bold bg-gradient-to-r from-emerald-500 to-sky-500 bg-clip-text text-transparent">
-                                    FlowDrain
-                                </span>
-                                <button
-                                    onClick={() => setSidebarOpen(false)}
-                                    className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-                                >
-                                    <svg className="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                </button>
-                            </div>
-
-                            <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-                                {navItems.map((item) => (
-                                    <Link
-                                        key={item.path}
-                                        to={item.path}
-                                        onClick={() => setSidebarOpen(false)}
-                                        className={cn(
-                                            "flex items-center gap-4 px-5 py-4 rounded-2xl text-base font-medium transition-all",
-                                            location.pathname === item.path
-                                                ? "bg-slate-900 text-white shadow-lg"
-                                                : "text-slate-500 hover:bg-slate-100"
-                                        )}
-                                    >
-                                        <item.icon className="h-5 w-5" />
-                                        {item.label}
-                                    </Link>
-                                ))}
-
-                                {/* Items extras para admin */}
-                                {!isTecnico && (
-                                    <>
-                                        {/* Fallback para itens extras se necessário */}
-                                    </>
-                                )}
-                            </nav>
-
-                            <div className="p-4 border-t border-gray-100">
-                                <button
-                                    onClick={() => {
-                                        setSidebarOpen(false)
-                                        handleSignOut()
-                                    }}
-                                    className="flex w-full items-center gap-4 px-5 py-4 text-base font-medium text-red-500 hover:bg-red-50 rounded-2xl transition-colors"
-                                >
-                                    <LogOut className="h-5 w-5" />
-                                    Sair do Sistema
-                                </button>
-                            </div>
-                        </aside>
-                    </div>
-                )}
-
-                {/* Main Content Scrollable */}
-                <main className="flex-1 overflow-x-hidden bg-transparent z-10 -mt-8 md:mt-0 md:p-8 px-4 pb-32 pt-4 md:bg-[#f3f4f6]">
-                    {/* Desktop Header */}
-                    <header className="hidden md:flex h-20 items-center justify-between mb-8">
-                        <div>
-                            <h1 className="text-3xl font-bold text-slate-800 tracking-tight">{getPageTitle()}</h1>
-                            <p className="text-slate-500 mt-1">Gerencie sua empresa com eficiência.</p>
-                        </div>
-                        <div className="flex items-center gap-4">
-                            <div className="flex flex-col items-end">
-                                <span className="font-bold text-foreground">{userData?.nome}</span>
-                                <span className="text-xs text-muted-foreground">{userData?.email}</span>
-                            </div>
-                            <div className="w-12 h-12 bg-muted rounded-full overflow-hidden border-2 border-background shadow-sm">
-                                <div className="w-full h-full flex items-center justify-center bg-primary text-primary-foreground font-bold text-xl">
-                                    {userData?.nome?.[0]}
+                    {/* Mobile Header Gradient */}
+                    {/* Mobile Header Gradient */}
+                    <header className="md:hidden min-h-[140px] banking-gradient rounded-b-[30px] px-6 pt-[calc(3rem+env(safe-area-inset-top))] pb-8 flex flex-col justify-between shadow-2xl relative z-0 shrink-0">
+                        <div className="flex items-center justify-between text-white">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border border-white/30">
+                                    <span className="font-bold text-lg">{userData?.nome?.[0] || 'F'}</span>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-emerald-100 font-medium opacity-90">
+                                        {location.pathname === '/' ? 'Bem-vindo de volta,' : 'Gerenciamento'}
+                                    </p>
+                                    <h1 className="text-xl font-bold leading-tight">{getPageTitle()}</h1>
                                 </div>
                             </div>
+                            <button onClick={() => setSidebarOpen(true)} className="p-2 bg-white/10 rounded-full hover:bg-white/20 backdrop-blur-sm transition-colors">
+                                <Menu className="h-5 w-5 text-white" />
+                            </button>
                         </div>
+
+                        {/* Decorative Elements */}
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none" />
+                        <div className="absolute bottom-0 left-0 w-24 h-24 bg-emerald-400/20 rounded-full blur-2xl -ml-10 -mb-5 pointer-events-none" />
                     </header>
 
-                    <div className="md:max-w-7xl md:mx-auto">
-                        <Outlet context={{ setFabAction }} />
-                    </div>
-                </main>
+                    {/* Mobile Sidebar Overlay */}
+                    {sidebarOpen && (
+                        <div className="md:hidden fixed inset-0 z-[100]">
+                            {/* Backdrop */}
+                            <div
+                                className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+                                onClick={() => setSidebarOpen(false)}
+                            />
 
-                {/* Mobile Bottom Navigation with FAB */}
-                {/* Mobile Bottom Navigation with FAB */}
-                <nav className="md:hidden fixed bottom-0 left-0 right-0 min-h-[5rem] pb-[env(safe-area-inset-bottom)] bg-white border-t border-gray-100 rounded-t-[30px] shadow-[0_-5px_20px_-5px_rgba(0,0,0,0.1)] flex items-center justify-around px-4 z-50 transition-all duration-300">
-                    {navItems.slice(0, 2).map((item) => (
-                        <Link
-                            key={item.path}
-                            to={item.path}
-                            className={cn(
-                                "flex flex-col items-center gap-1 transition-colors p-2",
-                                location.pathname === item.path ? "text-emerald-600" : "text-gray-400"
-                            )}
-                        >
-                            <item.icon className="h-6 w-6" strokeWidth={location.pathname === item.path ? 2.5 : 2} />
-                        </Link>
-                    ))}
+                            {/* Sidebar */}
+                            <aside className="absolute right-0 top-0 h-full w-72 bg-white shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+                                <div className="h-20 flex items-center justify-between px-6 border-b border-gray-100">
+                                    <span className="text-2xl font-bold bg-gradient-to-r from-emerald-500 to-sky-500 bg-clip-text text-transparent">
+                                        FlowDrain
+                                    </span>
+                                    <button
+                                        onClick={() => setSidebarOpen(false)}
+                                        className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                                    >
+                                        <svg className="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                    </button>
+                                </div>
 
-                    {/* FAB (Floating Action Button) */}
-                    <div className="relative -top-8">
-                        <button
-                            onClick={handleFabClick}
-                            className={cn(
-                                "w-16 h-16 bg-gradient-to-tr from-emerald-500 to-sky-500 rounded-full flex items-center justify-center text-white shadow-lg shadow-emerald-500/40 hover:scale-110 active:scale-95 transition-all duration-300 border-4 border-[#f3f4f6] z-[60]",
-                                !fabAction && "opacity-0 scale-50 pointer-events-none"
-                            )}
-                        >
-                            <Plus className="h-8 w-8" strokeWidth={3} />
-                        </button>
-                    </div>
+                                <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+                                    {navItems.map((item) => (
+                                        <Link
+                                            key={item.path}
+                                            to={item.path}
+                                            onClick={() => setSidebarOpen(false)}
+                                            className={cn(
+                                                "flex items-center gap-4 px-5 py-4 rounded-2xl text-base font-medium transition-all",
+                                                location.pathname === item.path
+                                                    ? "bg-slate-900 text-white shadow-lg"
+                                                    : "text-slate-500 hover:bg-slate-100"
+                                            )}
+                                        >
+                                            <item.icon className="h-5 w-5" />
+                                            {item.label}
+                                        </Link>
+                                    ))}
 
-                    {navItems.slice(2, 4).map((item) => (
-                        <Link
-                            key={item.path}
-                            to={item.path}
-                            className={cn(
-                                "flex flex-col items-center gap-1 transition-colors p-2",
-                                location.pathname === item.path ? "text-emerald-600" : "text-gray-400"
-                            )}
-                        >
-                            <item.icon className="h-6 w-6" strokeWidth={location.pathname === item.path ? 2.5 : 2} />
-                        </Link>
-                    ))}
-                </nav>
+                                    {/* Items extras para admin */}
+                                    {!isTecnico && (
+                                        <>
+                                            {/* Fallback para itens extras se necessário */}
+                                        </>
+                                    )}
+                                </nav>
+
+                                <div className="p-4 border-t border-gray-100">
+                                    <button
+                                        onClick={() => {
+                                            setSidebarOpen(false)
+                                            handleSignOut()
+                                        }}
+                                        className="flex w-full items-center gap-4 px-5 py-4 text-base font-medium text-red-500 hover:bg-red-50 rounded-2xl transition-colors"
+                                    >
+                                        <LogOut className="h-5 w-5" />
+                                        Sair do Sistema
+                                    </button>
+                                </div>
+                            </aside>
+                        </div>
+                    )}
+
+                    {/* Main Content Scrollable */}
+                    <main className="flex-1 overflow-x-hidden bg-transparent z-10 -mt-8 md:mt-0 md:p-8 px-4 pb-32 pt-4 md:bg-[#f3f4f6]">
+                        {/* Desktop Header */}
+                        <header className="hidden md:flex h-20 items-center justify-between mb-8">
+                            <div>
+                                <h1 className="text-3xl font-bold text-slate-800 tracking-tight">{getPageTitle()}</h1>
+                                <p className="text-slate-500 mt-1">Gerencie sua empresa com eficiência.</p>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <div className="flex flex-col items-end">
+                                    <span className="font-bold text-foreground">{userData?.nome}</span>
+                                    <span className="text-xs text-muted-foreground">{userData?.email}</span>
+                                </div>
+                                <div className="w-12 h-12 bg-muted rounded-full overflow-hidden border-2 border-background shadow-sm">
+                                    <div className="w-full h-full flex items-center justify-center bg-primary text-primary-foreground font-bold text-xl">
+                                        {userData?.nome?.[0]}
+                                    </div>
+                                </div>
+                            </div>
+                        </header>
+
+                        <div className="md:max-w-7xl md:mx-auto">
+                            <Outlet context={{ setFabAction }} />
+                        </div>
+                    </main>
+
+                    {/* Mobile Bottom Navigation with FAB */}
+                    {/* Mobile Bottom Navigation with FAB */}
+                    <nav className="md:hidden fixed bottom-0 left-0 right-0 min-h-[5rem] pb-[env(safe-area-inset-bottom)] bg-white border-t border-gray-100 rounded-t-[30px] shadow-[0_-5px_20px_-5px_rgba(0,0,0,0.1)] flex items-center justify-around px-4 z-50 transition-all duration-300">
+                        {navItems.slice(0, 2).map((item) => (
+                            <Link
+                                key={item.path}
+                                to={item.path}
+                                className={cn(
+                                    "flex flex-col items-center gap-1 transition-colors p-2",
+                                    location.pathname === item.path ? "text-emerald-600" : "text-gray-400"
+                                )}
+                            >
+                                <item.icon className="h-6 w-6" strokeWidth={location.pathname === item.path ? 2.5 : 2} />
+                            </Link>
+                        ))}
+
+                        {/* FAB (Floating Action Button) */}
+                        <div className="relative -top-8">
+                            <button
+                                onClick={handleFabClick}
+                                className={cn(
+                                    "w-16 h-16 bg-gradient-to-tr from-emerald-500 to-sky-500 rounded-full flex items-center justify-center text-white shadow-lg shadow-emerald-500/40 hover:scale-110 active:scale-95 transition-all duration-300 border-4 border-[#f3f4f6] z-[60]",
+                                    !fabAction && "opacity-0 scale-50 pointer-events-none"
+                                )}
+                            >
+                                <Plus className="h-8 w-8" strokeWidth={3} />
+                            </button>
+                        </div>
+
+                        {navItems.slice(2, 4).map((item) => (
+                            <Link
+                                key={item.path}
+                                to={item.path}
+                                className={cn(
+                                    "flex flex-col items-center gap-1 transition-colors p-2",
+                                    location.pathname === item.path ? "text-emerald-600" : "text-gray-400"
+                                )}
+                            >
+                                <item.icon className="h-6 w-6" strokeWidth={location.pathname === item.path ? 2.5 : 2} />
+                            </Link>
+                        ))}
+                    </nav>
+                </div>
             </div>
-        </div >
+        </div>
     )
 }

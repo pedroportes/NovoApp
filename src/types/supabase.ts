@@ -517,7 +517,6 @@ export type Database = {
                     id: string
                     nome: string
                     preco_padrao: number
-                    valor_padrao: number
                     tipo_comissao: string | null
                     codigo_tributacao_nacional: string | null
                 }
@@ -531,7 +530,6 @@ export type Database = {
                     id?: string
                     nome: string
                     preco_padrao: number
-                    valor_padrao: number
                     tipo_comissao?: string | null
                     codigo_tributacao_nacional?: string | null
                 }
@@ -544,7 +542,7 @@ export type Database = {
                     empresa_id?: string | null
                     id?: string
                     nome?: string
-                    valor_padrao?: number
+                    preco_padrao?: number
                     tipo_comissao?: string | null
                     codigo_tributacao_nacional?: string | null
                 }
@@ -580,6 +578,7 @@ export type Database = {
                     avatar?: string | null
                     signature_url?: string | null
                     status: boolean | null
+                    must_change_password: boolean | null
                 }
                 Insert: {
                     active?: boolean | null
@@ -592,6 +591,7 @@ export type Database = {
                     latitude?: number | null
                     longitude?: number | null
                     nome_completo?: string | null
+                    nome?: string | null
                     pix_chave?: string | null
                     pix_tipo?: string | null
                     telefone?: string | null
@@ -733,6 +733,15 @@ export type Database = {
                     total_despesas: number
                     bonus: number
                 }[]
+            }
+            ensure_complete_signup: {
+                Args: {
+                    user_id: string
+                    user_email: string
+                    user_name: string
+                    company_name: string
+                }
+                Returns: void
             }
         }
         Enums: {

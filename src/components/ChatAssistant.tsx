@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { ScrollArea } from './ui/scroll-area';
 import { Bot, Send, X, Sparkles, Loader2, User, Mic, MicOff } from 'lucide-react';
 import { aiService } from '@/services/aiService';
 import { useAuth } from '@/contexts/AuthContext';

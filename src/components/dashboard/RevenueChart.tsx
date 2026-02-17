@@ -37,7 +37,7 @@ export function RevenueChart({ data }: RevenueChartProps) {
                         <Tooltip
                             cursor={{ fill: '#f8fafc' }}
                             contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                            formatter={(value: number | undefined) => [`R$ ${(value || 0).toLocaleString('pt-BR')}`, 'Faturamento']}
+                            formatter={(value: any) => [`R$ ${(value || 0).toLocaleString('pt-BR')}`, 'Faturamento']}
                         />
                         <Bar
                             dataKey="faturamento"

@@ -52,7 +52,7 @@ export function useLicenseCheck() {
             const { data: companyData, error: companyError } = await supabase
                 .from('empresas')
                 .select('created_at, subscription_status, subscription_price_id')
-                .eq('id', empresaId)
+                .eq('id', empresaId || '')
                 .single()
 
             if (companyError || !companyData) throw new Error('Company not found')
@@ -67,17 +67,18 @@ export function useLicenseCheck() {
             let plan: PlanType = 'free'
             if (companyData.subscription_status === 'active') {
                 const priceId = companyData.subscription_price_id
-                // Mapeamento de IDs de Produção (Live)
-                if (priceId === 'price_1SsUSMC2SBfOxdrqfHxP7H4q') plan = 'essencial'
+                // Mapeamento de IDs de Produção (Live) - Sincronizado com Plans.tsx
+                if (priceId === 'price_1T02Y8C2SBfOxdrqfPf01e1C') plan = 'essencial'
                 else if (priceId === 'price_1SsUaDC2SBfOxdrq9LBbQkcl') plan = 'pro'
                 else if (priceId === 'price_1SsUe8C2SBfOxdrqRMtj4wjh') plan = 'operacional'
                 else if (priceId === 'price_1SsUkBC2SBfOxdrqofDd7Euj') plan = 'prime'
+                else if (priceId === 'price_1T02TLC2SBfOxdrqrdbCvFEQ') plan = 'free' // Solo is free-tier in logic sometimes, but here we treat it
                 
                 // Mantendo compatibilidade com plano de teste de R$ 1,99 (Tratado como Pro)
-                else if (priceId === 'price_1SsOJhC2SBfOxdrqy7Jf2xNO') plan = 'pro'
+                else if (priceId === 'price_1SsN4HC2SBfOxdrq13q2V5ga' || priceId === 'price_1SsOJhC2SBfOxdrqy7Jf2xNO') plan = 'pro'
                 
-                // Fallbacks antigos (se necessário manter por segurança, senão remover)
-                else if (priceId === 'price_1Sn41V2HN3YhJoauwIng5GnO' || priceId === '12990') plan = 'pro'
+                // Fallbacks antigos (removendo IDs redundantes/antigos para evitar confusão)
+                else if (priceId === '12990') plan = 'pro'
                 else plan = 'essencial'
             }
 
@@ -92,9 +93,9 @@ export function useLicenseCheck() {
 
             // 4. Get Usage Counts
             const [clientsCount, osCount, teamCount] = await Promise.all([
-                supabase.from('clientes').select('*', { count: 'exact', head: true }).eq('empresa_id', empresaId!),
-                supabase.from('ordens_servico').select('*', { count: 'exact', head: true }).eq('empresa_id', empresaId!),
-                supabase.from('usuarios').select('*', { count: 'exact', head: true }).eq('empresa_id', empresaId!).eq('cargo', 'tecnico') // Assuming only techs count for quota
+                supabase.from('clientes').select('*', { count: 'exact', head: true }).eq('empresa_id', empresaId || ''),
+                supabase.from('ordens_servico').select('*', { count: 'exact', head: true }).eq('empresa_id', empresaId || ''),
+                supabase.from('usuarios').select('*', { count: 'exact', head: true }).eq('empresa_id', empresaId || '').eq('cargo', 'tecnico') // Assuming only techs count for quota
             ])
 
 

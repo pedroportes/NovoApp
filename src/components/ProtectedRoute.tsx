@@ -34,5 +34,10 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
         return <Navigate to="/login" replace />
     }
 
+    // Forçar troca de senha se necessário
+    if (userData.must_change_password) {
+        return <Navigate to="/update-password" replace />
+    }
+
     return <>{children}</>
 }

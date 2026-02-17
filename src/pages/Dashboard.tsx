@@ -412,7 +412,7 @@ export function Dashboard() {
 
         try {
             generateDashboardReport({
-                companyName: userData?.nome_fantasia,
+                companyName: (userData as any)?.nome_fantasia || 'Minha Empresa',
                 dateRange: dateRange,
                 stats: stats,
                 technicianStats: technicianStats,

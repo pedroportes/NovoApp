@@ -19,6 +19,7 @@ export interface UserData {
     placa_carro?: string | null
     signature_url?: string | null
     isSuperAdmin?: boolean
+    must_change_password?: boolean
 }
 
 export const authStorage = {

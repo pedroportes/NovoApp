@@ -27,6 +27,12 @@ export function Login() {
 
     // Tenta buscar o nome da empresa se for técnico
     useEffect(() => {
+        const searchParams = new URLSearchParams(window.location.search)
+        const emailParam = searchParams.get('email')
+        if (emailParam) {
+            setEmail(emailParam)
+        }
+
         if (loginType === 'tecnico' && email.includes('@')) {
             // Lógica futura: buscar logo/nome da empresa pelo domínio ou email
             // Por enquanto, mostra placeholder visual

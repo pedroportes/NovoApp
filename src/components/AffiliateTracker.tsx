@@ -7,7 +7,7 @@ export function AffiliateTracker() {
 
     useEffect(() => {
         const searchParams = new URLSearchParams(location.search)
-        const ref = searchParams.get('ref') || searchParams.get('aff')
+        const ref = searchParams.get('ref') || searchParams.get('aff') || searchParams.get('client_reference_id')
 
         if (ref) {
             // 1. Armazena no localStorage para persistência durante o cadastro

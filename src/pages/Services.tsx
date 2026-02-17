@@ -11,7 +11,7 @@ interface Service {
     id: string
     nome: string
     descricao: string | null
-    valor_padrao: number
+    preco_padrao: number
     ativo: boolean
 }
 
@@ -27,7 +27,7 @@ export function Services() {
     const [formData, setFormData] = useState({
         nome: '',
         descricao: '',
-        valor_padrao: ''
+        preco_padrao: ''
     })
     const [saving, setSaving] = useState(false)
 
@@ -53,14 +53,13 @@ export function Services() {
                 .order('nome')
 
             if (error) throw error
-            if (error) throw error
 
             // Map and cast to ensure type safety
             const formattedServices: Service[] = (data || []).map(s => ({
                 id: s.id,
                 nome: s.nome,
                 descricao: s.descricao,
-                valor_padrao: s.valor_padrao,
+                preco_padrao: s.preco_padrao,
                 ativo: s.ativo ?? true // Default to true if null
             }))
 
@@ -81,7 +80,7 @@ export function Services() {
                 empresa_id: userData!.empresa_id,
                 nome: formData.nome,
                 descricao: formData.descricao,
-                valor_padrao: parseFloat(formData.valor_padrao.replace(',', '.')) || 0
+                preco_padrao: parseFloat(formData.preco_padrao.replace(',', '.')) || 0
             }
 
             if (editingService) {
@@ -130,11 +129,11 @@ export function Services() {
             setFormData({
                 nome: service.nome,
                 descricao: service.descricao || '',
-                valor_padrao: service.valor_padrao.toString()
+                preco_padrao: service.preco_padrao.toString()
             })
         } else {
             setEditingService(null)
-            setFormData({ nome: '', descricao: '', valor_padrao: '' })
+            setFormData({ nome: '', descricao: '', preco_padrao: '' })
         }
         setIsModalOpen(true)
     }
@@ -200,7 +199,7 @@ export function Services() {
                             <div className="mt-4 pt-4 border-t border-border flex justify-between items-center">
                                 <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Valor Padrão</span>
                                 <span className="font-bold text-primary text-lg">
-                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(service.valor_padrao || 0)}
+                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(service.preco_padrao || 0)}
                                 </span>
                             </div>
                         </div>
@@ -241,8 +240,8 @@ export function Services() {
                                     step="0.01"
                                     min="0"
                                     placeholder="0,00"
-                                    value={formData.valor_padrao}
-                                    onChange={e => setFormData({ ...formData, valor_padrao: e.target.value })}
+                                    value={formData.preco_padrao}
+                                    onChange={e => setFormData({ ...formData, preco_padrao: e.target.value })}
                                 />
                             </div>
 

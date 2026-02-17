@@ -43,64 +43,66 @@ serve(async (req) => {
             { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
         )
 
-        const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
-        if (authError || !user) {
-            throw new Error(`Falha na autenticação: ${authError?.message || 'Usuário não encontrado'}`)
+        const { data: { user } } = await supabaseClient.auth.getUser()
+        
+        let empresaId = null;
+        let customer_id = null;
+
+        if (user) {
+            console.log(`Buscando perfil para o usuário logado: ${user.id}`)
+
+            // 1. Get user profile to find empresa_id
+            const { data: profile } = await supabaseClient
+                .from('usuarios')
+                .select('empresa_id')
+                .eq('id', user.id)
+                .single()
+
+            if (profile?.empresa_id) {
+                empresaId = profile.empresa_id;
+                
+                // 2. Get company data
+                const { data: empresa } = await supabaseClient
+                    .from('empresas')
+                    .select('stripe_customer_id')
+                    .eq('id', empresaId)
+                    .single()
+
+                if (empresa) {
+                    customer_id = empresa.stripe_customer_id
+                }
+            }
         }
 
-        console.log(`Buscando perfil para o usuário: ${user.id}`)
-
-        // 1. Get user profile to find empresa_id
-        const { data: profile, error: profileError } = await supabaseClient
-            .from('usuarios')
-            .select('empresa_id')
-            .eq('id', user.id)
-            .single()
-
-        if (profileError || !profile?.empresa_id) {
-            throw new Error(`Empresa não vinculada ao usuário: ${profileError?.message || 'Perfil incompleto'}`)
-        }
-
-        // 2. Get company data
-        const { data: empresa, error: empresaError } = await supabaseClient
-            .from('empresas')
-            .select('*')
-            .eq('id', profile.empresa_id)
-            .single()
-
-        if (empresaError || !empresa) {
-            throw new Error(`Dados da empresa não localizados: ${empresaError?.message || 'Empresa sumiu'}`)
-        }
-
-        const { price_id, success_url, cancel_url } = await req.json()
+        const { price_id, affiliate_id, success_url, cancel_url } = await req.json()
         if (!price_id) throw new Error('O ID do preço (price_id) é obrigatório.')
 
-        // Find or create customer
-        let customer_id = empresa.stripe_customer_id
-        if (!customer_id) {
-            console.log('Criando novo cliente no Stripe...')
+        // Find or create customer (only if logged in and missing)
+        if (user && !customer_id && empresaId) {
+            console.log('Criando novo cliente no Stripe para usuário logado...')
             const customer = await stripe.customers.create({
                 email: user.email,
-                name: empresa.nome || user.email,
-                metadata: { empresa_id: empresa.id }
+                metadata: { empresa_id: empresaId }
             })
             customer_id = customer.id
 
             await supabaseClient
                 .from('empresas')
                 .update({ stripe_customer_id: customer_id })
-                .eq('id', empresa.id)
+                .eq('id', empresaId)
         }
 
-        console.log(`Criando sessão de checkout para: ${customer_id}`)
+        console.log(`Criando sessão de checkout (Customer: ${customer_id || 'Novo'})`)
         const session = await stripe.checkout.sessions.create({
-            customer: customer_id,
+            customer: customer_id || undefined,
+            customer_email: !customer_id && user ? user.email : undefined,
+            client_reference_id: affiliate_id || undefined,
             line_items: [{ price: price_id, quantity: 1 }],
             mode: 'subscription',
-            success_url: success_url,
+            success_url: user ? `${success_url}?email=${user.email}` : success_url,
             cancel_url: cancel_url,
             metadata: {
-                empresa_id: empresa.id,
+                empresa_id: empresaId,
                 price_id: price_id
             }
         })
