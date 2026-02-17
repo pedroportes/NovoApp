@@ -601,6 +601,7 @@ export type Database = {
                     placa_carro?: string | null
                     avatar?: string | null
                     signature_url?: string | null
+                    must_change_password?: boolean | false
                 }
                 Update: {
                     active?: boolean | null
@@ -622,6 +623,7 @@ export type Database = {
                     placa_carro?: string | null
                     avatar?: string | null
                     signature_url?: string | null
+                    must_change_password?: boolean | false
                 }
                 Relationships: [
                     {
