@@ -42,7 +42,7 @@ const playNotificationSound = () => {
 export function Dashboard() {
     const navigate = useNavigate()
     const { userData } = useAuth()
-    const { plan, isTrial, isTrialExpired, usage } = useLicenseCheck()
+    const { plan, isTrial, isTrialExpired, usage, expiresAt } = useLicenseCheck()
     const { setFabAction } = useOutletContext<{ setFabAction: (action: (() => void) | null) => void }>() ?? { setFabAction: () => { } }
     const dashboardRef = useRef<HTMLDivElement>(null)
 
@@ -528,6 +528,12 @@ export function Dashboard() {
                         <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-2xl text-emerald-600">
                             <Check className="h-4 w-4" />
                             <span className="text-xs font-bold uppercase tracking-tight"> Assinatura Ativa </span>
+                            {expiresAt && (
+                                <span className="text-[10px] ml-1 bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-md mix-blend-multiply flex items-center gap-1">
+                                    <CalendarIcon className="h-3 w-3" />
+                                    Até {expiresAt.substring(0, 10).split('-').reverse().join('/')}
+                                </span>
+                            )}
                         </div>
                     )}
                 </div>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
+import { differenceInDays, differenceInMonths, differenceInYears } from 'date-fns'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -27,7 +28,7 @@ interface CompanyInfo {
 
 interface UserInfo {
     id: string
-    nome: string | null
+    nome_completo: string | null
     email: string | null
     cargo: string | null
     status: boolean | null
@@ -57,6 +58,18 @@ const PLAN_NAMES: Record<string, string> = {
     'active': 'Ativo'
 }
 
+function getActiveTime(createdAt: string) {
+    const start = new Date(createdAt)
+    const now = new Date()
+    const days = differenceInDays(now, start)
+    const months = differenceInMonths(now, start)
+    const years = differenceInYears(now, start)
+
+    if (years > 0) return `${years} ano${years > 1 ? 's' : ''}`
+    if (months > 0) return `${months} mês${months > 1 ? 'es' : ''}`
+    return `${days} dia${days !== 1 ? 's' : ''}`
+}
+
 export function CompanyDetails() {
     const { empresaId } = useParams<{ empresaId: string }>()
     const navigate = useNavigate()
@@ -68,7 +81,16 @@ export function CompanyDetails() {
 
     // Edit state
     const [isEditing, setIsEditing] = useState(false)
-    const [editForm, setEditForm] = useState({ nome: '', cnpj: '', telefone: '', email: '', endereco: '' })
+    const [editForm, setEditForm] = useState({
+        nome: '',
+        cnpj: '',
+        telefone: '',
+        email: '',
+        endereco: '',
+        plano: '' as string | null,
+        status_assinatura: '' as string | null,
+        current_period_end: '' as string | null
+    })
 
     // Delete state
     const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -91,7 +113,7 @@ export function CompanyDetails() {
 
         const [companyRes, usersRes, ordensRes, clientesRes, financeiroRes] = await Promise.all([
             supabase.from('empresas').select('*').eq('id', id).single(),
-            supabase.from('usuarios').select('id, nome, email, cargo, status, created_at').eq('empresa_id', id),
+            supabase.from('usuarios').select('id, nome_completo, email, cargo, status, created_at').eq('empresa_id', id),
             supabase.from('ordens_servico').select('*', { count: 'exact', head: true }).eq('empresa_id', id),
             supabase.from('clientes').select('*', { count: 'exact', head: true }).eq('empresa_id', id),
             supabase.from('financeiro_fluxo').select('valor').eq('empresa_id', id).eq('tipo', 'receita')
@@ -117,7 +139,10 @@ export function CompanyDetails() {
                 cnpj: info.cnpj || '',
                 telefone: info.telefone || '',
                 email: info.email || '',
-                endereco: info.endereco || ''
+                endereco: info.endereco || '',
+                plano: info.plano || '',
+                status_assinatura: info.status_assinatura || '',
+                current_period_end: info.current_period_end ? new Date(info.current_period_end).toISOString().substring(0, 10) : ''
             })
         }
 
@@ -150,7 +175,10 @@ export function CompanyDetails() {
                 cnpj: editForm.cnpj || null,
                 telefone: editForm.telefone || null,
                 email: editForm.email || null,
-                endereco: editForm.endereco || null
+                endereco: editForm.endereco || null,
+                subscription_price_id: editForm.plano || null,
+                subscription_status: editForm.status_assinatura || null,
+                current_period_end: editForm.current_period_end ? new Date(editForm.current_period_end).toISOString() : null
             })
             .eq('id', empresaId)
 
@@ -252,7 +280,7 @@ export function CompanyDetails() {
         try {
             const { error } = await supabase
                 .from('usuarios')
-                .update({ nome: userEditName })
+                .update({ nome_completo: userEditName })
                 .eq('id', userEditId)
 
             if (error) {
@@ -261,7 +289,7 @@ export function CompanyDetails() {
             }
 
             toast.success('Usuário atualizado com sucesso!')
-            setUsers(prev => prev.map(u => u.id === userEditId ? { ...u, nome: userEditName } : u))
+            setUsers(prev => prev.map(u => u.id === userEditId ? { ...u, nome_completo: userEditName } : u))
             setUserEditId(null)
             setUserEditName('')
         } catch (err: any) {
@@ -276,7 +304,7 @@ export function CompanyDetails() {
         const newStatus = !(currentStatus ?? true)
         const { error } = await supabase
             .from('usuarios')
-            .update({ status: newStatus })
+            .update({ active: newStatus })
             .eq('id', userId)
 
         if (error) {
@@ -311,7 +339,7 @@ export function CompanyDetails() {
 
         const { error } = await supabase
             .from('usuarios')
-            .update({ empresa_id: null, status: false })
+            .update({ empresa_id: null, active: false })
             .eq('id', userId)
 
         if (error) {
@@ -349,11 +377,14 @@ export function CompanyDetails() {
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
-                    {company.status_assinatura === 'active' ? (
-                        <Badge className="bg-emerald-500">Ativa</Badge>
-                    ) : (
-                        <Badge variant="secondary">{company.status_assinatura || 'Sem plano'}</Badge>
-                    )}
+                    <Badge
+                        variant={company.status_assinatura === 'active' ? "default" : "secondary"}
+                        className={company.status_assinatura === 'active' ? "bg-emerald-500 hover:bg-emerald-600" : ""}
+                    >
+                        {company.plano ? (PLAN_NAMES[company.plano] || company.plano) :
+                            (company.status_assinatura === 'free' ? 'Gratuito' :
+                                company.status_assinatura === 'active' ? 'Ativa' : (company.status_assinatura || 'Sem plano'))}
+                    </Badge>
                     <Button
                         variant="outline"
                         size="sm"
@@ -366,7 +397,10 @@ export function CompanyDetails() {
                                         cnpj: company.cnpj || '',
                                         telefone: company.telefone || '',
                                         email: company.email || '',
-                                        endereco: company.endereco || ''
+                                        endereco: company.endereco || '',
+                                        plano: company.plano || '',
+                                        status_assinatura: company.status_assinatura || '',
+                                        current_period_end: company.current_period_end ? new Date(company.current_period_end).toISOString().substring(0, 10) : ''
                                     })
                                 }
                             } else {
@@ -464,6 +498,62 @@ export function CompanyDetails() {
                                 <label className="text-xs font-semibold text-muted-foreground uppercase">Endereço</label>
                                 <Input value={editForm.endereco} onChange={e => setEditForm(f => ({ ...f, endereco: e.target.value }))} />
                             </div>
+                            <div className="space-y-1">
+                                <label className="text-xs font-semibold text-muted-foreground uppercase">Plano</label>
+                                <select
+                                    className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                    value={editForm.plano || ''}
+                                    onChange={e => setEditForm(f => ({ ...f, plano: e.target.value }))}
+                                >
+                                    <option value="">Nenhum / Sem Plano</option>
+                                    <option value="free">Gratuito</option>
+                                    <option value="solo">Plano Solo</option>
+                                    <option value="essencial">Essencial</option>
+                                    <option value="pro">Pro Fluxo</option>
+                                    <option value="operacional">Operacional</option>
+                                    <option value="prime">Prime Fleet</option>
+                                    <option value="teste">Plano Teste</option>
+                                </select>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs font-semibold text-muted-foreground uppercase">Status da Assinatura</label>
+                                <select
+                                    className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                    value={editForm.status_assinatura || ''}
+                                    onChange={e => setEditForm(f => ({ ...f, status_assinatura: e.target.value }))}
+                                >
+                                    <option value="">Nenhum</option>
+                                    <option value="active">Ativo (active)</option>
+                                    <option value="past_due">Atrasado (past_due)</option>
+                                    <option value="canceled">Cancelado (canceled)</option>
+                                    <option value="unpaid">Não Pago (unpaid)</option>
+                                    <option value="trialing">Teste (trialing)</option>
+                                    <option value="free">Gratuito (free)</option>
+                                </select>
+                            </div>
+                            <div className="space-y-1">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-xs font-semibold text-muted-foreground uppercase">Expira em</label>
+                                    <div className="flex items-center gap-1">
+                                        <Badge variant="secondary" className="cursor-pointer text-[10px] px-1.5 py-0 hover:bg-secondary/80" onClick={() => {
+                                            const d = new Date(); d.setMonth(d.getMonth() + 1); setEditForm(f => ({ ...f, current_period_end: d.toISOString().substring(0, 10) }))
+                                        }}>Mensal</Badge>
+                                        <Badge variant="secondary" className="cursor-pointer text-[10px] px-1.5 py-0 hover:bg-secondary/80" onClick={() => {
+                                            const d = new Date(); d.setMonth(d.getMonth() + 3); setEditForm(f => ({ ...f, current_period_end: d.toISOString().substring(0, 10) }))
+                                        }}>Trimestral</Badge>
+                                        <Badge variant="secondary" className="cursor-pointer text-[10px] px-1.5 py-0 hover:bg-secondary/80" onClick={() => {
+                                            const d = new Date(); d.setMonth(d.getMonth() + 6); setEditForm(f => ({ ...f, current_period_end: d.toISOString().substring(0, 10) }))
+                                        }}>Semestral</Badge>
+                                        <Badge variant="secondary" className="cursor-pointer text-[10px] px-1.5 py-0 hover:bg-secondary/80" onClick={() => {
+                                            const d = new Date(); d.setFullYear(d.getFullYear() + 1); setEditForm(f => ({ ...f, current_period_end: d.toISOString().substring(0, 10) }))
+                                        }}>Anual</Badge>
+                                        <Badge variant="secondary" className="cursor-pointer text-[10px] px-1.5 py-0 hover:bg-red-50 hover:text-red-600" onClick={() => {
+                                            setEditForm(f => ({ ...f, current_period_end: '' }))
+                                        }}>Vitalício</Badge>
+                                    </div>
+                                </div>
+                                <Input type="date" value={editForm.current_period_end || ''} onChange={e => setEditForm(f => ({ ...f, current_period_end: e.target.value }))} />
+                            </div>
                         </>
                     ) : (
                         <>
@@ -484,11 +574,15 @@ export function CompanyDetails() {
                                 </p>
                             </div>
                             <div>
+                                <p className="text-sm text-muted-foreground">Tempo Ativo</p>
+                                <p className="font-medium">{getActiveTime(company.created_at)}</p>
+                            </div>
+                            <div>
                                 <p className="text-sm text-muted-foreground">Expira em</p>
                                 <p className="font-medium">
                                     {company.current_period_end
                                         ? new Date(company.current_period_end).toLocaleDateString('pt-BR')
-                                        : 'Permanente / Manual'}
+                                        : '—'}
                                 </p>
                             </div>
                         </>
@@ -510,7 +604,7 @@ export function CompanyDetails() {
                             <div key={user.id} className="flex items-center justify-between border-b pb-3 last:border-0 last:pb-0">
                                 <div className="flex-1">
                                     <div className="flex items-center gap-2">
-                                        <p className="font-medium">{user.nome || 'Sem nome'}</p>
+                                        <p className="font-medium">{user.nome_completo || 'Sem nome'}</p>
                                         {user.status === false && (
                                             <Badge variant="destructive" className="text-xs">Inativo</Badge>
                                         )}
@@ -572,7 +666,7 @@ export function CompanyDetails() {
                                     <Button
                                         variant="ghost"
                                         size="icon"
-                                        onClick={() => handleRemoveUser(user.id, user.nome)}
+                                        onClick={() => handleRemoveUser(user.id, user.nome_completo)}
                                         title="Remover da empresa"
                                     >
                                         <Trash2 className="h-4 w-4 text-red-400" />

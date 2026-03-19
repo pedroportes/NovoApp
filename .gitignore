@@ -20,3 +20,30 @@ supabase/.temp/
 *.sqlx
 *.sql.bak
 yarn-error.log*
+
+# Test scripts and API mocks
+test_*.js
+mock_*.js
+
+# Backup folders
+backup_*/
+
+# Root configuration/sensitive files
+*.json
+!package.json
+!tsconfig.json
+!composer.json
+!deno.json
+!deno.jsonc
+!supabase/functions/**/deno.json
+!supabase/functions/**/deno.jsonc
+*.json.bak
+*.json.tmp
+*.toml
+!supabase/config.toml
+!wrangler.toml
+!fly.toml
+!netlify.toml
+!firebase.json
+!firebase.toml
+!vercel.json

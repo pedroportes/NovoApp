@@ -14,7 +14,7 @@ export function Plans() {
     const PLANS = [
         {
             id: 'solo',
-            stripe_price_id: 'price_1T02TLC2SBfOxdrqrdbCvFEQ',
+            stripe_price_id: 'price_1Su5WxC2SBfOxdrq59392S2M', // Plano Solo - R$ 59,90/mês
             name: 'Plano Solo',
             price: 'R$ 59,90',
             period: '/mês',
@@ -24,7 +24,7 @@ export function Plans() {
         },
         {
             id: 'essencial',
-            stripe_price_id: 'price_1T02Y8C2SBfOxdrqfPf01e1C',
+            stripe_price_id: 'price_1Su5XbC2SBfOxdrqQryK1y1Q', // Plano Essencial - R$ 98,90/mês
             name: 'Essencial',
             price: 'R$ 98,90',
             period: '/mês',
@@ -34,7 +34,7 @@ export function Plans() {
         },
         {
             id: 'pro',
-            stripe_price_id: 'price_1SsUaDC2SBfOxdrq9LBbQkcl',
+            stripe_price_id: 'price_1Su5a1C2SBfOxdrqPhCj6qXz', // Plano Pro Fluxo - R$ 129,90/mês
             name: 'Pro Fluxo',
             price: 'R$ 129,90',
             period: '/mês',
@@ -44,7 +44,7 @@ export function Plans() {
         },
         {
             id: 'operacional',
-            stripe_price_id: 'price_1SsUe8C2SBfOxdrqRMtj4wjh',
+            stripe_price_id: 'price_1Su5aVC2SBfOxdrqn8K8wS6t', // Plano Operacional - R$ 249,90/mês
             name: 'Operacional',
             price: 'R$ 249,90',
             period: '/mês',
@@ -54,7 +54,7 @@ export function Plans() {
         },
         {
             id: 'prime',
-            stripe_price_id: 'price_1SsUkBC2SBfOxdrqofDd7Euj',
+            stripe_price_id: 'price_1Su5b8C2SBfOxdrqV2fJ7z4X', // Plano Prime Fleet - R$ 499,90/mês
             name: 'Prime Fleet',
             price: 'R$ 499,90',
             period: '/mês',
@@ -64,7 +64,7 @@ export function Plans() {
         },
         {
             id: 'teste',
-            stripe_price_id: 'price_1SsN4HC2SBfOxdrq13q2V5ga',
+            stripe_price_id: 'price_1Su5bTC2SBfOxdrqKe2j4p45', // Plano Teste - R$ 1,99/mês
             name: 'Plano Teste',
             price: 'R$ 1,99',
             period: '/mês',
