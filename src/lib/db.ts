@@ -50,6 +50,19 @@ export interface LocalServiceOrder {
     orcamento_gerado?: boolean;
     recibo_gerado?: boolean;
     contrato_gerado?: boolean;
+    
+    // NFe Fields
+    nfe_status?: string;
+    nfe_ref?: string | null;
+    nfe_id_focus?: string | null;
+    nfe_url_pdf?: string | null;
+    nfe_numero?: string | null;
+    nfe_serie?: string | null;
+    nfe_chave?: string | null;
+    nfe_xml_url?: string | null;
+    nfe_mensagem_erro?: string | null;
+    nf_uuid?: string | null;
+
     created_at?: string;
 
     // Sync metadata
@@ -71,7 +84,7 @@ export interface LocalService {
 // Basically a log of mutations
 export interface SyncQueueItem {
     id?: number; // Auto-increment
-    table: 'clientes' | 'ordens_servico';
+    table: 'clientes' | 'ordens_servico' | 'app_logs';
     action: 'create' | 'update' | 'delete';
     data: any; // The payload to send
     created_at: number; // Timestamp

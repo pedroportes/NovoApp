@@ -197,14 +197,35 @@ export function ServiceOrders() {
 
     const handleQuickStatusUpdate = async (osId: string, newStatus: string) => {
         try {
-            await SyncService.saveServiceOrder({
-                ...orders.find(o => o.id === osId),
+            const rawOs = orders.find(o => o.id === osId);
+            if (!rawOs) return;
+
+            // Limpa campos enriquecidos que não pertencem à tabela 'ordens_servico'
+            // Isso evita salvar objetos 'clientes' e 'tecnicos' dentro do registro da OS no Dexie
+            const { clientes, tecnicos, ...osData } = rawOs as any;
+
+            const updatedOs = {
+                ...osData,
                 status: newStatus
-            })
-            toast.success(`Status atualizado para ${newStatus.replace(/_/g, ' ')}`)
+            };
+
+            // Se o status for alterado para CONCLUIDO, recalcular o total para garantir que a trigger financeira
+            // no Supabase receba o valor correto, mesmo que a OS tenha sido alterada offline ou rapidamente.
+            if (newStatus === 'CONCLUIDO') {
+                const items = Array.isArray(updatedOs.itens) ? updatedOs.itens : [];
+                const total = items.reduce((sum: number, item: any) => {
+                    const price = parseFloat(item.valor) || 0;
+                    const qty = parseInt(item.quantidade) || 1;
+                    return sum + (price * qty);
+                }, 0);
+                updatedOs.valor_total = total;
+            }
+
+            await SyncService.saveServiceOrder(updatedOs);
+            toast.success(`Status atualizado para ${newStatus.replace(/_/g, ' ')}`);
         } catch (error) {
-            console.error('Erro ao atualizar status:', error)
-            toast.error('Erro ao atualizar status')
+            console.error('Erro ao atualizar status:', error);
+            toast.error('Erro ao atualizar status');
         }
     }
 

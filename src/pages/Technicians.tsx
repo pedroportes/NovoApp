@@ -110,7 +110,7 @@ export function Technicians() {
     const { setFabAction } = useOutletContext<{ setFabAction: (action: (() => void) | null) => void }>() ?? { setFabAction: () => { } }
 
     useEffect(() => {
-        setFabAction(() => handleNewTechClick)
+        setFabAction(handleNewTechClick)
         return () => setFabAction(null)
     }, [handleNewTechClick, setFabAction])
 
@@ -284,41 +284,21 @@ export function Technicians() {
 
                 alert('Técnico atualizado!')
             } else {
-                // CRIAR NOVO - Usar signup simples
-                const { data: signupData, error: signupError } = await supabase.auth.signUp({
-                    email: formData.email,
-                    password: formData.password,
-                    options: {
-                        data: {
-                            full_name: formData.name
-                        }
-                    }
+                // CRIAR NOVO - Usar RPC para evitar deslogar o admin e contornar restrições de RLS
+                const { data: rpcData, error: rpcError } = await (supabase as any).rpc('create_technician_user', {
+                    new_email: formData.email,
+                    new_password: formData.password || Math.random().toString(36).slice(-10),
+                    new_name: formData.name,
+                    new_phone: formData.phone,
+                    new_commission_rate: commRate,
+                    new_base_salary: salary,
+                    new_pix_key: formData.pix_key,
+                    new_avatar_url: newAvatarUrl,
+                    new_signature_url: newSignatureUrl
                 })
 
-                if (signupError) throw signupError
-                if (!signupData.user) throw new Error('Erro ao criar usuário')
-
-                // 2. Inserir manualmente o perfil (UPSERT) para garantir que existe
-                // (Ignora trigger falho)
-                const { error: profileError } = await supabase
-                    .from('usuarios')
-                    .upsert({
-                        id: signupData.user.id,
-                        empresa_id: userData!.empresa_id,
-                        cargo: 'tecnico', // Força cargo técnico
-                        nome_completo: formData.name,
-                        email: formData.email,
-                        telefone: formData.phone,
-                        percentual_comissao: commRate,
-                        salario_base: salary,
-                        pix_key: formData.pix_key,
-                        avatar: newAvatarUrl,
-                        signature_url: newSignatureUrl,
-                        placa_carro: formData.placa_carro,
-                        status: true
-                    }, { onConflict: 'id' })
-
-                if (profileError) throw profileError
+                if (rpcError) throw rpcError
+                if (!rpcData.success) throw new Error(rpcData.error)
 
                 alert('Técnico criado com sucesso!')
             }

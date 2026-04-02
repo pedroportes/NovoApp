@@ -284,6 +284,24 @@ export const SyncService = {
 
             if (error) {
                 console.error('[SyncService] ❌ Supabase upsert error:', error);
+                
+                // Tenta logar o erro remotamente para auditoria, se possível
+                try {
+                    await (supabase as any).from('app_logs').insert({
+                        level: 'error',
+                        message: `Falha na Sincronização de OS (ID: ${payload.id}): ${error.message}`,
+                        meta: { 
+                            error_code: error.code,
+                            error_details: error.details,
+                            error_hint: error.hint,
+                            payload_id: payload.id,
+                            status: payload.status
+                        }
+                    });
+                } catch (logErr) {
+                    console.error('[SyncService] Erro ao registrar log de falha:', logErr);
+                }
+
                 throw error;
             }
 
