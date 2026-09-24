@@ -23,6 +23,7 @@ export interface LocalClient {
     ativo?: boolean;
     criado_por?: string | null;
     created_at?: string;
+    marca_id?: string | null;
 
     // Sync metadata
     synced: number; // 0 = false, 1 = true
@@ -32,6 +33,7 @@ export interface LocalClient {
 export interface LocalServiceOrder {
     id: string; // UUID (or 'local-' + timestamp for new offline items)
     empresa_id: string;
+    marca_id?: string | null;
     cliente_id: string;
     cliente_nome?: string; // Cache for list display
     tecnico_id: string;

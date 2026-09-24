@@ -1,6 +1,7 @@
+﻿import { BrandSwitcher } from '@/components/BrandSwitcher'
 import { useState, useEffect, useCallback } from 'react'
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Users, ClipboardList, Settings, Menu, LogOut, Plus, Wrench, Wallet, FileText, Bot, Calendar, Shield } from 'lucide-react'
+import { LayoutDashboard, Users, ClipboardList, Settings, Menu, LogOut, Plus, Wrench, Wallet, FileText, Bot, Calendar, Shield, BarChart3 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from './ui/button'
@@ -39,6 +40,7 @@ export function MainLayout() {
             { icon: Wrench, label: 'Serviços', path: '/services' },
             { icon: Users, label: 'Equipe', path: '/technicians' },
             { icon: Wallet, label: 'Financeiro', path: '/financial' },
+            { icon: BarChart3, label: 'Relatórios', path: '/reports' },
             { icon: FileText, label: 'Não Feitos', path: '/unfinished-services' },
             { icon: Bot, label: 'IA', path: '/ai-chatbot' },
             { icon: Settings, label: 'Configurações', path: '/settings' },
@@ -49,10 +51,12 @@ export function MainLayout() {
     const getPageTitle = () => {
         switch (location.pathname) {
             case '/': {
-                const firstName = userData?.nome?.trim().split(' ')[0]
-                return `Olá, ${firstName || 'Visitante'}`
+                const name = userData?.nome?.trim()
+                const displayName = name === 'Desentupidora Aqui Perto' ? name : name?.split(' ')[0]
+                return `Olá, ${displayName || 'Visitante'}`
             }
             case '/service-orders': return 'Ordens de Serviço';
+            case '/reports': case '/relatorios': return 'Central de Relatórios';
             case '/services': return 'Catálogo de Serviços';
             case '/clients': return 'Carteira de Clientes';
             case '/technicians': return 'Equipe Técnica';
@@ -225,10 +229,15 @@ export function MainLayout() {
                                 <p className="text-slate-500 mt-1">Gerencie sua empresa com eficiência.</p>
                             </div>
                             <div className="flex items-center gap-4">
-                                <div className="flex flex-col items-end">
-                                    <span className="font-bold text-foreground">{userData?.nome}</span>
-                                    <span className="text-xs text-muted-foreground">{userData?.email}</span>
-                                </div>
+                                <BrandSwitcher />
+                                <Button
+                                    onClick={() => navigate('/service-orders/new')}
+                                    className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md shadow-emerald-600/20 rounded-xl h-11 px-4 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                                    title="Abrir Nova Ordem de Serviço"
+                                >
+                                    <Plus className="h-4 w-4 stroke-[3]" />
+                                    <span>Nova OS</span>
+                                </Button>
                                 <div className="w-12 h-12 bg-muted rounded-full overflow-hidden border-2 border-background shadow-sm">
                                     <div className="w-full h-full flex items-center justify-center bg-primary text-primary-foreground font-bold text-xl">
                                         {userData?.nome?.[0]}

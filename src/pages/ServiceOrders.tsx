@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
-import { Plus, Search, FileText, Calendar, User, Trash2, Phone, MapPin, Receipt, FileSignature, Pencil, FileBadge, Loader2, Mic, MicOff } from 'lucide-react'
+import { Plus, Search, FileText, Calendar, User, Trash2, Phone, MapPin, Receipt, FileSignature, Pencil, FileBadge, Loader2, Mic, MicOff, Building2, RefreshCw, AlertCircle } from 'lucide-react'
 import { useVoiceRecognition } from '@/hooks/useVoiceRecognition'
 import { SearchAssistant, SmartFilter } from '@/services/searchAssistant'
 import { FocusNFeService } from '@/services/focusNFeService'
@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
+import { useBrand } from '@/contexts/BrandContext'
 import { useLicenseCheck } from '@/hooks/useLicenseCheck'
 import { UpgradeModal } from '@/components/subscription/UpgradeModal'
 import {
@@ -29,7 +30,7 @@ import {
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { SyncService } from '@/services/syncService'
-import { useOfflineServiceOrders, useOfflineClients } from '@/hooks/useOfflineData'
+import { useOfflineServiceOrders, useOfflineClients, useOfflineTechnicians } from '@/hooks/useOfflineData'
 
 type ServiceOrder = any
 
@@ -38,6 +39,55 @@ export function ServiceOrders() {
     const { userData } = useAuth()
     const { orders: rawOrders, loading: loadingOrders } = useOfflineServiceOrders()
     const { clients } = useOfflineClients()
+    const { technicians: offlineTechs } = useOfflineTechnicians()
+    const { brands, selectedBrandId } = useBrand()
+
+    const [dbTechnicians, setDbTechnicians] = useState<any[]>([])
+
+    // Sincroniza dados fiscais de NFS-e do Supabase para o banco offline local
+    useEffect(() => {
+        if (!userData?.empresa_id) return
+        supabase
+            .from('ordens_servico')
+            .select('id, nfe_status, nfe_ref, nfe_numero, nfe_pdf_url, nfe_mensagem_erro')
+            .eq('empresa_id', userData.empresa_id)
+            .not('nfe_status', 'is', null)
+            .then(async ({ data }) => {
+                if (data && data.length > 0) {
+                    for (const item of data) {
+                        try {
+                            const pdfLink = item.nfe_pdf_url || (item as any).nfe_url_pdf || null
+                            await db.ordens_servico.update(item.id, {
+                                nfe_status: item.nfe_status,
+                                nfe_ref: item.nfe_ref,
+                                nfe_numero: item.nfe_numero,
+                                nfe_url_pdf: pdfLink,
+                                nfe_pdf_url: pdfLink,
+                                nfe_mensagem_erro: item.nfe_mensagem_erro,
+                                synced: 1
+                            })
+                        } catch (e) {
+                            console.warn('Erro ao sincronizar OS local:', e)
+                        }
+                    }
+                }
+            })
+    }, [userData?.empresa_id])
+
+    // Busca técnicos parceiros do banco para garantir nomes reais
+    useEffect(() => {
+        if (!userData?.empresa_id) return
+        supabase
+            .from('usuarios')
+            .select('id, nome, nome_completo, email')
+            .eq('empresa_id', userData.empresa_id)
+            .then(({ data }) => {
+                if (data && data.length > 0) {
+                    setDbTechnicians(data)
+                }
+            })
+    }, [userData?.empresa_id])
+
     const [searchTerm, setSearchTerm] = useState('')
     const [smartFilter, setSmartFilter] = useState<SmartFilter | null>(null)
 
@@ -70,16 +120,59 @@ export function ServiceOrders() {
     // Delete Modal State
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
     const [osToDelete, setOsToDelete] = useState<string | null>(null)
+    const [cancelModalOpen, setCancelModalOpen] = useState(false)
+    const [osToCancel, setOsToCancel] = useState<any | null>(null)
+    const [cancelJustificativa, setCancelJustificativa] = useState('Cancelamento de serviço solicitado pelo cliente')
+    const [isCanceling, setIsCanceling] = useState(false)
     const [emittingIds, setEmittingIds] = useState<Set<string>>(new Set())
+    const [syncing, setSyncing] = useState(false)
+    const [displayLimit, setDisplayLimit] = useState(24)
 
-    // ... (Enrichment logic stays same)
+    // Reseta paginação quando o usuário pesquisa ou troca de marca
+    useEffect(() => {
+        setDisplayLimit(24)
+    }, [searchTerm, selectedBrandId, smartFilter])
+
+    const handleManualSync = async () => {
+        if (!userData?.empresa_id || syncing) return
+        setSyncing(true)
+        toast.info('Sincronizando todas as ordens de serviço da nuvem...')
+        try {
+            await SyncService.pullAllData(userData.empresa_id)
+            toast.success('Todas as ordens de serviço foram sincronizadas!')
+        } catch (error: any) {
+            console.error('Erro na sincronização manual:', error)
+            toast.error('Erro ao sincronizar: ' + error.message)
+        } finally {
+            setSyncing(false)
+        }
+    }
+
+    // Combina técnicos locais e remotos
+    const allTechnicians = dbTechnicians.length > 0 ? dbTechnicians : (offlineTechs || [])
+
+    // Enriquecimento com técnicos reais e dados da marca
     const orders = (rawOrders || [])
         .map(order => {
             const client = clients?.find(c => c.id === order.cliente_id)
+            const tech = allTechnicians.find((t: any) => t.id === order.tecnico_id)
+            const techName = tech?.nome_completo || tech?.nome || (order.tecnico_id ? 'Técnico Parceiro' : null)
+            
+            // Prioridade de identificação da marca:
+            // 1. Marca expressa na OS (order.marca_id)
+            // 2. Marca cadastrada no cliente (client?.marca_id)
+            // 3. Fallback para Matriz Hidro Curitiba / primeira marca do grupo
+            const brandId = order.marca_id || client?.marca_id
+            const fallbackBrand = brands?.find(b => b.matriz) || (brands && brands.length > 0 ? brands[0] : null)
+            const marca = (brands && brands.length > 0)
+                ? (brands.find(b => b.id === brandId) || fallbackBrand)
+                : null
+
             return {
                 ...order,
                 clientes: client,
-                tecnicos: { nome_completo: 'Técnico' }
+                marca: marca,
+                tecnicos: techName ? { nome_completo: techName } : null
             }
         })
 
@@ -89,7 +182,6 @@ export function ServiceOrders() {
     const [etaMinutes, setEtaMinutes] = useState('')
 
     const handleNavigationStart = async (app: 'waze' | 'google') => {
-        // ... (existing logic)
         if (!selectedOsForNav) return
         const updates: any = { deslocamento_iniciado_em: new Date().toISOString() }
         if (etaMinutes) {
@@ -115,16 +207,18 @@ export function ServiceOrders() {
         return () => setFabAction(null)
     }, [setFabAction, handleNewOSClick])
 
-    // fetchOrders removed in favor of useOfflineServiceOrders hook
-
     const filteredOrders = orders.filter(os => {
         const term = searchTerm.toLowerCase()
+
+        // Filtro por marca se estiver selecionada no seletor do topo
+        if (selectedBrandId && selectedBrandId !== 'all') {
+            if (os.marca_id && os.marca_id !== selectedBrandId) return false
+        }
 
         // Strictly hide "Not Done" statuses from the main list unless explicitly filtered.
         const osStatus = os.status?.toLowerCase()
         const isNotDoneStatus = ['orcamento', 'nao_feito_outra_empresa', 'nao_feito_ja_realizado', 'nao_feito_cancelado'].includes(osStatus)
 
-        // If we have a smart filter for status, we use it, otherwise we hide not-done.
         if (smartFilter?.status) {
             if (osStatus !== smartFilter.status) return false
         } else if (isNotDoneStatus) {
@@ -147,12 +241,9 @@ export function ServiceOrders() {
         if (os.clientes?.cidade?.toLowerCase().includes(term)) return true
         if (os.clientes?.endereco?.toLowerCase().includes(term)) return true
         // Search by phone
-        const cleanedTerm = term.replace(/\D/g, '') // Remove non-digits for phone matching
+        const cleanedTerm = term.replace(/\D/g, '')
         if (cleanedTerm && (os.clientes?.whatsapp?.replace(/\D/g, '').includes(cleanedTerm))) return true
-        // LocalClient doesn't strictly have 'telefone' in TS definition, cast to any if legacy data exists
         if (cleanedTerm && ((os.clientes as any)?.telefone?.replace(/\D/g, '').includes(cleanedTerm))) return true
-        // Top level cliente_whatsapp might not exist on enriched local object
-        // if (cleanedTerm && (os.cliente_whatsapp?.replace(/\D/g, '').includes(cleanedTerm))) return true 
 
         return false
     })
@@ -165,6 +256,18 @@ export function ServiceOrders() {
     const formatDate = (dateString: string) => {
         return new Date(dateString).toLocaleDateString('pt-BR')
     }
+
+    // Ordenação do mais recém-criado (topo) para o mais antigo (final)
+    const sortedOrders = [...filteredOrders].sort((a, b) => {
+        const getTime = (val: any) => {
+            if (!val) return 0;
+            const d = new Date(val).getTime();
+            return isNaN(d) ? 0 : d;
+        };
+        const tA = getTime(a.created_at) || getTime(a.updated_at) || getTime(a.data_agendamento);
+        const tB = getTime(b.created_at) || getTime(b.updated_at) || getTime(b.data_agendamento);
+        return tB - tA;
+    });
 
     const confirmDelete = async () => {
         if (!osToDelete) return
@@ -182,12 +285,12 @@ export function ServiceOrders() {
         const column = type === 'ORCAMENTO' ? 'orcamento_gerado' : type === 'RECIBO' ? 'recibo_gerado' : 'contrato_gerado'
 
         try {
-            // Update via SyncService for offline support and instant UI update
+            const effectiveBrandId = os.marca?.id || os.marca_id || os.clientes?.marca_id
             await SyncService.saveServiceOrder({
                 ...os,
+                marca_id: effectiveBrandId || os.marca_id,
                 [column]: true
             })
-            // Open print page (Corrected path to match App.tsx)
             window.open(`/print/service-orders/${os.id}?type=${type}`, '_blank')
         } catch (error) {
             console.error('Erro ao marcar documento:', error)
@@ -197,60 +300,198 @@ export function ServiceOrders() {
 
     const handleQuickStatusUpdate = async (osId: string, newStatus: string) => {
         try {
-            const rawOs = orders.find(o => o.id === osId);
-            if (!rawOs) return;
+            const rawOs = orders.find(o => o.id === osId)
+            if (!rawOs) return
 
-            // Limpa campos enriquecidos que não pertencem à tabela 'ordens_servico'
-            // Isso evita salvar objetos 'clientes' e 'tecnicos' dentro do registro da OS no Dexie
-            const { clientes, tecnicos, ...osData } = rawOs as any;
+            // Limpa campos enriquecidos que não pertencem à tabela 'ordens_servico' no Dexie
+            const { clientes, tecnicos, marca, ...osData } = rawOs as any
 
             const updatedOs = {
                 ...osData,
                 status: newStatus
-            };
-
-            // Se o status for alterado para CONCLUIDO, recalcular o total para garantir que a trigger financeira
-            // no Supabase receba o valor correto, mesmo que a OS tenha sido alterada offline ou rapidamente.
-            if (newStatus === 'CONCLUIDO') {
-                const items = Array.isArray(updatedOs.itens) ? updatedOs.itens : [];
-                const total = items.reduce((sum: number, item: any) => {
-                    const price = parseFloat(item.valor) || 0;
-                    const qty = parseInt(item.quantidade) || 1;
-                    return sum + (price * qty);
-                }, 0);
-                updatedOs.valor_total = total;
             }
 
-            await SyncService.saveServiceOrder(updatedOs);
-            toast.success(`Status atualizado para ${newStatus.replace(/_/g, ' ')}`);
+            if (newStatus === 'CONCLUIDO') {
+                const items = Array.isArray(updatedOs.itens) ? updatedOs.itens : []
+                const total = items.reduce((sum: number, item: any) => {
+                    const price = parseFloat(item.valor) || 0
+                    const qty = parseInt(item.quantidade) || 1
+                    return sum + (price * qty)
+                }, 0)
+                if (total > 0) {
+                    updatedOs.valor_total = total
+                }
+            }
+
+            await SyncService.saveServiceOrder(updatedOs)
+            toast.success(`Status atualizado para ${newStatus.replace(/_/g, ' ')}`)
         } catch (error) {
-            console.error('Erro ao atualizar status:', error);
-            toast.error('Erro ao atualizar status');
+            console.error('Erro ao atualizar status:', error)
+            toast.error('Erro ao atualizar status')
         }
     }
 
-    const handleQuickEmitNFe = async (osId: string) => {
+    const handleCancelNFe = async () => {
+        if (!osToCancel) return
+        if (!cancelJustificativa || cancelJustificativa.trim().length < 10) {
+            toast.error('Informe uma justificativa com no mínimo 10 caracteres para o cancelamento.')
+            return
+        }
+
+        const ref = osToCancel.nfe_ref
+        if (!ref) {
+            toast.error('Referência fiscal da nota não encontrada.')
+            return
+        }
+
         try {
-            setEmittingIds(prev => new Set(prev).add(osId))
-            toast.info('Iniciando emissão da NFS-e...')
+            setIsCanceling(true)
+            toast.info('Enviando solicitação de cancelamento para a prefeitura...')
 
-            const result = await FocusNFeService.emitirNotaFiscal(osId)
+            const res = await FocusNFeService.cancelarNotaFiscal(ref, cancelJustificativa.trim(), osToCancel.empresa_id)
 
-            toast.success('NFS-e enviada para processamento!')
+            // Atualiza status local e remoto
+            await db.ordens_servico.update(osToCancel.id, {
+                nfe_status: 'cancelado',
+                synced: 1
+            })
+            await supabase.from('ordens_servico').update({
+                nfe_status: 'cancelado'
+            }).eq('id', osToCancel.id)
 
-            // Update local DB instantly
-            if (result && result.data) {
-                await db.ordens_servico.update(osId, {
-                    nfe_status: result.data.status || 'enviada',
-                    nfe_ref: result.data.ref || null,
-                    nfe_id_focus: result.data.id_focus || null,
+            toast.success('NFS-e cancelada com sucesso na prefeitura!', { duration: 6000 })
+            setCancelModalOpen(false)
+            setOsToCancel(null)
+        } catch (err: any) {
+            console.error('Erro ao cancelar NFS-e:', err)
+            // Se a prefeitura informou que está em processamento de cancelamento:
+            if (err.message && (err.message.includes('Não processado') || err.message.includes('Aguardando validação'))) {
+                await db.ordens_servico.update(osToCancel.id, {
+                    nfe_status: 'processando_cancelamento',
                     synced: 1
                 })
+                await supabase.from('ordens_servico').update({
+                    nfe_status: 'processando_cancelamento'
+                }).eq('id', osToCancel.id)
+
+                toast.info('Cancelamento enviado! A prefeitura está processando a anulação da nota.', { duration: 6000 })
+                setCancelModalOpen(false)
+                setOsToCancel(null)
+            } else {
+                toast.error(`Erro ao cancelar NFS-e: ${err.message || 'Falha na comunicação'}`, { duration: 7000 })
+            }
+        } finally {
+            setIsCanceling(false)
+        }
+    }
+
+    const handleQuickEmitNFe = async (os: any) => {
+        const osId = typeof os === 'string' ? os : os.id
+        const currentOs = typeof os === 'string' ? (serviceOrders.find(item => item.id === osId) || os) : os
+
+        try {
+            setEmittingIds(prev => new Set(prev).add(osId))
+
+            // 1. Se já tem URL do PDF e está autorizada, abre direto
+            if (currentOs?.nfe_url_pdf && (currentOs?.nfe_status === 'autorizado' || currentOs?.nfe_status === 'autorizada')) {
+                window.open(currentOs.nfe_url_pdf, '_blank')
+                return
+            }
+
+            let refParaConsultar = currentOs?.nfe_ref
+
+            // 2. Se não tem ref, dispara a emissão inicial
+            if (!refParaConsultar) {
+                toast.info('Enviando NFS-e para a prefeitura via Focus NFe...')
+                const result = await FocusNFeService.emitirNotaFiscal(osId)
+                refParaConsultar = result?.ref || null
+                
+                if (refParaConsultar) {
+                    await db.ordens_servico.update(osId, {
+                        nfe_status: 'processando_autorizacao',
+                        nfe_ref: refParaConsultar,
+                        synced: 1
+                    })
+                    await supabase.from('ordens_servico').update({
+                        nfe_status: 'processando_autorizacao',
+                        nfe_ref: refParaConsultar,
+                    }).eq('id', osId)
+                }
+            }
+
+            if (!refParaConsultar) {
+                throw new Error('Não foi possível obter a referência da nota para acompanhamento.')
+            }
+
+            // 3. POLLING ATIVO: Consulta a cada 2.5s por até 10 tentativas (25s) até autorizar
+            toast.info('Aguardando autorização da prefeitura (verificando retorno)...', { duration: 4000 })
+            
+            let autorizada = false
+            let tentativas = 0
+            const maxTentativas = 10
+
+            while (tentativas < maxTentativas && !autorizada) {
+                tentativas++
+                await new Promise(resolve => setTimeout(resolve, 2500))
+
+                try {
+                    const data = await FocusNFeService.consultarNotaFiscal(refParaConsultar, currentOs?.empresa_id)
+
+                    if (data.status === 'autorizado' || data.status === 'autorizada') {
+                        autorizada = true
+                        const pdfHost = (data.caminho_danfe && data.caminho_danfe.startsWith('http'))
+                            ? ''
+                            : (currentOs?.nfe_ambiente === 'producao' ? 'https://api.focusnfe.com.br' : 'https://homologacao.focusnfe.com.br')
+                        const pdfUrl = data.url_danfse || (data.caminho_danfe ? (`${pdfHost}${data.caminho_danfe}`) : null)
+                        const nroNota = String(data.numero || data.numero_dps || '')
+
+                        // Atualiza no banco local e nuvem
+                        await db.ordens_servico.update(osId, {
+                            nfe_status: 'autorizado',
+                            nfe_url_pdf: pdfUrl,
+                            nfe_pdf_url: pdfUrl,
+                            nfe_numero: nroNota,
+                            synced: 1
+                        })
+                        await supabase.from('ordens_servico').update({
+                            nfe_status: 'autorizado',
+                            nfe_url_pdf: pdfUrl,
+                            nfe_pdf_url: pdfUrl,
+                            nfe_numero: nroNota,
+                        }).eq('id', osId)
+
+                        toast.success(`🎉 NFS-e nº ${nroNota || ''} AUTORIZADA com sucesso! Abrindo PDF...`, { duration: 6000 })
+                        if (pdfUrl) {
+                            window.open(pdfUrl, '_blank')
+                        }
+                        return
+                    } else if (data.status === 'erro_autorizacao' || data.status === 'erro') {
+                        const msgErro = data.erros?.[0]?.mensagem || data.motivo_status || 'Erro retornado pela prefeitura'
+                        await db.ordens_servico.update(osId, {
+                            nfe_status: 'erro_autorizacao',
+                            nfe_mensagem_erro: msgErro,
+                            synced: 1
+                        })
+                        await supabase.from('ordens_servico').update({
+                            nfe_status: 'erro_autorizacao',
+                            nfe_mensagem_erro: msgErro,
+                        }).eq('id', osId)
+
+                        toast.error(`NFS-e Rejeitada: ${msgErro}`, { duration: 7000 })
+                        return
+                    }
+                } catch (pollErr: any) {
+                    console.warn('Tentativa de consulta:', pollErr.message)
+                }
+            }
+
+            if (!autorizada) {
+                toast.info('A nota ainda está sendo processada pela prefeitura. Clique no botão de status para checar novamente.', { duration: 6000 })
             }
 
         } catch (error: any) {
             console.error('Erro ao emitir NFe:', error)
-            toast.error(`Erro ao emitir: ${error.message}`)
+            toast.error(`Erro ao emitir NFS-e: ${error.message}`)
         } finally {
             setEmittingIds(prev => {
                 const newSet = new Set(prev)
@@ -260,8 +501,39 @@ export function ServiceOrders() {
         }
     }
 
+    const normalizePhoneForWhatsApp = (rawPhone: string | null | undefined): string => {
+        if (!rawPhone) return ''
+        let clean = rawPhone.replace(/\D/g, '').replace(/^0+/, '')
+        // Se tem 8 ou 9 dígitos (ex: 984501037), está sem DDD. Sede em Curitiba/RMC = DDD 41
+        if (clean.length === 8 || clean.length === 9) {
+            clean = '41' + clean
+        }
+        // Se tem 10 ou 11 dígitos, adiciona DDI 55
+        if (clean.length === 10 || clean.length === 11) {
+            clean = '55' + clean
+        }
+        return clean
+    }
+
+    const handleShareNFeWhatsApp = (os: ServiceOrder) => {
+        const cleanPhone = normalizePhoneForWhatsApp(getClientPhone(os))
+        const clientFirstName = (os.cliente_nome || 'Cliente').split(' ')[0]
+        const brandName = os.marca?.nome || 'Desentupidora Hidro Curitiba'
+        const pdfUrl = os.nfe_url_pdf || os.nfe_pdf_url || ''
+        const nfNumber = os.nfe_numero || ''
+        const valorFormatado = (os.valor_total || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+
+        const message = `Olá, *${clientFirstName}*! Tudo bem?\n\nSegue a sua *Nota Fiscal de Serviço Eletrônica (NFS-e nº ${nfNumber})* referente ao atendimento da *${brandName}*:\n\n📄 *Acesse e baixe o seu DANFSe em PDF:*\n${pdfUrl}\n\n💰 *Valor:* ${valorFormatado}\n\nAgradecemos pela preferência e confiança! Qualquer dúvida, estamos sempre à disposição.`
+
+        if (cleanPhone) {
+            window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank')
+        } else {
+            toast.info('Cliente sem telefone cadastrado. Selecione o contato no WhatsApp.')
+            window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank')
+        }
+    }
+
     const getStatusColor = (status: string, hasDeslocamento?: boolean) => {
-        // Se está em deslocamento ativo (e não concluído), mostrar como azul
         if (hasDeslocamento && !['concluído', 'concluido'].includes(status?.toLowerCase())) {
             return 'bg-blue-500/10 text-blue-600 border-blue-500/20 shadow-[0_0_10px_rgba(59,130,246,0.2)]'
         }
@@ -281,14 +553,12 @@ export function ServiceOrders() {
         }
     }
 
-    // Helper to extract address for map query - updated for LocalServiceOrder structure
     const getClientAddress = (os: ServiceOrder) => {
         const c = os.clientes
         if (!c) return ''
         return `${c.logradouro || ''}, ${c.numero || ''} - ${c.bairro || ''}, ${c.cidade || ''}`
     }
 
-    // Helper to get phone
     const getClientPhone = (os: ServiceOrder) => {
         return os.clientes?.whatsapp || (os.clientes as any)?.telefone || os.cliente_whatsapp
     }
@@ -298,102 +568,157 @@ export function ServiceOrders() {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <h1 className="text-3xl font-black text-slate-800 tracking-tight">Ordens de Serviço</h1>
-                    <p className="text-slate-500 font-medium mt-1">Gerencie sua empresa com eficiência. <span className='text-xs ml-2 opacity-50'>{userData?.email}</span></p>
+                    <p className="text-slate-500 text-sm mt-1">Gerencie os atendimentos e serviços da sua empresa.</p>
                 </div>
-                <Button onClick={handleNewOSClick} className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20 rounded-2xl h-12 px-6 font-bold transition-all hover:scale-105 active:scale-95">
-                    <Plus className="mr-2 h-5 w-5" />
-                    Nova OS
-                </Button>
+                <div className="flex items-center gap-3 w-full md:w-auto">
+                    <Button 
+                        variant="outline"
+                        type="button"
+                        onClick={handleManualSync}
+                        disabled={syncing}
+                        className="gap-2 rounded-xl h-11 px-4 border-slate-200 text-slate-700 hover:bg-slate-50 transition-all font-semibold"
+                        title="Buscar todas as ordens de serviço atualizadas do banco"
+                    >
+                        <RefreshCw className={`h-4 w-4 text-emerald-600 ${syncing ? 'animate-spin' : ''}`} />
+                        {syncing ? 'Sincronizando...' : 'Atualizar Dados'}
+                    </Button>
+                    <Button onClick={handleNewOSClick} className="w-full md:w-auto gap-2 bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-600/20 text-white rounded-xl h-11 px-5 font-bold transition-all">
+                        <Plus className="h-5 w-5" />
+                        Nova Ordem de Serviço
+                    </Button>
+                </div>
             </div>
 
-            <div className="relative group max-w-2xl mx-auto mb-8">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-emerald-500/50 group-focus-within:text-emerald-500 transition-colors" />
-                <Input
-                    placeholder="Buscar por cliente, endereço, telefone ou ID..."
-                    className="pl-12 pr-14 h-14 text-lg shadow-xl shadow-emerald-500/5 border-0 bg-white/80 backdrop-blur-xl rounded-2xl focus:ring-2 focus:ring-emerald-500/20 transition-all"
-                    value={searchTerm}
-                    onChange={(e) => {
-                        setSearchTerm(e.target.value)
-                        setSmartFilter(null)
-                    }}
-                />
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className={cn(
-                        "absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-xl transition-all",
-                        isListening ? "bg-red-50 text-red-500 animate-pulse" : "text-slate-400 hover:bg-slate-50"
-                    )}
-                    onClick={(e) => {
-                        e.preventDefault()
-                        isListening ? stopListening() : startListening()
-                    }}
-                >
-                    {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
-                </Button>
+            {/* Smart Search Bar */}
+            <div className="relative">
+                <div className="relative flex items-center">
+                    <Search className="absolute left-4 h-5 w-5 text-slate-400" />
+                    <Input
+                        value={searchTerm}
+                        onChange={(e) => {
+                            setSearchTerm(e.target.value)
+                            if (smartFilter) setSmartFilter(null)
+                        }}
+                        placeholder="Buscar por cliente, endereço, telefone ou use a voz (ex: 'Ver serviços em Curitiba')"
+                        className="pl-12 pr-12 h-14 bg-white border-slate-200/80 rounded-2xl shadow-sm text-base focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                    />
+                    <button
+                        type="button"
+                        onClick={isListening ? stopListening : startListening}
+                        className={`absolute right-4 p-2 rounded-xl transition-all ${isListening ? 'bg-red-50 text-red-600 animate-pulse' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
+                        title={isListening ? "Parar gravação" : "Pesquisar por voz"}
+                    >
+                        {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+                    </button>
+                </div>
+
+                {smartFilter && (
+                    <div className="mt-2 flex items-center gap-2 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-3 py-1.5 rounded-xl w-fit">
+                        <span>Filtro inteligente ativo:</span>
+                        {smartFilter.status && <span className="bg-emerald-100 px-2 py-0.5 rounded-md">Status: {smartFilter.status}</span>}
+                        {smartFilter.city && <span className="bg-emerald-100 px-2 py-0.5 rounded-md">Cidade: {smartFilter.city}</span>}
+                        <button onClick={() => setSmartFilter(null)} className="text-emerald-500 hover:text-emerald-800 ml-1 font-bold">×</button>
+                    </div>
+                )}
             </div>
 
-            <UpgradeModal
-                isOpen={showUpgradeModal}
-                onClose={() => setShowUpgradeModal(false)}
-                description={upgradeMessage}
-            />
-
+            {/* Grid de Ordens de Serviço */}
             {loading ? (
-                <div className="text-center py-20 text-emerald-600 font-medium">Carregando ordens de serviço...</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {[1, 2, 3, 4, 5, 6].map(i => (
+                        <div key={i} className="h-64 bg-white rounded-3xl border border-slate-100 p-6 animate-pulse" />
+                    ))}
+                </div>
             ) : filteredOrders.length === 0 ? (
-                <div className="text-center py-20 text-slate-400 bg-white/50 rounded-3xl border-2 border-dashed border-slate-200 mx-4">
-                    Nenhuma ordem de serviço encontrada.
+                <div className="text-center py-16 bg-white rounded-3xl border border-dashed border-slate-200">
+                    <FileText className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+                    <h3 className="text-lg font-bold text-slate-700">Nenhuma ordem de serviço encontrada</h3>
+                    <p className="text-sm text-slate-400 mt-1 max-w-sm mx-auto">
+                        Tente ajustar a sua busca ou crie uma nova OS para começar a atender seus clientes.
+                    </p>
                 </div>
             ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                    {filteredOrders.map((os) => (
-                        <div key={os.id}
+                <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {sortedOrders.slice(0, displayLimit).map((os) => (
+                        <div
+                            key={os.id}
                             onClick={() => navigate(`/service-orders/${os.id}`)}
-                            className="group relative flex flex-col justify-between rounded-[24px] border border-white bg-white/90 backdrop-blur-xl p-6 shadow-xl shadow-emerald-900/5 hover:shadow-2xl hover:shadow-emerald-900/10 hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden">
-
+                            className="group relative flex flex-col justify-between rounded-[24px] border border-white bg-white/90 backdrop-blur-xl p-6 shadow-xl shadow-emerald-900/5 hover:shadow-2xl hover:shadow-emerald-900/10 hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden"
+                        >
                             {/* Decorative gradient blob */}
                             <div className="absolute -top-10 -right-10 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl group-hover:bg-emerald-500/20 transition-all pointer-events-none" />
 
-                            <div className="flex justify-between items-start mb-5 relative z-10">
-                                <Select
-                                    value={os.status || 'PENDENTE'}
-                                    onValueChange={(value) => handleQuickStatusUpdate(os.id, value)}
-                                >
-                                    <SelectTrigger onClick={(e) => e.stopPropagation()} className={cn(
-                                        "w-fit h-auto px-4 py-1.5 rounded-full text-xs font-bold border flex items-center gap-1.5 transition-all outline-none ring-0 focus:ring-0 select-none",
-                                        getStatusColor(os.status || 'pendente', !!os.deslocamento_iniciado_em)
-                                    )}>
-                                        <div className="w-1.5 h-1.5 rounded-full bg-current" />
-                                        <SelectValue>
-                                            {os.deslocamento_iniciado_em && !['concluído', 'concluido'].includes(os.status?.toLowerCase() || '')
-                                                ? 'EM DESLOCAMENTO'
-                                                : (os.status || 'Pendente').replace(/_/g, ' ').toUpperCase()}
-                                        </SelectValue>
-                                    </SelectTrigger>
-                                    <SelectContent onClick={(e) => e.stopPropagation()} className="rounded-xl shadow-xl border-slate-100">
-                                        <SelectItem value="PENDENTE">Pendente</SelectItem>
-                                        <SelectItem value="EM_ANDAMENTO">Em Andamento</SelectItem>
-                                        <SelectItem value="CONCLUIDO" className="text-emerald-600 font-bold">Concluído</SelectItem>
-                                        <SelectItem value="ORCAMENTO">Somente Orçamento</SelectItem>
-                                        <SelectItem value="NAO_FEITO_CANCELADO">Cancelado</SelectItem>
-                                        <SelectItem value="NAO_FEITO_OUTRA_EMPRESA">Outra Empresa</SelectItem>
-                                        <SelectItem value="NAO_FEITO_JA_REALIZADO">Já Realizado</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <span className="text-xs text-slate-400 font-mono tracking-wider">#{os.id.slice(0, 8)}</span>
+                            <div className="flex justify-between items-center mb-4 relative z-10 gap-2">
+                                <div className="flex items-center gap-2 min-w-0">
+                                    <Select
+                                        value={os.status || 'PENDENTE'}
+                                        onValueChange={(value) => handleQuickStatusUpdate(os.id, value)}
+                                    >
+                                        <SelectTrigger onClick={(e) => e.stopPropagation()} className={cn(
+                                            "w-fit h-7 px-2.5 py-0 rounded-full text-[11px] font-bold border flex items-center gap-1.5 transition-all outline-none ring-0 focus:ring-0 select-none shrink-0 shadow-xs",
+                                            getStatusColor(os.status || 'pendente', !!os.deslocamento_iniciado_em)
+                                        )}>
+                                            <div className="w-1.5 h-1.5 rounded-full bg-current shrink-0" />
+                                            <SelectValue>
+                                                {os.deslocamento_iniciado_em && !['concluído', 'concluido'].includes(os.status?.toLowerCase() || '')
+                                                    ? 'EM DESLOCAMENTO'
+                                                    : (os.status || 'Pendente').replace(/_/g, ' ').toUpperCase()}
+                                            </SelectValue>
+                                        </SelectTrigger>
+                                        <SelectContent onClick={(e) => e.stopPropagation()} className="rounded-xl shadow-xl border-slate-100">
+                                            <SelectItem value="PENDENTE">Pendente</SelectItem>
+                                            <SelectItem value="EM_ANDAMENTO">Em Andamento</SelectItem>
+                                            <SelectItem value="CONCLUIDO" className="text-emerald-600 font-bold">Concluído</SelectItem>
+                                            <SelectItem value="ORCAMENTO">Somente Orçamento</SelectItem>
+                                            <SelectItem value="NAO_FEITO_CANCELADO">Cancelado</SelectItem>
+                                            <SelectItem value="NAO_FEITO_OUTRA_EMPRESA">Outra Empresa</SelectItem>
+                                            <SelectItem value="NAO_FEITO_JA_REALIZADO">Já Realizado</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+
+                                    {os.marca && (
+                                        <span 
+                                            className="h-7 px-2.5 flex items-center justify-center rounded-full font-bold text-[11px] shadow-xs shrink-0 whitespace-nowrap"
+                                            style={{ 
+                                                backgroundColor: `${os.marca.cor_tema || '#10b981'}15`,
+                                                color: os.marca.cor_tema || '#059669',
+                                                border: `1px solid ${os.marca.cor_tema || '#10b981'}35`
+                                            }}
+                                        >
+                                            {os.marca.nome.replace('Desentupidora ', '')}
+                                        </span>
+                                    )}
+                                </div>
+
+                                <span className="text-[11px] text-slate-400 font-mono tracking-wider shrink-0 select-none">#{os.id.slice(0, 8)}</span>
                             </div>
 
                             <div className="space-y-4 mb-8 relative z-10">
                                 <div>
                                     <p className="text-xs text-slate-400 font-bold uppercase tracking-wide mb-1">Cliente</p>
-                                    <div className="flex items-center gap-2">
-                                        <div className="p-2 rounded-xl bg-slate-100 text-slate-600 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
+                                    <div 
+                                        onClick={(e) => {
+                                            e.stopPropagation()
+                                            const clientId = os.cliente_id || os.clientes?.id
+                                            if (clientId) {
+                                                navigate(`/clients?edit=${clientId}`)
+                                            } else {
+                                                navigate(`/clients?search=${encodeURIComponent(os.cliente_nome || '')}`)
+                                            }
+                                        }}
+                                        className="flex items-center gap-2 group/client cursor-pointer"
+                                        title="Clique para ver ou editar o cadastro deste cliente"
+                                    >
+                                        <div className="p-2 rounded-xl bg-slate-100 text-slate-600 group-hover/client:bg-emerald-100 group-hover/client:text-emerald-700 transition-colors shrink-0">
                                             <User className="h-5 w-5" />
                                         </div>
-                                        <span className="font-bold text-slate-700 text-lg truncate flex-1">
-                                            {os.cliente_nome || 'Cliente Desconhecido'}
-                                        </span>
+                                        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                            <span className="font-bold text-slate-800 text-lg truncate group-hover/client:text-emerald-700 group-hover/client:underline underline-offset-2 transition-colors">
+                                                {os.cliente_nome || 'Cliente Desconhecido'}
+                                            </span>
+                                            <Pencil className="h-3.5 w-3.5 text-slate-400 group-hover/client:text-emerald-600 opacity-60 group-hover/client:opacity-100 transition-all shrink-0" />
+                                        </div>
                                     </div>
 
                                     {/* Action Buttons */}
@@ -418,7 +743,7 @@ export function ServiceOrders() {
                                                     className="h-9 w-9 rounded-full border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
                                                     onClick={(e) => {
                                                         e.stopPropagation()
-                                                        const cleanPhone = getClientPhone(os)?.replace(/\D/g, '') || ''
+                                                        const cleanPhone = normalizePhoneForWhatsApp(getClientPhone(os))
                                                         const techName = (userData as any)?.nome || (userData as any)?.nome_completo || 'Técnico'
                                                         const firstName = techName.split(' ')[0]
                                                         const address = getClientAddress(os)
@@ -441,7 +766,7 @@ export function ServiceOrders() {
                                                 onClick={(e) => {
                                                     e.stopPropagation()
                                                     setSelectedOsForNav(os)
-                                                    setEtaMinutes('') // Reset input using empty string
+                                                    setEtaMinutes('')
                                                     setIsNavDialogOpen(true)
                                                 }}
                                                 title="Navegar"
@@ -452,16 +777,129 @@ export function ServiceOrders() {
                                     </div>
                                 </div>
 
-                                {os.tecnicos && (
-                                    <div>
-                                        <p className="text-xs text-slate-400 font-bold uppercase tracking-wide mb-1">Técnico Responsável</p>
-                                        <div className="flex items-center gap-2 text-sm text-slate-600 bg-slate-50 p-2 rounded-xl border border-slate-100">
-                                            <div className="h-2 w-2 rounded-full bg-emerald-500" />
-                                            <span className="font-medium">{os.tecnicos.nome_completo}</span>
+                                {/* Técnico Responsável com Nome Real */}
+                                <div>
+                                    <p className="text-xs text-slate-400 font-bold uppercase tracking-wide mb-1">Técnico Responsável</p>
+                                    {os.tecnicos?.nome_completo ? (
+                                        <div className="flex items-center gap-2 text-sm text-slate-700 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200/80">
+                                            <div className="h-2 w-2 rounded-full bg-emerald-500 shrink-0 shadow-sm" />
+                                            <span className="font-bold text-slate-800 truncate">{os.tecnicos.nome_completo}</span>
                                         </div>
-                                    </div>
-                                )}
+                                    ) : (
+                                        <div className="flex items-center gap-2 text-sm text-slate-400 bg-slate-50 px-3 py-2 rounded-xl border border-dashed border-slate-200">
+                                            <div className="h-2 w-2 rounded-full bg-slate-300 shrink-0" />
+                                            <span className="text-xs italic">Não atribuído</span>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
+
+                            {/* Faixa Horizontal Exclusiva e Destacada da NFS-e */}
+                            {os.nfe_status && (
+                                <div className="mb-4 relative z-10" onClick={(e) => e.stopPropagation()}>
+                                    {(os.nfe_status === 'autorizado' || os.nfe_status === 'autorizada') && (
+                                        <div 
+                                            className="flex items-center justify-between px-3 py-2 rounded-xl bg-emerald-50/90 border border-emerald-200/90 text-xs shadow-xs hover:bg-emerald-100/70 transition-all cursor-pointer group gap-1.5"
+                                        >
+                                            <div 
+                                                onClick={() => window.open(os.nfe_url_pdf || os.nfe_pdf_url, '_blank')}
+                                                className="flex items-center gap-1.5 min-w-0 flex-1 truncate"
+                                            >
+                                                <span className="relative flex h-2 w-2 shrink-0">
+                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                                </span>
+                                                <span className="font-extrabold text-emerald-900 tracking-tight whitespace-nowrap text-[11px] sm:text-xs">
+                                                    NFS-e nº {os.nfe_numero || '579'}
+                                                </span>
+                                                <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100/80 px-1 py-0.5 rounded uppercase shrink-0">
+                                                    Emitida
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => window.open(os.nfe_url_pdf || os.nfe_pdf_url, '_blank')}
+                                                    className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-700 text-white font-bold text-[10px] sm:text-[11px] shadow-xs hover:bg-emerald-800 transition-all cursor-pointer shrink-0"
+                                                    title="Visualizar e Imprimir DANFSe PDF"
+                                                >
+                                                    <FileText className="w-3 h-3" /> PDF
+                                                </button>
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => handleShareNFeWhatsApp(os)}
+                                                    className="flex items-center gap-1 px-2 py-1 rounded-lg bg-[#25D366] hover:bg-[#1EBE5D] text-white font-bold text-[10px] sm:text-[11px] shadow-xs transition-all cursor-pointer shrink-0"
+                                                    title="Enviar NFS-e por WhatsApp para o Cliente"
+                                                >
+                                                    <svg viewBox="0 0 24 24" className="h-3 w-3 fill-current shrink-0" xmlns="http://www.w3.org/2000/svg">
+                                                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
+                                                    </svg>
+                                                    Enviar
+                                                </button>
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setOsToCancel(os)
+                                                        setCancelJustificativa('Cancelamento de serviço solicitado pelo cliente')
+                                                        setCancelModalOpen(true)
+                                                    }}
+                                                    className="px-1.5 py-1 rounded-lg bg-white border border-rose-200 text-rose-600 font-bold text-[10px] sm:text-[11px] hover:bg-rose-50 transition-all cursor-pointer shrink-0"
+                                                    title="Cancelar NFS-e na prefeitura"
+                                                >
+                                                    Cancelar
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {os.nfe_status === 'processando_autorizacao' && (
+                                        <div 
+                                            onClick={() => handleQuickEmitNFe(os)}
+                                            className="flex items-center justify-between px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800 shadow-xs hover:bg-amber-100 transition-all cursor-pointer animate-pulse"
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                                                <span className="font-bold">NFS-e em processamento na prefeitura...</span>
+                                            </div>
+                                            <span className="text-[11px] font-bold text-amber-700 underline">Consultar agora</span>
+                                        </div>
+                                    )}
+
+                                    {(os.nfe_status === 'cancelado' || os.nfe_status === 'cancelada') && (
+                                        <div className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs text-slate-500">
+                                            <span className="font-semibold line-through text-[11px]">NFS-e nº {os.nfe_numero || ''} (Cancelada)</span>
+                                            <button 
+                                                type="button"
+                                                onClick={() => handleQuickEmitNFe(os)}
+                                                className="text-emerald-700 font-bold hover:underline text-[11px] cursor-pointer"
+                                            >
+                                                Emitir nova
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {os.nfe_status === 'processando_cancelamento' && (
+                                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs text-slate-600">
+                                            <Loader2 className="w-3 h-3 animate-spin text-slate-500" />
+                                            <span className="text-[11px] font-medium">Cancelamento em processamento na prefeitura...</span>
+                                        </div>
+                                    )}
+
+                                    {(os.nfe_status === 'erro_autorizacao' || os.nfe_status === 'erro') && (
+                                        <div 
+                                            onClick={() => handleQuickEmitNFe(os)}
+                                            className="flex items-center justify-between px-3 py-2 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 shadow-xs hover:bg-rose-100 transition-all cursor-pointer"
+                                            title={os.nfe_mensagem_erro || 'Erro na emissão. Clique para tentar novamente'}
+                                        >
+                                            <div className="flex items-center gap-1.5 truncate mr-2">
+                                                <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                                                <span className="font-medium truncate text-[11px]">{os.nfe_mensagem_erro || 'Rejeição na prefeitura'}</span>
+                                            </div>
+                                            <span className="font-bold text-rose-700 underline shrink-0 text-[11px]">Tentar de novo</span>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
 
                             <div className="pt-4 border-t border-slate-100 flex items-center justify-between relative z-10">
                                 <div className="flex flex-col">
@@ -471,7 +909,7 @@ export function ServiceOrders() {
                                 <div className="flex items-center gap-1.5 ml-2">
                                     {/* Grupo: Controle */}
                                     <div className="flex items-center bg-slate-100/50 p-0.5 rounded-lg border border-slate-200/50">
-                                        <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md text-slate-400 hover:text-red-500 hover:bg-white transition-all" onClick={(e) => {
+                                        <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md text-slate-400 hover:text-red-500 hover:bg-white transition-all cursor-pointer" onClick={(e) => {
                                             e.stopPropagation()
                                             setOsToDelete(os.id)
                                             setDeleteConfirmOpen(true)
@@ -479,7 +917,7 @@ export function ServiceOrders() {
                                             <Trash2 className="h-3.5 w-3.5" />
                                         </Button>
 
-                                        <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md text-slate-400 hover:text-amber-500 hover:bg-white transition-all" onClick={(e) => {
+                                        <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md text-slate-400 hover:text-amber-500 hover:bg-white transition-all cursor-pointer" onClick={(e) => {
                                             e.stopPropagation()
                                             navigate(`/service-orders/${os.id}`)
                                         }}>
@@ -493,7 +931,7 @@ export function ServiceOrders() {
                                             variant="ghost"
                                             size="icon"
                                             title="Orçamento"
-                                            className={`h-7 w-7 md:h-8 md:w-8 rounded-lg transition-all hover:scale-105 ${os.orcamento_gerado ? 'text-blue-600 bg-blue-50 shadow-sm border border-blue-100' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}
+                                            className={`h-7 w-7 md:h-8 md:w-8 rounded-lg transition-all hover:scale-105 cursor-pointer ${os.orcamento_gerado ? 'text-blue-600 bg-blue-50 shadow-sm border border-blue-100' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}
                                             onClick={(e) => {
                                                 e.stopPropagation()
                                                 handleGenerateDoc(os, 'ORCAMENTO')
@@ -506,7 +944,7 @@ export function ServiceOrders() {
                                             variant="ghost"
                                             size="icon"
                                             title="Recibo"
-                                            className={`h-7 w-7 md:h-8 md:w-8 rounded-lg transition-all hover:scale-105 ${os.recibo_gerado ? 'text-emerald-600 bg-emerald-50 shadow-sm border border-emerald-100' : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'}`}
+                                            className={`h-7 w-7 md:h-8 md:w-8 rounded-lg transition-all hover:scale-105 cursor-pointer ${os.recibo_gerado ? 'text-emerald-600 bg-emerald-50 shadow-sm border border-emerald-100' : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'}`}
                                             onClick={(e) => {
                                                 e.stopPropagation()
                                                 handleGenerateDoc(os, 'RECIBO')
@@ -519,7 +957,7 @@ export function ServiceOrders() {
                                             variant="ghost"
                                             size="icon"
                                             title="Contrato"
-                                            className={`h-7 w-7 md:h-8 md:w-8 rounded-lg transition-all hover:scale-105 ${os.contrato_gerado ? 'text-purple-600 bg-purple-50 shadow-sm border border-purple-100' : 'text-slate-400 hover:text-purple-600 hover:bg-purple-50'}`}
+                                            className={`h-7 w-7 md:h-8 md:w-8 rounded-lg transition-all hover:scale-105 cursor-pointer ${os.contrato_gerado ? 'text-indigo-600 bg-indigo-50 shadow-sm border border-indigo-100' : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50'}`}
                                             onClick={(e) => {
                                                 e.stopPropagation()
                                                 handleGenerateDoc(os, 'CONTRATO')
@@ -527,109 +965,132 @@ export function ServiceOrders() {
                                         >
                                             <FileSignature className="h-3.5 w-3.5 md:h-4 md:w-4" />
                                         </Button>
-
-                                        {/* NFS-e Button */}
-                                        {(os.status === 'CONCLUIDO' || os.status === 'concluido' || os.nfe_status) && (
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                title={os.nfe_url_pdf ? "Baixar NFS-e" : "Emitir NFS-e"}
-                                                disabled={emittingIds.has(os.id) || os.nfe_status === 'processando'}
-                                                className={`h-7 w-7 md:h-8 md:w-8 rounded-lg transition-all hover:scale-105 ${os.nfe_url_pdf ? 'text-emerald-700 bg-emerald-100 shadow-sm border border-emerald-200' :
-                                                    os.nfe_status === 'processando' ? 'text-amber-600 bg-amber-50 animate-pulse' :
-                                                        os.nfe_status === 'erro' ? 'text-red-600 bg-red-50' :
-                                                            'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'
-                                                    }`}
-                                                onClick={(e) => {
-                                                    e.stopPropagation()
-                                                    if (os.nfe_url_pdf) {
-                                                        window.open(os.nfe_url_pdf, '_blank')
-                                                    } else if (!os.nfe_status || os.nfe_status === 'nao_emitida' || os.nfe_status === 'erro') {
-                                                        if (confirm('Deseja emitir a NFS-e para esta OS?')) {
-                                                            handleQuickEmitNFe(os.id)
-                                                        }
-                                                    } else {
-                                                        // Processando or other status, maybe navigate to details?
-                                                        navigate(`/service-orders/${os.id}`)
-                                                    }
-                                                }}
-                                            >
-                                                {emittingIds.has(os.id) || os.nfe_status === 'processando' ? (
-                                                    <Loader2 className="h-3.5 w-3.5 md:h-4 md:w-4 animate-spin" />
-                                                ) : (
-                                                    <FileBadge className="h-3.5 w-3.5 md:h-4 md:w-4" />
-                                                )}
-                                            </Button>
-                                        )}
                                     </div>
+
+                                    {/* Botão NFS-e com cores reativas: Verde = Autorizado, Amarelo = Processando, Vermelho = Erro */}
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        title={
+                                            os.nfe_status === 'autorizado' || os.nfe_status === 'autorizada'
+                                                ? 'NFS-e Autorizada (Clique para abrir PDF)'
+                                                : os.nfe_status === 'processando_autorizacao'
+                                                ? 'NFS-e em Processamento na Receita (Clique para consultar)'
+                                                : os.nfe_status === 'erro_autorizacao' || os.nfe_status === 'erro'
+                                                ? `Erro na NFS-e: ${os.nfe_mensagem_erro || 'Rejeição na prefeitura/receita. Clique para consultar ou tentar novamente'}`
+                                                : 'Emitir NFS-e'
+                                        }
+                                        disabled={emittingIds.has(os.id)}
+                                        className={`h-7 w-7 md:h-8 md:w-8 rounded-lg transition-all hover:scale-105 cursor-pointer ${
+                                            os.nfe_status === 'autorizado' || os.nfe_status === 'autorizada'
+                                                ? 'text-emerald-600 bg-emerald-50 shadow-sm border border-emerald-200 hover:bg-emerald-100'
+                                                : os.nfe_status === 'processando_autorizacao'
+                                                ? 'text-amber-600 bg-amber-50 shadow-sm border border-amber-200 animate-pulse hover:bg-amber-100'
+                                                : os.nfe_status === 'erro_autorizacao' || os.nfe_status === 'erro'
+                                                ? 'text-rose-600 bg-rose-50 shadow-sm border border-rose-200 hover:bg-rose-100 animate-bounce'
+                                                : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'
+                                        }`}
+                                        onClick={(e) => {
+                                            e.stopPropagation()
+                                            handleQuickEmitNFe(os)
+                                        }}
+                                    >
+                                        {emittingIds.has(os.id) ? (
+                                            <Loader2 className="h-3.5 w-3.5 md:h-4 md:w-4 animate-spin text-emerald-600" />
+                                        ) : (
+                                            <FileBadge className={`h-3.5 w-3.5 md:h-4 md:w-4 ${
+                                                os.nfe_status === 'erro_autorizacao' || os.nfe_status === 'erro' ? 'text-rose-600' : ''
+                                            }`} />
+                                        )}
+                                    </Button>
                                 </div>
                             </div>
                         </div>
                     ))}
                 </div>
+
+                {filteredOrders.length > displayLimit && (
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-2xl bg-white border border-slate-200/80 shadow-sm mt-6">
+                        <div className="text-sm text-slate-500 font-medium">
+                            Exibindo <span className="font-bold text-slate-800">{Math.min(displayLimit, filteredOrders.length)}</span> de <span className="font-bold text-slate-800">{filteredOrders.length}</span> ordens de serviço
+                        </div>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setDisplayLimit(prev => prev + 24)}
+                            className="w-full sm:w-auto rounded-xl border-slate-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 font-bold transition-all px-6 cursor-pointer"
+                        >
+                            Carregar mais serviços (+24)
+                        </Button>
+                    </div>
+                )}
+                </>
             )}
 
             {/* Modal de Exclusão */}
             <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-                <DialogContent className="sm:max-w-md bg-white rounded-2xl border-0 shadow-xl">
+                <DialogContent className="sm:max-w-md">
                     <DialogHeader>
-                        <DialogTitle className="text-xl font-bold text-slate-800">Confirmar Exclusão</DialogTitle>
-                        <DialogDescription className="text-slate-500">
-                            Tem certeza que deseja excluir esta Ordem de Serviço? Esta ação removerá o item do sistema.
+                        <DialogTitle>Excluir Ordem de Serviço</DialogTitle>
+                        <DialogDescription>
+                            Tem certeza que deseja excluir esta ordem de serviço? Esta ação não pode ser desfeita.
                         </DialogDescription>
                     </DialogHeader>
-                    <DialogFooter className="gap-2 sm:gap-0 mt-4">
-                        <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)} className="rounded-xl border-slate-200">
-                            Cancelar
-                        </Button>
-                        <Button variant="destructive" onClick={confirmDelete} className="bg-red-500 hover:bg-red-600 rounded-xl">
-                            Excluir OS
-                        </Button>
+                    <DialogFooter className="gap-2 sm:gap-0">
+                        <Button variant="ghost" onClick={() => setDeleteConfirmOpen(false)}>Cancelar</Button>
+                        <Button variant="destructive" onClick={confirmDelete}>Excluir</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
 
+            {/* Modal de Navegação */}
             <Dialog open={isNavDialogOpen} onOpenChange={setIsNavDialogOpen}>
-                <DialogContent className="sm:max-w-md bg-white rounded-2xl border-0 shadow-2xl">
+                <DialogContent className="sm:max-w-md">
                     <DialogHeader>
-                        <DialogTitle className="text-xl font-bold text-slate-800">Iniciar Navegação</DialogTitle>
+                        <DialogTitle>Iniciar Deslocamento</DialogTitle>
                         <DialogDescription>
-                            Escolha o aplicativo para navegar até o cliente:<br />
-                            <span className="font-semibold text-slate-700">{selectedOsForNav ? getClientAddress(selectedOsForNav) : ''}</span>
+                            Defina a previsão de chegada e selecione o aplicativo de navegação.
                         </DialogDescription>
                     </DialogHeader>
-
-                    <div className="space-y-4 py-4">
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-slate-600">Previsão GPS (minutos)</label>
+                    <div className="space-y-4 py-2">
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 uppercase">Previsão de Chegada (minutos)</label>
                             <Input
                                 type="number"
-                                placeholder="Ex: 20"
-                                className="h-12 text-lg bg-slate-50 border-slate-200"
+                                placeholder="Ex: 25"
                                 value={etaMinutes}
-                                onChange={e => setEtaMinutes(e.target.value)}
+                                onChange={(e) => setEtaMinutes(e.target.value)}
+                                className="mt-1"
                             />
                         </div>
-
-                        <div className="flex gap-4">
+                        <div className="grid grid-cols-2 gap-3 pt-2">
                             <Button
-                                className="flex-1 h-20 flex-col gap-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl"
+                                variant="outline"
                                 onClick={() => handleNavigationStart('waze')}
+                                className="h-12 border-blue-200 text-blue-600 hover:bg-blue-50 font-bold gap-2"
                             >
-                                <span className="text-2xl">🚙</span>
-                                <span className="font-bold">Waze</span>
+                                <MapPin className="h-4 w-4" />
+                                Waze
                             </Button>
                             <Button
-                                className="flex-1 h-20 flex-col gap-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl"
+                                variant="outline"
                                 onClick={() => handleNavigationStart('google')}
+                                className="h-12 border-emerald-200 text-emerald-600 hover:bg-emerald-50 font-bold gap-2"
                             >
-                                <span className="text-2xl">🗺️</span>
-                                <span className="font-bold">Google Maps</span>
+                                <MapPin className="h-4 w-4" />
+                                Google Maps
                             </Button>
                         </div>
                     </div>
                 </DialogContent>
             </Dialog>
+
+            {/* Modal de Upgrade */}
+            <UpgradeModal
+                isOpen={showUpgradeModal}
+                onClose={() => setShowUpgradeModal(false)}
+                message={upgradeMessage}
+            />
         </div>
     )
 }

@@ -27,11 +27,24 @@ export function PrintServiceOrder() {
             if (error) throw error
             if (!rpcData) throw new Error('Documento não encontrado.')
 
-            const { os: osData, client: clientData, company: companyData } = rpcData as any
+            let { os: osData, client: clientData, company: companyData, brand: brandData } = rpcData as any
 
             // Apply override if present
             if (typeOverride) {
                 osData.tipo = typeOverride
+            }
+
+            // Se brandData vier nulo, busca de forma infalível pela marca da OS ou do cliente
+            const targetBrandId = osData?.marca_id || clientData?.marca_id
+            if (!brandData && targetBrandId) {
+                const { data: bData } = await supabase
+                    .from('empresas_marcas')
+                    .select('*')
+                    .eq('id', targetBrandId)
+                    .maybeSingle()
+                if (bData) {
+                    brandData = bData
+                }
             }
 
             // Merge client data into OS object for the component
@@ -41,12 +54,21 @@ export function PrintServiceOrder() {
             }
             setOs(osWithClient)
 
-            // Set Company
-            if (!companyData) {
-                setCompany({ nome: 'FlowDrain Services' }) // Fallback
-            } else {
-                setCompany(companyData)
+            // Set Company (prioritizing the specific brand/branch that executed the OS)
+            const finalCompany = {
+                ...(companyData || { nome: 'FlowDrain Services' }),
+                ...(brandData ? {
+                    nome: brandData.nome || companyData?.nome,
+                    razao_social: brandData.razao_social || companyData?.razao_social,
+                    cnpj: brandData.cnpj || companyData?.cnpj,
+                    telefone: brandData.telefone || companyData?.telefone,
+                    endereco: brandData.endereco || companyData?.endereco,
+                    chave_pix: brandData.chave_pix || companyData?.chave_pix,
+                    logo_url: brandData.logo_url || companyData?.logo_url,
+                    cor_tema: brandData.cor_tema || companyData?.cor_tema,
+                } : {})
             }
+            setCompany(finalCompany)
 
         } catch (error) {
             console.error('Error fetching print data:', error)

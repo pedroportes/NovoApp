@@ -20,8 +20,9 @@ export function useOfflineClients() {
                     const d = new Date(val).getTime();
                     return isNaN(d) ? 0 : d;
                 };
-                const tA = getTime(a.created_at || a.updated_at);
-                const tB = getTime(b.created_at || b.updated_at);
+                // Mais recentemente criado sempre no topo
+                const tA = getTime(a.created_at) || getTime((a as any).criado_em) || getTime(a.updated_at);
+                const tB = getTime(b.created_at) || getTime((b as any).criado_em) || getTime(b.updated_at);
                 if (tB !== tA) return tB - tA;
                 return (a.nome_razao || '').localeCompare(b.nome_razao || '');
             });
@@ -52,8 +53,9 @@ export function useOfflineServiceOrders() {
                     const d = new Date(val).getTime();
                     return isNaN(d) ? 0 : d;
                 };
-                const tA = getTime(a.created_at || a.data_agendamento);
-                const tB = getTime(b.created_at || b.data_agendamento);
+                // Prioriza created_at (data de abertura da OS) no topo, depois updated_at e agendamento
+                const tA = getTime(a.created_at) || getTime(a.updated_at) || getTime(a.data_agendamento);
+                const tB = getTime(b.created_at) || getTime(b.updated_at) || getTime(b.data_agendamento);
                 if (tB !== tA) return tB - tA;
                 return b.id.localeCompare(a.id);
             });

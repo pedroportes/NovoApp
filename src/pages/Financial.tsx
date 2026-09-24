@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -31,7 +31,19 @@ export function Financial() {
     const [recentActivities, setRecentActivities] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [filterType, setFilterType] = useState<'ALL' | 'ENTRADA' | 'SAIDA'>('ALL')
-    const [activeTab, setActiveTab] = useState<'fluxo' | 'comissoes'>('fluxo')
+    const [searchParams] = useSearchParams()
+    const tabParam = searchParams.get('tab')
+    const techIdParam = searchParams.get('techId')
+
+    const [activeTab, setActiveTab] = useState<'fluxo' | 'comissoes'>(
+        tabParam === 'comissoes' ? 'comissoes' : 'fluxo'
+    )
+
+    useEffect(() => {
+        if (tabParam === 'comissoes') {
+            setActiveTab('comissoes')
+        }
+    }, [tabParam])
 
     // Expense Dialog State
     const [isExpenseDialogOpen, setIsExpenseDialogOpen] = useState(false)
@@ -481,7 +493,7 @@ export function Financial() {
 
                 {activeTab === 'comissoes' && (
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <FinancialClosing />
+                        <FinancialClosing initialTechId={techIdParam || undefined} />
                     </div>
                 )}
 

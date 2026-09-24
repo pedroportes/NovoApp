@@ -47,3 +47,9 @@ backup_*/
 !firebase.json
 !firebase.toml
 !vercel.json
+
+# Backups
+*.backup.*
+*.backup_*
+*.backup
+*.bak

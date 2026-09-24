@@ -17,28 +17,56 @@ const ReceiptLayout = ({ os, company, title }: { os: any, company: any, title: s
     // Helper for formatting date
     const formatDate = (dateString: string) => {
         if (!dateString) return ''
+        // Evita atraso de fuso UTC (ex: 2026-09-01 virando 31/08)
+        if (typeof dateString === 'string' && dateString.includes('T')) {
+            const [datePart] = dateString.split('T')
+            const parts = datePart.split('-')
+            if (parts.length === 3) {
+                return `${parts[2]}/${parts[1]}/${parts[0]}`
+            }
+        }
         return new Date(dateString).toLocaleDateString('pt-BR')
     }
 
+    // Fallback inteligente para OSs com itens vazios mas com descricao e valor_total
+    const effectiveItems = (os.itens && Array.isArray(os.itens) && os.itens.length > 0)
+        ? os.itens
+        : (os.descricao_servico || os.descricao || Number(os.valor_total) > 0)
+            ? [{
+                descricao: os.descricao_servico || os.descricao || 'Serviço de Desentupimento',
+                qtd: 1,
+                valor_unitario: Number(os.valor_total) || 0,
+                total: Number(os.valor_total) || 0
+            }]
+            : []
+
     const calculateTotal = () => {
-        if (os.itens && Array.isArray(os.itens)) {
-            return os.itens.reduce((acc: number, item: any) => acc + (Number(item.total) || 0), 0)
+        if (effectiveItems.length > 0) {
+            return effectiveItems.reduce((acc: number, item: any) => acc + (Number(item.total) || 0), 0)
         }
-        return 0
+        return Number(os.valor_total) || 0
     }
 
     const formatAddress = (obj: any) => {
-        if (obj?.endereco) return obj.endereco;
         if (!obj) return '';
-        const parts = [
-            obj.logradouro,
-            obj.numero ? `Nº ${obj.numero}` : '',
-            obj.bairro,
-            obj.cidade,
-            obj.uf,
-            obj.cep
-        ].filter(Boolean);
-        return parts.join(', ');
+        if (typeof obj === 'string') return obj;
+
+        const street = obj.logradouro || obj.endereco || '';
+        const num = obj.numero ? (String(obj.numero).toLowerCase().includes('n') ? String(obj.numero) : `nº ${obj.numero}`) : '';
+        const comp = obj.complemento || '';
+        const b = obj.bairro || '';
+        const city = obj.cidade || obj.municipio || '';
+        const state = obj.uf || obj.estado || '';
+        const zip = obj.cep ? `CEP: ${obj.cep}` : '';
+
+        // Se possui detalhes (número, bairro ou cidade), monta o endereço completo e profissional
+        if (num || b || city) {
+            const line1 = [street, num, comp].filter(Boolean).join(', ');
+            const line2 = [b, [city, state].filter(Boolean).join(' - '), zip].filter(Boolean).join(' - ');
+            return [line1, line2].filter(Boolean).join(' - ');
+        }
+
+        return street || obj.endereco || '';
     }
 
     const subtotal = calculateTotal()
@@ -122,7 +150,7 @@ const ReceiptLayout = ({ os, company, title }: { os: any, company: any, title: s
 
                 {/* Items List */}
                 <div className="flex-1">
-                    {os.itens && os.itens.map((item: any, index: number) => (
+                    {effectiveItems && effectiveItems.map((item: any, index: number) => (
                         <div key={index} className="flex border-b border-black text-sm">
                             <div className="flex-1 p-2 border-r-2 border-black uppercase min-h-[32px]">
                                 {item.descricao}
@@ -197,6 +225,17 @@ const ReceiptLayout = ({ os, company, title }: { os: any, company: any, title: s
                     </div>
                 </div>
 
+                {/* Chave PIX da Empresa/Filial */}
+                {company?.chave_pix && (
+                    <div className="border-t-2 border-black p-2 bg-emerald-50/50 flex flex-wrap items-center justify-between text-[11px] md:text-xs">
+                        <div>
+                            <span className="font-bold text-emerald-800">CHAVE PIX PARA PAGAMENTO:</span>{' '}
+                            <span className="font-mono font-bold text-black select-all">{company.chave_pix}</span>
+                        </div>
+                        <span className="text-[10px] text-gray-600 font-semibold">{company.nome}</span>
+                    </div>
+                )}
+
                 {/* Disclaimer/Footer */}
                 <div className="text-center p-2 text-[10px] text-gray-500 border-t border-black mt-auto">
                     Todos os serviços têm uma garantia de 30 dias exceto vaso sanitário e limpeza de caixa de gordura.
@@ -224,22 +263,40 @@ const ContractLayout = ({ os, company }: { os: any, company: any }) => {
         return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
     }
 
-    const subtotal = os.itens ? os.itens.reduce((acc: number, item: any) => acc + (Number(item.total) || 0), 0) : 0
+    const effectiveItems = (os.itens && Array.isArray(os.itens) && os.itens.length > 0)
+        ? os.itens
+        : (os.descricao_servico || os.descricao || Number(os.valor_total) > 0)
+            ? [{
+                descricao: os.descricao_servico || os.descricao || 'Serviço de Desentupimento',
+                qtd: 1,
+                valor_unitario: Number(os.valor_total) || 0,
+                total: Number(os.valor_total) || 0
+            }]
+            : []
+    const subtotal = effectiveItems.length > 0 ? effectiveItems.reduce((acc: number, item: any) => acc + (Number(item.total) || 0), 0) : Number(os.valor_total) || 0
     const discountValue = os.desconto ? (subtotal * os.desconto) / 100 : 0
     const totalValue = os.valor_total || (subtotal - discountValue)
 
     const formatAddress = (obj: any) => {
-        if (obj?.endereco) return obj.endereco;
         if (!obj) return '';
-        const parts = [
-            obj.logradouro,
-            obj.numero ? `Nº ${obj.numero}` : '',
-            obj.bairro,
-            obj.cidade,
-            obj.uf,
-            obj.cep
-        ].filter(Boolean);
-        return parts.join(', ');
+        if (typeof obj === 'string') return obj;
+
+        const street = obj.logradouro || obj.endereco || '';
+        const num = obj.numero ? (String(obj.numero).toLowerCase().includes('n') ? String(obj.numero) : `nº ${obj.numero}`) : '';
+        const comp = obj.complemento || '';
+        const b = obj.bairro || '';
+        const city = obj.cidade || obj.municipio || '';
+        const state = obj.uf || obj.estado || '';
+        const zip = obj.cep ? `CEP: ${obj.cep}` : '';
+
+        // Se possui detalhes (número, bairro ou cidade), monta o endereço completo e profissional
+        if (num || b || city) {
+            const line1 = [street, num, comp].filter(Boolean).join(', ');
+            const line2 = [b, [city, state].filter(Boolean).join(' - '), zip].filter(Boolean).join(' - ');
+            return [line1, line2].filter(Boolean).join(' - ');
+        }
+
+        return street || obj.endereco || '';
     }
 
     return (
@@ -266,7 +323,7 @@ const ContractLayout = ({ os, company }: { os: any, company: any }) => {
                 O presente contrato tem por objeto a prestação de serviços de desentupimento e/ou limpeza conforme descritos abaixo:
             </p>
             <ul className="list-disc pl-8 mb-4 bg-gray-50 p-4 border rounded">
-                {os.itens && os.itens.map((item: any, index: number) => (
+                {effectiveItems && effectiveItems.map((item: any, index: number) => (
                     <li key={index}>
                         <span className="font-bold">{item.descricao}</span>
                         {item.qtd > 1 ? ` (Qtd: ${item.qtd})` : ''} - {formatCurrency(item.total)}

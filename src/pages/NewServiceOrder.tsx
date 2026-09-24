@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useNavigate, useParams, useOutletContext, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Camera, FileText, Printer, Trash2, PenTool, Eraser, Calendar, Upload, Cloud, Wifi, CheckCircle2, AlertTriangle, Eye, Plus, User, ChevronDown, ClipboardList, ChevronRight, Loader2, Receipt, Search, X } from 'lucide-react'
+import { ArrowLeft, Building2, Camera, FileText, Printer, Trash2, PenTool, Eraser, Calendar, Upload, Cloud, Wifi, CheckCircle2, AlertTriangle, Eye, Plus, User, ChevronDown, ClipboardList, ChevronRight, Loader2, Receipt, Search, X, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -8,6 +8,7 @@ import { SignaturePad } from '@/components/ui/signature-pad'
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog"
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
+import { useBrand } from '@/contexts/BrandContext'
 import { SyncService } from '@/services/syncService'
 import { LocalServiceOrder, db } from '@/lib/db'
 import { useOfflineClients, useOfflineTechnicians, useOfflineServices } from '@/hooks/useOfflineData'
@@ -26,6 +27,7 @@ export function NewServiceOrder() {
     const navigate = useNavigate()
     const { id } = useParams()
     const { userData } = useAuth()
+    const { brands, selectedBrandId } = useBrand()
     const [savingSignature, setSavingSignature] = useState(false)
     const [viewingPhoto, setViewingPhoto] = useState<string | null>(null)
     const [loading, setLoading] = useState(false)
@@ -44,8 +46,19 @@ export function NewServiceOrder() {
         descricao_servico: '',
         observacoes: '',
         desconto: '',
-        status: 'PENDENTE'
+        status: 'PENDENTE',
+        marca_id: ''
     })
+
+    // Pré-seleciona a marca ativa do cabeçalho ou a primeira marca se for uma nova OS
+    useEffect(() => {
+        if (!id && !formData.marca_id && brands.length > 0) {
+            const initialBrandId = selectedBrandId && selectedBrandId !== 'all' 
+                ? selectedBrandId 
+                : brands[0].id
+            setFormData(prev => ({ ...prev, marca_id: initialBrandId }))
+        }
+    }, [id, selectedBrandId, brands, formData.marca_id])
 
     const [items, setItems] = useState<ServiceItem[]>([])
     const [photos, setPhotos] = useState<{ antes: string[], depois: string[] }>({ antes: [], depois: [] })
@@ -290,9 +303,22 @@ export function NewServiceOrder() {
                     descricao_servico: osData.descricao_servico || '',
                     observacoes: osData.observacoes || '',
                     desconto: osData.desconto ? osData.desconto.toString() : '',
-                    status: osData.status || 'PENDENTE'
+                    status: osData.status || 'PENDENTE',
+                    marca_id: osData.marca_id || (brands[0]?.id || '')
                 })
-                setItems((osData.itens as ServiceItem[]) || [])
+                const rawItens = (osData.itens as ServiceItem[]) || []
+                if (rawItens.length === 0 && Number(osData.valor_total) > 0) {
+                    const val = Number(osData.valor_total)
+                    const desc = osData.descricao || osData.descricao_servico || 'Serviço Prestado'
+                    setItems([{
+                        descricao: desc,
+                        qtd: 1,
+                        valor_unitario: val,
+                        total: val
+                    }])
+                } else {
+                    setItems(rawItens)
+                }
 
                 // Photos
                 const loadedPhotos = osData.fotos as any || { antes: [], depois: [] }
@@ -350,9 +376,22 @@ export function NewServiceOrder() {
                     descricao_servico: osData.descricao_servico || '',
                     observacoes: osData.observacoes || '',
                     desconto: osData.desconto ? osData.desconto.toString() : '',
-                    status: osData.status || 'PENDENTE'
+                    status: osData.status || 'PENDENTE',
+                    marca_id: osData.marca_id || (brands[0]?.id || '')
                 })
-                setItems((osData.itens as ServiceItem[]) || [])
+                const rawFetchItens = (osData.itens as ServiceItem[]) || []
+                if (rawFetchItens.length === 0 && Number(osData.valor_total) > 0) {
+                    const val = Number(osData.valor_total)
+                    const desc = osData.descricao || osData.descricao_servico || 'Serviço Prestado'
+                    setItems([{
+                        descricao: desc,
+                        qtd: 1,
+                        valor_unitario: val,
+                        total: val
+                    }])
+                } else {
+                    setItems(rawFetchItens)
+                }
                 // Handle JSONB photos structure (backward compatible if null)
                 const loadedPhotos = osData.fotos as any || { antes: [], depois: [] }
                 setPhotos({
@@ -543,6 +582,7 @@ export function NewServiceOrder() {
 
             const payload: any = {
                 empresa_id: userData!.empresa_id,
+                marca_id: formData.marca_id || selectedClient?.marca_id || (selectedBrandId !== 'all' ? selectedBrandId : (brands[0]?.id || null)),
                 cliente_id: formData.cliente_id,
                 cliente_nome: selectedClient?.nome_razao || 'Cliente não identificado',
                 cliente_whatsapp: selectedClient?.whatsapp || null,
@@ -724,19 +764,66 @@ export function NewServiceOrder() {
                 </div>
 
                 <div className="space-y-6">
+                    {/* SELETOR VISUAL DA EMPRESA PRESTADORA (FILIAL) */}
+                    {brands.length > 1 && (
+                        <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 space-y-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                                <Label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                                    <Building2 className="h-4 w-4 text-emerald-600" />
+                                    Empresa Prestadora (Filial que atendeu)
+                                </Label>
+                                <span className="text-[11px] text-slate-500 font-medium">
+                                    Recibos e documentos sairão com os dados desta filial
+                                </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                                {brands.map((brand) => {
+                                    const isSelected = (formData.marca_id || (selectedBrandId !== 'all' ? selectedBrandId : brands[0]?.id)) === brand.id
+                                    return (
+                                        <button
+                                            key={brand.id}
+                                            type="button"
+                                            onClick={() => setFormData(prev => ({ ...prev, marca_id: brand.id }))}
+                                            className={`flex items-center gap-2.5 p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                                                isSelected
+                                                    ? 'bg-white border-2 shadow-sm font-bold scale-[1.02]'
+                                                    : 'bg-white/70 border-slate-200 text-slate-600 hover:bg-white hover:border-slate-300'
+                                            }`}
+                                            style={isSelected ? { borderColor: brand.cor_tema || '#10b981' } : {}}
+                                        >
+                                            <span
+                                                className="w-3.5 h-3.5 rounded-full shrink-0 shadow-sm"
+                                                style={{ backgroundColor: brand.cor_tema || '#10b981' }}
+                                            />
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-xs truncate font-semibold text-slate-800 leading-tight">
+                                                    {brand.nome}
+                                                </p>
+                                                <span className="text-[10px] text-slate-400 block leading-tight mt-0.5">
+                                                    {brand.ordem === 1 ? 'Matriz Principal' : 'Filial'}
+                                                </span>
+                                            </div>
+                                        </button>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    )}
+
                     <div className="space-y-2">
                         <Label className="text-slate-600 font-medium ml-1">Cliente</Label>
-                        <div className="relative">
+                        <div className="flex gap-2 items-center">
                             <Dialog open={isClientSearchOpen} onOpenChange={setIsClientSearchOpen}>
                                 <DialogTrigger asChild>
                                     <button
                                         type="button"
-                                        className="w-full h-14 pl-4 pr-10 bg-slate-50 border-0 rounded-2xl text-slate-700 font-medium focus:ring-2 focus:ring-emerald-500/20 transition-all text-left flex items-center justify-between"
+                                        className="flex-1 h-14 pl-4 pr-4 bg-slate-50 border-0 rounded-2xl text-slate-700 font-medium focus:ring-2 focus:ring-emerald-500/20 transition-all text-left flex items-center justify-between"
                                     >
-                                        <span className={formData.cliente_id ? 'text-slate-700' : 'text-slate-400'}>
+                                        <span className={formData.cliente_id ? 'text-slate-700 font-semibold truncate' : 'text-slate-400'}>
                                             {clients.find(c => c.id === formData.cliente_id)?.nome_razao || 'Pesquisar Cliente...'}
                                         </span>
-                                        <Search className="h-5 w-5 text-slate-400" />
+                                        <Search className="h-5 w-5 text-slate-400 shrink-0 ml-2" />
                                     </button>
                                 </DialogTrigger>
                                 <DialogContent className="max-w-xl p-0 overflow-hidden bg-white rounded-3xl sm:rounded-3xl border-none shadow-2xl">
@@ -767,7 +854,11 @@ export function NewServiceOrder() {
                                                         key={client.id}
                                                         type="button"
                                                         onClick={() => {
-                                                            setFormData({ ...formData, cliente_id: client.id });
+                                                            setFormData({ 
+                                                                ...formData, 
+                                                                cliente_id: client.id,
+                                                                marca_id: client.marca_id || formData.marca_id 
+                                                            });
                                                             setIsClientSearchOpen(false);
                                                             setClientSearch('');
                                                         }}
@@ -776,10 +867,24 @@ export function NewServiceOrder() {
                                                             : 'bg-white border-transparent hover:bg-slate-50 text-slate-700'
                                                             }`}
                                                     >
-                                                        <div className="font-bold">{client.nome_razao}</div>
-                                                        <div className="text-xs text-slate-400 flex gap-3 mt-1">
-                                                            {client.cpf_cnpj && <span>{client.cpf_cnpj}</span>}
-                                                            {client.whatsapp && <span>{client.whatsapp}</span>}
+                                                        <div className="flex items-center justify-between w-full">
+                                                            <div className="flex-1 min-w-0 pr-2">
+                                                                <div className="font-bold truncate">{client.nome_razao}</div>
+                                                                <div className="text-xs text-slate-400 flex gap-3 mt-1">
+                                                                    {client.cpf_cnpj && <span>{client.cpf_cnpj}</span>}
+                                                                    {client.whatsapp && <span>{client.whatsapp}</span>}
+                                                                </div>
+                                                            </div>
+                                                            <span
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    window.open(`/clients?edit=${client.id}`, '_blank');
+                                                                }}
+                                                                className="p-2 hover:bg-slate-200/80 rounded-xl text-slate-400 hover:text-emerald-600 transition-colors shrink-0"
+                                                                title="Ver ou editar este cliente em nova aba"
+                                                            >
+                                                                <Pencil className="h-4 w-4" />
+                                                            </span>
                                                         </div>
                                                     </button>
                                                 ))
@@ -802,6 +907,19 @@ export function NewServiceOrder() {
                                     </div>
                                 </DialogContent>
                             </Dialog>
+
+                            {formData.cliente_id && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => window.open(`/clients?edit=${formData.cliente_id}`, '_blank')}
+                                    className="h-14 px-4 rounded-2xl border-slate-200 bg-white hover:bg-emerald-50 hover:border-emerald-300 text-slate-700 hover:text-emerald-700 font-bold flex items-center gap-1.5 shrink-0 shadow-xs"
+                                    title="Abrir cadastro do cliente em nova aba para visualizar ou editar"
+                                >
+                                    <Pencil className="h-4 w-4 text-emerald-600" />
+                                    <span className="hidden sm:inline text-xs">Editar Cliente</span>
+                                </Button>
+                            )}
                         </div>
                     </div>
 
@@ -948,28 +1066,47 @@ export function NewServiceOrder() {
 
                 {/* ITEMS LIST */}
                 <div className="space-y-3">
-                    {items.map((item, index) => (
-                        <div key={index} className="grid grid-cols-12 gap-3 items-center bg-slate-50 p-3 rounded-2xl border border-slate-100 group hover:border-emerald-200 transition-colors">
-                            <div className="col-span-12 md:col-span-6">
-                                <Input value={item.descricao} onChange={e => updateItem(index, 'descricao', e.target.value)} className="bg-transparent border-0 h-auto p-0 font-medium text-slate-700 placeholder:text-slate-400 focus-visible:ring-0" placeholder="Descrição do item" />
-                            </div>
-                            <div className="col-span-3 md:col-span-2">
-                                <div className="bg-white rounded-lg px-2 py-1 border border-slate-200 flex items-center">
-                                    <span className="text-[10px] text-slate-400 mr-2">Qtd</span>
-                                    <input type="number" min="1" value={item.qtd} onChange={e => updateItem(index, 'qtd', e.target.value)} className="w-full bg-transparent outline-none text-sm font-bold text-slate-700" />
-                                </div>
-                            </div>
-                            <div className="col-span-4 md:col-span-3">
-                                <div className="bg-white rounded-lg px-2 py-1 border border-slate-200 flex items-center">
-                                    <span className="text-[10px] text-slate-400 mr-1">R$</span>
-                                    <input type="number" step="0.01" value={item.valor_unitario} onChange={e => updateItem(index, 'valor_unitario', e.target.value)} className="w-full bg-transparent outline-none text-sm font-bold text-slate-700" />
-                                </div>
-                            </div>
-                            <div className="col-span-5 md:col-span-1 flex justify-end">
-                                <button className="p-2 text-slate-300 hover:text-red-500 transition-colors" onClick={() => removeItem(index)}><Trash2 className="h-5 w-5" /></button>
-                            </div>
+                    {items.length > 0 && (
+                        <div className="hidden md:grid grid-cols-12 gap-3 px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                            <div className="col-span-5">Serviço / Descrição</div>
+                            <div className="col-span-2">Quantidade</div>
+                            <div className="col-span-2">Valor Unit.</div>
+                            <div className="col-span-3 text-right pr-9">Total do Item</div>
                         </div>
-                    ))}
+                    )}
+                    {items.map((item, index) => {
+                        const itemTotal = Number(item.total) || (Number(item.qtd || 1) * Number(item.valor_unitario || 0)) || 0;
+                        return (
+                            <div key={index} className="grid grid-cols-12 gap-3 items-center bg-slate-50 p-3 rounded-2xl border border-slate-100 group hover:border-emerald-200 transition-colors">
+                                <div className="col-span-12 md:col-span-5">
+                                    <Input value={item.descricao} onChange={e => updateItem(index, 'descricao', e.target.value)} className="bg-transparent border-0 h-auto p-0 font-medium text-slate-700 placeholder:text-slate-400 focus-visible:ring-0" placeholder="Descrição do item" />
+                                </div>
+                                <div className="col-span-3 md:col-span-2">
+                                    <div className="bg-white rounded-lg px-2 py-1 border border-slate-200 flex items-center">
+                                        <span className="text-[10px] text-slate-400 mr-2">Qtd</span>
+                                        <input type="number" min="1" value={item.qtd} onChange={e => updateItem(index, 'qtd', e.target.value)} className="w-full bg-transparent outline-none text-sm font-bold text-slate-700" />
+                                    </div>
+                                </div>
+                                <div className="col-span-4 md:col-span-2">
+                                    <div className="bg-white rounded-lg px-2 py-1 border border-slate-200 flex items-center">
+                                        <span className="text-[10px] text-slate-400 mr-1">R$</span>
+                                        <input type="number" step="0.01" value={item.valor_unitario} onChange={e => updateItem(index, 'valor_unitario', e.target.value)} className="w-full bg-transparent outline-none text-sm font-bold text-slate-700" />
+                                    </div>
+                                </div>
+                                <div className="col-span-5 md:col-span-3 flex items-center justify-end gap-2">
+                                    <div className="text-right">
+                                        <span className="text-[9px] uppercase font-bold text-slate-400 block -mb-0.5 md:hidden">Total</span>
+                                        <span className="text-sm font-black text-emerald-700 whitespace-nowrap">
+                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(itemTotal)}
+                                        </span>
+                                    </div>
+                                    <button className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors ml-1" title="Remover item" onClick={() => removeItem(index)}>
+                                        <Trash2 className="h-5 w-5" />
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    })}
                     {items.length === 0 && (
                         <div className="text-center py-8 text-slate-400 text-sm bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
                             Nenhum item adicionado ainda.

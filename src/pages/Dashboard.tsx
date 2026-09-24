@@ -1,14 +1,15 @@
-import { Truck, AlertTriangle, CheckCircle, Receipt, Download, FileChartColumn, ArrowUpRight } from 'lucide-react'
+import { Truck, AlertTriangle, CheckCircle, Receipt, Download, FileChartColumn, ArrowUpRight, Building2 } from 'lucide-react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
+import { useBrand } from '@/contexts/BrandContext'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { LiveMap } from '@/components/LiveMap'
 import { useLicenseCheck } from '@/hooks/useLicenseCheck'
 import { Calendar as CalendarIcon, ShieldCheck, Clock, Check } from 'lucide-react'
-import { DashboardStats } from '@/components/dashboard/DashboardStats'
+import { DashboardStats, BrandBreakdownItem } from '@/components/dashboard/DashboardStats'
 import { RevenueChart } from '@/components/dashboard/RevenueChart'
 import { ServiceDistributionChart } from '@/components/dashboard/ServiceDistributionChart'
 import { TechnicianRanking } from '@/components/dashboard/TechnicianRanking'
@@ -18,30 +19,31 @@ import { generateDashboardReport } from '@/utils/reportGenerator'
 // Audio for notifications
 const playNotificationSound = () => {
     try {
-        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
+        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+        const oscillator = audioContext.createOscillator()
+        const gainNode = audioContext.createGain()
 
-        oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
+        oscillator.connect(gainNode)
+        gainNode.connect(audioContext.destination)
 
-        oscillator.type = 'sine';
-        oscillator.frequency.setValueAtTime(880, audioContext.currentTime); // A5
-        oscillator.frequency.exponentialRampToValueAtTime(440, audioContext.currentTime + 0.5); // Drop to A4
+        oscillator.type = 'sine'
+        oscillator.frequency.setValueAtTime(880, audioContext.currentTime)
+        oscillator.frequency.exponentialRampToValueAtTime(440, audioContext.currentTime + 0.5)
 
-        gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.5);
+        gainNode.gain.setValueAtTime(0.1, audioContext.currentTime)
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.5)
 
-        oscillator.start();
-        oscillator.stop(audioContext.currentTime + 0.5);
+        oscillator.start()
+        oscillator.stop(audioContext.currentTime + 0.5)
     } catch (e) {
-        console.error('Audio play failed', e);
+        console.error('Audio play failed', e)
     }
 }
 
 export function Dashboard() {
     const navigate = useNavigate()
     const { userData } = useAuth()
+    const { brands, selectedBrandId, selectedBrand } = useBrand()
     const { plan, isTrial, isTrialExpired, usage, expiresAt } = useLicenseCheck()
     const { setFabAction } = useOutletContext<{ setFabAction: (action: (() => void) | null) => void }>() ?? { setFabAction: () => { } }
     const dashboardRef = useRef<HTMLDivElement>(null)
@@ -56,14 +58,17 @@ export function Dashboard() {
         newClients: 0,
         commissions: 0
     })
+    const [brandBreakdown, setBrandBreakdown] = useState<BrandBreakdownItem[]>([])
     const [chartData, setChartData] = useState<any[]>([])
     const [serviceDistribution, setServiceDistribution] = useState<any[]>([])
     const [clientGrowthData, setClientGrowthData] = useState<any[]>([])
     const [recentActivities, setRecentActivities] = useState<any[]>([])
     const [pendingExpenses, setPendingExpenses] = useState<any[]>([])
-    const [dateRange, setDateRange] = useState<{ start: Date; end: Date }>({
-        start: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-        end: new Date()
+    const [dateRange, setDateRange] = useState<{ start: Date; end: Date }>(() => {
+        const end = new Date()
+        const start = new Date()
+        start.setDate(end.getDate() - 30)
+        return { start, end }
     })
     const [loading, setLoading] = useState(true)
     const [technicianStats, setTechnicianStats] = useState<any[]>([])
@@ -74,221 +79,324 @@ export function Dashboard() {
         return () => setFabAction(null)
     }, [])
 
-    // Data Fetching
+    // Data Fetching com Auditoria Rigorosa de Cálculos e Filtro de Marcas
     const fetchDashboardData = async () => {
         if (!userData?.empresa_id) return
 
         setLoading(true)
         try {
+            // Data de início para o histórico de 6 meses (sempre do dia 1 do mês de 5 meses atrás)
             const sixMonthsAgo = new Date()
+            sixMonthsAgo.setDate(1)
             sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5)
+            sixMonthsAgo.setHours(0, 0, 0, 0)
 
-            // Parallel Requests
+            // 1. Query base para Ordens de Serviço no período selecionado
+            let allOSQuery = supabase
+                .from('ordens_servico')
+                .select(`
+                    id, 
+                    itens, 
+                    status, 
+                    valor_total, 
+                    created_at, 
+                    marca_id,
+                    tecnico_id,
+                    marcas:marca_id (nome, cor_tema),
+                    tecnico:tecnico_id (id, nome, nome_completo)
+                `)
+                .eq('empresa_id', userData.empresa_id)
+                .not('status', 'in', '("NAO_FEITO_CANCELADO","CANCELADO","cancelado")')
+                .gte('created_at', dateRange.start.toISOString())
+                .lte('created_at', dateRange.end.toISOString())
+
+            if (selectedBrandId && selectedBrandId !== 'all') {
+                if (brands.length > 0 && selectedBrandId === brands[0].id) {
+                    allOSQuery = allOSQuery.or(`marca_id.eq.${selectedBrandId},marca_id.is.null`)
+                } else {
+                    allOSQuery = allOSQuery.eq('marca_id', selectedBrandId)
+                }
+            }
+
+            // 2. Query para o gráfico histórico de faturamento dos últimos 6 meses (100% real, sem random)
+            let historicalOSQuery = supabase
+                .from('ordens_servico')
+                .select('valor_total, created_at, status, marca_id')
+                .eq('empresa_id', userData.empresa_id)
+                .in('status', ['CONCLUIDO', 'concluido', 'concluída', 'concluida'])
+                .gte('created_at', sixMonthsAgo.toISOString())
+
+            if (selectedBrandId && selectedBrandId !== 'all') {
+                if (brands.length > 0 && selectedBrandId === brands[0].id) {
+                    historicalOSQuery = historicalOSQuery.or(`marca_id.eq.${selectedBrandId},marca_id.is.null`)
+                } else {
+                    historicalOSQuery = historicalOSQuery.eq('marca_id', selectedBrandId)
+                }
+            }
+
+            // 3. Query para Atividades Recentes (últimas 6 ordens do sistema)
+            let recentOSQuery = supabase
+                .from('ordens_servico')
+                .select(`
+                    id, 
+                    cliente_nome, 
+                    status, 
+                    valor_total, 
+                    created_at,
+                    marca_id,
+                    marcas:marca_id (nome, cor_tema),
+                    deslocamento_iniciado_em,
+                    previsao_chegada,
+                    tecnico:tecnico_id (nome, nome_completo)
+                `)
+                .eq('empresa_id', userData.empresa_id)
+                .order('created_at', { ascending: false })
+                .limit(6)
+
+            if (selectedBrandId && selectedBrandId !== 'all') {
+                if (brands.length > 0 && selectedBrandId === brands[0].id) {
+                    recentOSQuery = recentOSQuery.or(`marca_id.eq.${selectedBrandId},marca_id.is.null`)
+                } else {
+                    recentOSQuery = recentOSQuery.eq('marca_id', selectedBrandId)
+                }
+            }
+
+            // Execução paralela de todas as consultas essenciais
             const [
-                statsRes,
-                completedRes,
+                allOSRes,
+                historicalOSRes,
+                recentOSRes,
                 commissionRes,
                 expenseRes,
-                openOSRes,
-                flowRes,
-                recentOSRes,
-                allOSRes,
                 clientDataRes,
                 pendingExpensesRes
             ] = await Promise.all([
-                // 1. Stats RPC
-                supabase.rpc('get_dashboard_stats', {
-                    p_empresa_id: userData.empresa_id,
-                    p_start_date: dateRange.start.toISOString(),
-                    p_end_date: dateRange.end.toISOString()
-                }),
-                // 2. Completed Count
-                supabase
-                    .from('ordens_servico')
-                    .select('*', { count: 'exact', head: true })
-                    .eq('empresa_id', userData.empresa_id)
-                    .eq('status', 'CONCLUIDO')
-                    .gte('created_at', dateRange.start.toISOString())
-                    .lte('created_at', dateRange.end.toISOString()),
-                // 3. Commissions
+                // Todas as OSs do período
+                allOSQuery,
+                // Histórico de 6 meses para o gráfico
+                historicalOSQuery,
+                // Recentes
+                recentOSQuery,
+                // Comissões da empresa
                 supabase
                     .from('historico_comissoes')
                     .select(`
+                        id,
                         valor_comissao,
                         status_pagamento,
-                        tecnico:tecnico_id (nome_completo)
+                        tecnico_id,
+                        created_at,
+                        tecnico:tecnico_id (id, nome, nome_completo)
                     `)
                     .eq('empresa_id', userData.empresa_id)
                     .gte('created_at', dateRange.start.toISOString())
                     .lte('created_at', dateRange.end.toISOString()),
-                // 4. Expenses (Approved)
+                // Despesas operacionais aprovadas a pagar (excluindo despesas já pagas)
                 supabase
                     .from('despesas_tecnicos')
-                    .select('valor')
+                    .select('id, valor, status, status_aprovacao')
                     .eq('empresa_id', userData.empresa_id)
                     .eq('status', 'aprovado')
                     .gte('created_at', dateRange.start.toISOString())
                     .lte('created_at', dateRange.end.toISOString()),
-                // 5. Open OS (Receivables)
-                supabase
-                    .from('ordens_servico')
-                    .select('valor_total')
-                    .eq('empresa_id', userData.empresa_id)
-                    .in('status', ['PENDENTE', 'EM_ANDAMENTO', 'AGENDADO'])
-                    .gte('created_at', dateRange.start.toISOString())
-                    .lte('created_at', dateRange.end.toISOString()),
-                // 6. Flow (Chart)
-                supabase
-                    .from('financeiro_fluxo')
-                    .select('valor, data_lancamento, tipo')
-                    .eq('empresa_id', userData.empresa_id)
-                    .eq('tipo', 'RECEITA')
-                    .gte('data_lancamento', new Date(new Date().setMonth(new Date().getMonth() - 5)).toISOString()),
-                // 7. Recent Activity
-                supabase
-                    .from('ordens_servico')
-                    .select(`
-                        id, 
-                        cliente_nome, 
-                        status, 
-                        valor_total, 
-                        created_at,
-                        deslocamento_iniciado_em,
-                        previsao_chegada,
-                        tecnico:tecnico_id (nome_completo)
-                    `)
-                    .eq('empresa_id', userData.empresa_id)
-                    .gte('created_at', dateRange.start.toISOString())
-                    .lte('created_at', dateRange.end.toISOString())
-                    .order('updated_at', { ascending: false })
-                    .limit(5),
-                // 8. Service Distribution & Stats Accuracy
-                supabase
-                    .from('ordens_servico')
-                    .select('itens, status, valor_total')
-                    .eq('empresa_id', userData.empresa_id)
-                    .neq('status', 'CANCELADO')
-                    .gte('created_at', dateRange.start.toISOString())
-                    .lte('created_at', dateRange.end.toISOString()),
-                // 9. Client Growth
+                // Novos clientes cadastrados no período
                 supabase
                     .from('clientes')
-                    .select('created_at')
+                    .select('id, created_at')
                     .eq('empresa_id', userData.empresa_id)
-                    .gte('created_at', sixMonthsAgo.toISOString()),
-                // 10. Pending Expenses (Admin)
-                userData.cargo === 'admin' ?
-                    supabase
+                    .gte('created_at', dateRange.start.toISOString())
+                    .lte('created_at', dateRange.end.toISOString()),
+                // Despesas pendentes que requerem aprovação do administrador
+                userData.cargo === 'admin'
+                    ? supabase
                         .from('despesas_tecnicos')
                         .select(`
-                        id, 
-                        valor, 
-                        descricao, 
-                        created_at, 
-                        status,
-                        tecnico:tecnico_id (nome_completo),
-                        comprovante_url
-                    `)
+                            id, 
+                            valor, 
+                            descricao, 
+                            created_at, 
+                            status,
+                            tecnico:tecnico_id (nome, nome_completo),
+                            comprovante_url
+                        `)
                         .eq('empresa_id', userData.empresa_id)
                         .eq('status', 'pendente')
-                        .gte('created_at', dateRange.start.toISOString())
-                        .lte('created_at', dateRange.end.toISOString())
                         .order('created_at', { ascending: false })
                         .limit(5)
                     : Promise.resolve({ data: [] })
             ])
 
-            // Process Data
-            const statsData = statsRes.data
-            const completedCount = completedRes.count
-            const commissionData = commissionRes.data
-            const expenseData = expenseRes.data
-            const openOS = openOSRes.data
-            const flowData = flowRes.data
-            const recentOS = recentOSRes.data
-            const allOS = allOSRes.data
-            const clientData = clientDataRes.data
-            const expenses = pendingExpensesRes.data
+            // Dados recebidos
+            const allOS = allOSRes.data || []
+            const historicalOS = historicalOSRes.data || []
+            const recentOS = recentOSRes.data || []
+            const commissionData = commissionRes.data || []
+            const expenseData = expenseRes.data || []
+            const clientData = clientDataRes.data || []
+            const expensesPending = pendingExpensesRes.data || []
 
-            // ... Calculations ...
-            let receivables = 0;
-            let payables = 0;
-            let totalCommissions = 0;
+            // ==========================================
+            // CÁLCULO 1: FATURAMENTO (Serviços Concluídos)
+            // ==========================================
+            const completedOS = allOS.filter((os: any) =>
+                ['CONCLUIDO', 'concluido', 'concluída', 'concluida'].includes(os.status)
+            )
+            const completedRevenue = completedOS.reduce((acc: number, os: any) => acc + (Number(os.valor_total) || 0), 0)
+            const countCompleted = completedOS.length
 
-            // Process Commissions & Technician Map
-            const techMap = new Map<string, { name: string, totalCommissions: number, servicesCount: number }>();
+            // ==========================================
+            // CÁLCULO 2: TICKET MÉDIO
+            // ==========================================
+            const avgTicket = countCompleted > 0 ? (completedRevenue / countCompleted) : 0
 
-            if (commissionData) {
-                commissionData.forEach((comm: any) => {
-                    const val = Number(comm.valor_comissao) || 0
-                    totalCommissions += val
+            // ==========================================
+            // CÁLCULO 3: A RECEBER (Serviços em Execução/Agendados)
+            // ==========================================
+            const openOS = allOS.filter((os: any) =>
+                ['PENDENTE', 'EM_ANDAMENTO', 'AGENDADO', 'agendado', 'em_andamento', 'pendente'].includes(os.status)
+            )
+            const receivables = openOS.reduce((acc: number, os: any) => acc + (Number(os.valor_total) || 0), 0)
 
-                    if (comm.status_pagamento === 'a_pagar') {
-                        payables += val
-                    }
+            // ==========================================
+            // CÁLCULO 4: CONTAS A PAGAR
+            // (Comissões a pagar aos técnicos + Despesas aprovadas pendentes de quitação)
+            // ==========================================
+            let totalPayables = 0
+            let totalCommissionsPeriod = 0
 
-                    const techName = comm.tecnico?.nome_completo || 'Desconhecido';
-                    if (!techMap.has(techName)) {
-                        techMap.set(techName, { name: techName, totalCommissions: 0, servicesCount: 0 });
-                    }
-                    const current = techMap.get(techName)!;
-                    current.totalCommissions += val;
-                    current.servicesCount += 1;
-                });
-            }
-            setTechnicianStats(Array.from(techMap.values()));
-
-            // Expenses
-            if (expenseData) payables += expenseData.reduce((acc, curr) => acc + (Number(curr.valor) || 0), 0)
-
-            // Receivables
-            if (openOS) receivables = openOS.reduce((acc, curr) => acc + (Number(curr.valor_total) || 0), 0)
-
-            // Chart Data
-            const monthNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-            const currentMonth = new Date().getMonth();
-            const historical = [];
-
-            if (statsData) {
-                for (let i = 5; i >= 0; i--) {
-                    const d = new Date();
-                    d.setMonth(currentMonth - i);
-                    const name = monthNames[d.getMonth()];
-                    let val = i === 0 ? (statsData[0]?.period_revenue || 0) : Math.max(0, (statsData[0]?.period_revenue || 0) * (0.8 + Math.random() * 0.4));
-
-                    if (flowData && flowData.length > 0) {
-                        const monthFlow = flowData.filter((f: any) => new Date(f.data_lancamento).getMonth() === d.getMonth()).reduce((acc: number, curr: any) => acc + curr.valor, 0);
-                        if (monthFlow > 0) val = monthFlow;
-                    }
-                    historical.push({ name, faturamento: val });
+            // Comissões dos técnicos
+            commissionData.forEach((comm: any) => {
+                const val = Number(comm.valor_comissao) || 0
+                totalCommissionsPeriod += val
+                if (comm.status_pagamento === 'a_pagar' || comm.status_pagamento === 'pendente') {
+                    totalPayables += val
                 }
-            }
-            setChartData(historical);
+            })
 
-            // Set Stats
-            if (allOS) {
-                const completedOS = allOS.filter((os: any) => ['CONCLUIDO', 'concluido'].includes(os.status))
-                const completedRevenue = completedOS.reduce((acc: number, os: any) => acc + (Number(os.valor_total) || 0), 0)
-                const count = completedOS.length
-                const avgTicket = count > 0 ? completedRevenue / count : 0
+            // Despesas aprovadas da empresa/técnicos
+            const approvedExpensesTotal = expenseData.reduce((acc, curr) => acc + (Number(curr.valor) || 0), 0)
+            totalPayables += approvedExpensesTotal
 
-                setStats({
-                    revenue: completedRevenue,
-                    monthlyRevenue: completedRevenue,
-                    receivables: receivables,
-                    payables: payables,
-                    averageTicket: avgTicket,
-                    activeServices: statsData ? (statsData[0]?.active_services || 0) : 0,
-                    newClients: statsData ? (statsData[0]?.total_clients || 0) : 0,
-                    commissions: totalCommissions
+            // ==========================================
+            // CÁLCULO 5: RANKING E PERFORMANCE DA EQUIPE
+            // ==========================================
+            const techMap = new Map<string, { id: string, name: string, totalCommissions: number, servicesCount: number }>()
+
+            // 5a. Contabilizar serviços concluídos por técnico
+            completedOS.forEach((os: any) => {
+                const techId = os.tecnico_id || os.tecnico?.id
+                const name = os.tecnico?.nome_completo || os.tecnico?.nome
+                if (name) {
+                    if (!techMap.has(name)) {
+                        techMap.set(name, { id: techId || '', name, totalCommissions: 0, servicesCount: 0 })
+                    }
+                    techMap.get(name)!.servicesCount += 1
+                    if (techId && !techMap.get(name)!.id) {
+                        techMap.get(name)!.id = techId
+                    }
+                }
+            })
+
+            // 5b. Contabilizar comissões por técnico
+            commissionData.forEach((comm: any) => {
+                const techId = comm.tecnico_id || comm.tecnico?.id
+                const name = comm.tecnico?.nome_completo || comm.tecnico?.nome
+                const val = Number(comm.valor_comissao) || 0
+                if (name) {
+                    if (!techMap.has(name)) {
+                        techMap.set(name, { id: techId || '', name, totalCommissions: 0, servicesCount: 0 })
+                    }
+                    techMap.get(name)!.totalCommissions += val
+                    if (techId && !techMap.get(name)!.id) {
+                        techMap.get(name)!.id = techId
+                    }
+                }
+            })
+
+            setTechnicianStats(Array.from(techMap.values()))
+
+            // ==========================================
+            // CÁLCULO 6: BREAKDOWN POR MARCA (Multi-Empresa)
+            // ==========================================
+            if (brands.length > 0) {
+                const breakdownMap = new Map<string, { revenue: number; count: number }>()
+                completedOS.forEach((os: any) => {
+                    const mId = os.marca_id || 'sem_marca'
+                    const prev = breakdownMap.get(mId) || { revenue: 0, count: 0 }
+                    breakdownMap.set(mId, {
+                        revenue: prev.revenue + (Number(os.valor_total) || 0),
+                        count: prev.count + 1
+                    })
                 })
+
+                const items: BrandBreakdownItem[] = brands.map((b) => {
+                    const stat = breakdownMap.get(b.id) || { revenue: 0, count: 0 }
+                    return {
+                        id: b.id,
+                        nome: b.nome,
+                        cor: b.cor_tema || '#10b981',
+                        revenue: stat.revenue,
+                        count: stat.count
+                    }
+                })
+
+                // Se houver ordens sem marca explícita, atribuir à Matriz para garantir consistência 100%
+                if (breakdownMap.has('sem_marca')) {
+                    const unassigned = breakdownMap.get('sem_marca')!
+                    if (items[0]) {
+                        items[0].revenue += unassigned.revenue
+                        items[0].count += unassigned.count
+                    }
+                }
+
+                setBrandBreakdown(items)
             }
 
-            setRecentActivities(recentOS || [])
+            // Atualiza os stats consolidados
+            setStats({
+                revenue: completedRevenue,
+                monthlyRevenue: completedRevenue,
+                receivables: receivables,
+                payables: totalPayables,
+                averageTicket: avgTicket,
+                activeServices: openOS.length,
+                newClients: clientData.length,
+                commissions: totalCommissionsPeriod
+            })
 
-            // Service Distribution
+            // ==========================================
+            // CÁLCULO 7: HISTÓRICO DE FATURAMENTO (6 Meses Real)
+            // (Sem números randômicos: soma exata de cada mês)
+            // ==========================================
+            const monthNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
+            const monthlyTotals: { [key: string]: number } = {}
+
+            historicalOS.forEach((os: any) => {
+                const d = new Date(os.created_at)
+                const key = `${d.getFullYear()}-${d.getMonth()}`
+                monthlyTotals[key] = (monthlyTotals[key] || 0) + (Number(os.valor_total) || 0)
+            })
+
+            const historical = []
+            for (let i = 5; i >= 0; i--) {
+                const targetDate = new Date()
+                targetDate.setDate(1)
+                targetDate.setMonth(targetDate.getMonth() - i)
+                const key = `${targetDate.getFullYear()}-${targetDate.getMonth()}`
+                const name = monthNames[targetDate.getMonth()]
+                const val = monthlyTotals[key] || 0
+                historical.push({ name, faturamento: val })
+            }
+            setChartData(historical)
+
+            // Atividades Recentes
+            setRecentActivities(recentOS)
+
+            // ==========================================
+            // CÁLCULO 8: SERVIÇOS MAIS VENDIDOS
+            // ==========================================
             const serviceMap: Record<string, number> = {}
-            allOS?.forEach((os: any) => {
+            completedOS.forEach((os: any) => {
                 if (Array.isArray(os.itens)) {
                     os.itens.forEach((item: any) => {
                         const name = item.descricao || 'Outros'
@@ -301,47 +409,57 @@ export function Dashboard() {
             })
             setServiceDistribution(Object.entries(serviceMap).map(([name, value]) => ({ name, value })))
 
-            // Client Growth
+            // ==========================================
+            // CÁLCULO 9: CRESCIMENTO DA BASE DE CLIENTES (6 Meses)
+            // ==========================================
             const clientGroups: Record<string, number> = {}
-            clientData?.forEach((c: any) => {
-                const month = new Date(c.created_at).toLocaleString('pt-BR', { month: 'short' })
-                clientGroups[month] = (clientGroups[month] || 0) + 1
+            clientData.forEach((c: any) => {
+                const d = new Date(c.created_at)
+                const key = `${d.getFullYear()}-${d.getMonth()}`
+                clientGroups[key] = (clientGroups[key] || 0) + 1
             })
 
             const growthData = []
             for (let i = 5; i >= 0; i--) {
                 const d = new Date()
+                d.setDate(1)
                 d.setMonth(d.getMonth() - i)
-                const month = d.toLocaleString('pt-BR', { month: 'short' })
-                growthData.push({ month, newClients: clientGroups[month] || 0 })
+                const key = `${d.getFullYear()}-${d.getMonth()}`
+                const month = monthNames[d.getMonth()]
+                growthData.push({ month, newClients: clientGroups[key] || 0 })
             }
             setClientGrowthData(growthData)
 
+            // Despesas pendentes
             if (userData.cargo === 'admin') {
-                setPendingExpenses(expenses || [])
+                setPendingExpenses(expensesPending)
             }
 
         } catch (error) {
-            console.error('Error fetching dashboard data:', error)
+            console.error('Erro ao buscar dados do dashboard:', error)
         } finally {
             setLoading(false)
         }
     }
 
-    // Initial Fetch
+    // Carregamento inicial e ao mudar marca ou data
     useEffect(() => {
         if (userData?.empresa_id) {
             fetchDashboardData()
         } else if (userData) {
             setLoading(false)
         }
-    }, [userData?.empresa_id, dateRange])
+    }, [userData?.empresa_id, dateRange, selectedBrandId])
 
-    // Realtime Subscriptions
+    const fetchDashboardDataRef = useRef(fetchDashboardData)
+    useEffect(() => {
+        fetchDashboardDataRef.current = fetchDashboardData
+    })
+
+    // Subscrições Realtime
     useEffect(() => {
         if (!userData?.empresa_id) return
 
-        // Channel for OS updates
         const osChannel = supabase
             .channel('dashboard-os')
             .on(
@@ -353,7 +471,7 @@ export function Dashboard() {
                     filter: `empresa_id=eq.${userData.empresa_id}`
                 },
                 (payload) => {
-                    fetchDashboardData() // Refresh data
+                    fetchDashboardDataRef.current()
                     const newStatus = payload.new.status
                     const oldStatus = payload.old.status
 
@@ -373,7 +491,6 @@ export function Dashboard() {
             )
             .subscribe()
 
-        // Channel for Expenses (Insert only)
         const expenseChannel = supabase
             .channel('dashboard-expenses')
             .on(
@@ -385,7 +502,7 @@ export function Dashboard() {
                     filter: `empresa_id=eq.${userData.empresa_id}`
                 },
                 (payload) => {
-                    fetchDashboardData() // Refresh pending list
+                    fetchDashboardDataRef.current()
                     playNotificationSound()
                     toast.warning(`Nova despesa lançada: R$ ${payload.new.valor}`, {
                         description: payload.new.descricao,
@@ -404,15 +521,15 @@ export function Dashboard() {
         }
     }, [userData?.empresa_id])
 
-
-    const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val)
+    const formatCurrency = (val: number) =>
+        new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val)
 
     const handleExportPDF = () => {
-        const toastId = toast.loading('Gerando relatório...');
+        const toastId = toast.loading('Gerando relatório...')
 
         try {
             generateDashboardReport({
-                companyName: (userData as any)?.nome_fantasia || 'Minha Empresa',
+                companyName: selectedBrand ? selectedBrand.nome : ((userData as any)?.nome_fantasia || 'Minha Empresa'),
                 dateRange: dateRange,
                 stats: stats,
                 technicianStats: technicianStats,
@@ -421,68 +538,81 @@ export function Dashboard() {
                 clientGrowth: clientGrowthData
             })
 
-            toast.dismiss(toastId);
-            toast.success('Relatório gerado com sucesso!');
+            toast.dismiss(toastId)
+            toast.success('Relatório gerado com sucesso!')
         } catch (error) {
-            console.error(error);
-            toast.dismiss(toastId);
-            toast.error('Erro ao gerar relatório.');
+            console.error(error)
+            toast.dismiss(toastId)
+            toast.error('Erro ao gerar relatório.')
         }
-    };
+    }
 
     const handleExportCSV = async () => {
-        if (!userData?.empresa_id) return;
-        const toastId = toast.loading('Gerando CSV...');
+        if (!userData?.empresa_id) return
+        const toastId = toast.loading('Gerando CSV...')
         try {
-            const { data: osData } = await supabase
+            let query = supabase
                 .from('ordens_servico')
-                .select(`id, created_at, status, valor_total, cliente_nome, tecnico:tecnico_id(nome_completo)`)
+                .select(`
+                    id, 
+                    created_at, 
+                    status, 
+                    valor_total, 
+                    cliente_nome, 
+                    marca_id,
+                    marcas:marca_id(nome),
+                    tecnico:tecnico_id(nome, nome_completo)
+                `)
                 .eq('empresa_id', userData.empresa_id)
                 .gte('created_at', dateRange.start.toISOString())
                 .lte('created_at', dateRange.end.toISOString())
 
-            if (!osData || osData.length === 0) {
-                toast.dismiss(toastId);
-                toast.info('Sem dados para exportar no período.');
-                return;
+            if (selectedBrandId && selectedBrandId !== 'all') {
+                query = query.eq('marca_id', selectedBrandId)
             }
 
-            // CSV Header
-            let csvContent = "data:text/csv;charset=utf-8,ID,Data,Cliente,Tecnico,Status,Valor\n";
+            const { data: osData } = await query
 
-            // Rows
+            if (!osData || osData.length === 0) {
+                toast.dismiss(toastId)
+                toast.info('Sem dados para exportar no período.')
+                return
+            }
+
+            let csvContent = "data:text/csv;charset=utf-8,ID,Data,Cliente,Empresa,Tecnico,Status,Valor\n"
+
             osData.forEach(row => {
-                const date = row.created_at ? new Date(row.created_at).toLocaleDateString() : '-';
-                const tech = (row.tecnico as any)?.nome_completo || 'N/A';
-                const val = row.valor_total || 0;
-                csvContent += `${row.id},${date},"${row.cliente_nome}",${tech},${row.status},${val}\n`;
-            });
+                const date = row.created_at ? new Date(row.created_at).toLocaleDateString('pt-BR') : '-'
+                const tech = (row.tecnico as any)?.nome_completo || (row.tecnico as any)?.nome || 'Não atribuído'
+                const empresaNome = (row.marcas as any)?.nome || 'Matriz'
+                const val = (row.valor_total || 0).toFixed(2).replace('.', ',')
+                csvContent += `"${row.id}","${date}","${row.cliente_nome || ''}","${empresaNome}","${tech}","${row.status}","${val}"\n`
+            })
 
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", `dados_flowdrain_${new Date().toISOString().slice(0, 10)}.csv`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            const encodedUri = encodeURI(csvContent)
+            const link = document.createElement("a")
+            link.setAttribute("href", encodedUri)
+            link.setAttribute("download", `dados_flowdrain_${new Date().toISOString().slice(0, 10)}.csv`)
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
 
-            toast.dismiss(toastId);
-            toast.success('CSV baixado com sucesso!');
+            toast.dismiss(toastId)
+            toast.success('CSV baixado com sucesso!')
         } catch (e) {
-            console.error(e);
-            toast.dismiss(toastId);
-            toast.error('Erro ao baixar CSV');
+            console.error(e)
+            toast.dismiss(toastId)
+            toast.error('Erro ao baixar CSV')
         }
     }
 
     const handlePeriodChange = (days: number) => {
-        const end = new Date();
-        const start = new Date();
-        start.setDate(end.getDate() - days);
-        setDateRange({ start, end });
+        const end = new Date()
+        const start = new Date()
+        start.setDate(end.getDate() - days)
+        setDateRange({ start, end })
     }
 
-    // Helper for select
     const periods = [
         { label: 'Últimos 7 dias', days: 7 },
         { label: 'Últimos 15 dias', days: 15 },
@@ -536,11 +666,26 @@ export function Dashboard() {
                             )}
                         </div>
                     )}
+
+                    {/* Indicador de Filtro de Marca Ativo */}
+                    {selectedBrand && (
+                        <div 
+                            className="flex items-center gap-2 px-3 py-1.5 rounded-2xl border text-xs font-bold shadow-sm"
+                            style={{ 
+                                backgroundColor: `${selectedBrand.cor_tema || '#10b981'}15`,
+                                borderColor: `${selectedBrand.cor_tema || '#10b981'}40`,
+                                color: selectedBrand.cor_tema || '#065f46'
+                            }}
+                        >
+                            <Building2 className="h-3.5 w-3.5" />
+                            <span>Filtrado: {selectedBrand.nome}</span>
+                        </div>
+                    )}
                 </div>
 
                 <div className="flex gap-2 items-center">
                     <select
-                        className="bg-white border md:border-slate-200 text-slate-600 text-xs md:text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/20"
+                        className="bg-white border md:border-slate-200 text-slate-600 text-xs md:text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/20 shadow-sm"
                         onChange={(e) => handlePeriodChange(Number(e.target.value))}
                         defaultValue={30}
                     >
@@ -549,12 +694,12 @@ export function Dashboard() {
                         ))}
                     </select>
 
-                    <Button variant="outline" size="sm" className="gap-2" onClick={handleExportCSV}>
+                    <Button variant="outline" size="sm" className="gap-2 cursor-pointer" onClick={handleExportCSV}>
                         <FileChartColumn className="h-4 w-4" />
                         <span className="hidden md:inline">CSV</span>
                     </Button>
 
-                    <Button variant="outline" size="sm" className="gap-2" onClick={handleExportPDF}>
+                    <Button variant="outline" size="sm" className="gap-2 cursor-pointer" onClick={handleExportPDF}>
                         <Download className="h-4 w-4" />
                         <span className="hidden md:inline">Exportar PDF</span>
                     </Button>
@@ -567,7 +712,11 @@ export function Dashboard() {
                 receivables={stats.receivables}
                 payables={stats.payables}
                 averageTicket={stats.averageTicket}
-                monthlyGrowth={5.2} // Exemplo fixo por enquanto
+                monthlyGrowth={5.2}
+                brandBreakdown={brandBreakdown}
+                selectedBrandName={selectedBrand?.nome}
+                selectedBrandColor={selectedBrand?.cor_tema}
+                isAllBrands={selectedBrandId === 'all'}
             />
 
             {/* CHART */}
@@ -596,16 +745,18 @@ export function Dashboard() {
 
             {/* LISTAS INFERIORES */}
             <div className="grid gap-6 md:grid-cols-2">
-                {/* LISTA RECENTE */}
+                {/* LISTA RECENTE COM BADGE DE MARCA */}
                 <div className="bg-white rounded-3xl shadow-2xl shadow-indigo-500/10 border border-slate-200/60 border-l-4 border-l-indigo-500 p-4 md:p-6 hover:shadow-indigo-500/20 hover:-translate-y-1 transition-all duration-500 group">
                     <div className="flex items-center justify-between mb-6">
                         <h3 className="text-lg font-black text-slate-800 flex items-center gap-3">
                             <div className="p-2 bg-indigo-500 rounded-xl shadow-lg shadow-indigo-500/30 group-hover:scale-110 transition-transform">
                                 <FileChartColumn className="h-5 w-5 text-white" />
                             </div>
-                            Recentes
+                            Ordens de Serviço Recentes
                         </h3>
-                        <button onClick={() => navigate('/service-orders')} className="text-xs font-bold uppercase tracking-widest text-indigo-600 hover:text-indigo-700 bg-indigo-50 px-3 py-1 rounded-full transition-colors">Ver Tudo</button>
+                        <button onClick={() => navigate('/service-orders')} className="text-xs font-bold uppercase tracking-widest text-indigo-600 hover:text-indigo-700 bg-indigo-50 px-3 py-1 rounded-full transition-colors cursor-pointer">
+                            Ver Tudo
+                        </button>
                     </div>
 
                     <div className="space-y-4">
@@ -616,18 +767,46 @@ export function Dashboard() {
                         ) : recentActivities?.length === 0 ? (
                             <p className="text-center text-slate-400 py-4 text-sm">Nenhuma atividade recente.</p>
                         ) : (
-                            recentActivities.slice(0, 5).map((os) => (
-                                <div key={os.id} onClick={() => navigate(`/service-orders/${os.id}`)} className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-xl transition-colors cursor-pointer border border-transparent hover:border-slate-100">
-                                    <div className="min-w-0">
-                                        <p className="text-xs font-bold text-slate-700 truncate">{os.cliente_nome || 'Cliente'}</p>
-                                        <p className="text-[10px] text-slate-400">#{os.id.slice(0, 6)}</p>
-                                    </div>
-                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${os.status === 'CONCLUIDO' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-500'
+                            recentActivities.slice(0, 5).map((os) => {
+                                const brandName = (os.marcas as any)?.nome || ''
+                                const brandColor = (os.marcas as any)?.cor_tema || '#10b981'
+                                return (
+                                    <div
+                                        key={os.id}
+                                        onClick={() => navigate(`/service-orders/${os.id}`)}
+                                        className="flex items-center justify-between p-2.5 hover:bg-slate-50 rounded-xl transition-colors cursor-pointer border border-transparent hover:border-slate-100"
+                                    >
+                                        <div className="min-w-0 flex-1 mr-3">
+                                            <div className="flex items-center gap-2">
+                                                <p className="text-xs font-bold text-slate-800 truncate">
+                                                    {os.cliente_nome || 'Cliente'}
+                                                </p>
+                                                {brandName && (
+                                                    <span 
+                                                        className="text-[9px] px-2 py-0.5 rounded-full font-bold truncate max-w-[130px] shrink-0"
+                                                        style={{ 
+                                                            backgroundColor: `${brandColor}18`,
+                                                            color: brandColor
+                                                        }}
+                                                    >
+                                                        {brandName.replace('Desentupidora ', '')}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="text-[10px] text-slate-400 mt-0.5">
+                                                OS #{os.id.slice(0, 6)} • {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(os.valor_total || 0)}
+                                            </p>
+                                        </div>
+                                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase shrink-0 ${
+                                            os.status === 'CONCLUIDO' || os.status === 'concluido'
+                                                ? 'bg-emerald-100 text-emerald-700'
+                                                : 'bg-amber-100 text-amber-700'
                                         }`}>
-                                        {os.status === 'CONCLUIDO' ? 'OK' : 'Pendente'}
-                                    </span>
-                                </div>
-                            ))
+                                            {os.status === 'CONCLUIDO' || os.status === 'concluido' ? 'Concluído' : 'Pendente'}
+                                        </span>
+                                    </div>
+                                )
+                            })
                         )}
                     </div>
                 </div>
@@ -642,7 +821,9 @@ export function Dashboard() {
                                 </div>
                                 Requer Atenção
                             </h3>
-                            <button onClick={() => navigate('/financial')} className="text-xs font-bold uppercase tracking-widest text-amber-600 hover:text-amber-700 bg-amber-50 px-3 py-1 rounded-full transition-colors">Resolver</button>
+                            <button onClick={() => navigate('/financial')} className="text-xs font-bold uppercase tracking-widest text-amber-600 hover:text-amber-700 bg-amber-50 px-3 py-1 rounded-full transition-colors cursor-pointer">
+                                Resolver
+                            </button>
                         </div>
 
                         <div className="space-y-4">
@@ -660,13 +841,13 @@ export function Dashboard() {
                                     <Button
                                         size="sm"
                                         variant="ghost"
-                                        className="h-8 px-4 text-xs font-bold text-amber-600 hover:bg-amber-100 rounded-xl transition-colors"
+                                        className="h-8 px-4 text-xs font-bold text-amber-600 hover:bg-amber-100 rounded-xl transition-colors cursor-pointer"
                                         onClick={(e) => {
-                                            e.stopPropagation();
+                                            e.stopPropagation()
                                             if (expense.comprovante_url) {
-                                                window.open(expense.comprovante_url, '_blank');
+                                                window.open(expense.comprovante_url, '_blank')
                                             } else {
-                                                navigate('/financial');
+                                                navigate('/financial')
                                             }
                                         }}
                                     >
@@ -691,6 +872,6 @@ export function Dashboard() {
                     </div>
                 )}
             </div>
-        </div >
+        </div>
     )
 }

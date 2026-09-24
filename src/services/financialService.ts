@@ -29,7 +29,7 @@ export const financialService = {
      * 3. Fetches pending advances/bonuses from financeiro_fluxo.
      * 4. Calculates totals.
      */
-    getTechnicianBalance: async (technicianId: string): Promise<TechnicianBalance> => {
+    getTechnicianBalance: async (technicianId: string, startDate?: string, endDate?: string): Promise<TechnicianBalance> => {
         try {
             // 1. Get Technician Details
             const { data: tech, error: techError } = await (supabase
@@ -40,7 +40,7 @@ export const financialService = {
 
             if (techError) throw techError
 
-            // Handle potential field name variations (user reported adding snake_case, but app might use others)
+            // Handle potential field name variations
             const commissionRate = (tech.percentual_comissao || tech.commission_rate || 0) / 100
 
             let totalCommission = 0
@@ -50,37 +50,80 @@ export const financialService = {
             let totalBonus = 0
             const advancesIds: string[] = []
 
-            // 2. Get Unpaid Commissions (historico_comissoes) - with graceful error handling
-            let commissions: any[] = []
-            try {
-                const { data: commData, error: commError } = await (supabase
-                    .from('historico_comissoes') as any)
-                    .select('*')
-                    .eq('tecnico_id', technicianId)
-                    .eq('status_pagamento', 'a_pagar')
+            // Período: datas 'AAAA-MM-DD' são interpretadas no fuso local (início 00:00, fim 23:59:59.999)
+            const paraData = (s: string, fimDoDia: boolean) => {
+                if (s.includes('T')) return new Date(s)
+                const [y, m, d] = s.split('-').map(Number)
+                return fimDoDia ? new Date(y, m - 1, d, 23, 59, 59, 999) : new Date(y, m - 1, d)
+            }
+            const inicio = startDate ? paraData(startDate, false) : null
+            const fim = endDate ? paraData(endDate, true) : null
+            const dentroDoPeriodo = (dataIso?: string | null) => {
+                if (!dataIso) return !inicio && !fim
+                const d = new Date(dataIso)
+                return (!inicio || d >= inicio) && (!fim || d <= fim)
+            }
 
-                if (!commError && commData) {
-                    commissions = commData
-                    commissions.forEach((comm: any) => {
-                        const value = Number(comm.valor_comissao) || 0
-                        totalCommission += value
-                        if (comm.ordem_servico_id) osIds.push(comm.ordem_servico_id)
-                        commissionIds.push(comm.id)
-                    })
+            // 2. Comissões a pagar, filtradas pela DATA DA OS (e não pela data em que a comissão foi gerada)
+            let commissions: any[] = []
+            const osPorId = new Map<string, any>()
+            try {
+                // Busca em páginas: o Supabase devolve no máximo 1000 linhas por consulta
+                const todasComissoes: any[] = []
+                for (let de = 0; ; de += 1000) {
+                    const { data: pagina, error: commError } = await (supabase
+                        .from('historico_comissoes') as any)
+                        .select('*')
+                        .eq('tecnico_id', technicianId)
+                        .eq('status_pagamento', 'a_pagar')
+                        .order('id', { ascending: true })
+                        .range(de, de + 999)
+                    if (commError) throw commError
+                    todasComissoes.push(...(pagina || []))
+                    if (!pagina || pagina.length < 1000) break
                 }
+
+                // Carrega as OS dessas comissões em lotes (evita URL gigante no filtro .in)
+                const idsOs = [...new Set(todasComissoes.map((c: any) => c.ordem_servico_id).filter(Boolean))] as string[]
+                for (let i = 0; i < idsOs.length; i += 150) {
+                    const { data: lote, error: osError } = await (supabase
+                        .from('ordens_servico') as any)
+                        .select('id, cliente_id, cliente_nome, descricao_servico, itens, data_agendamento, created_at, valor_total, status')
+                        .in('id', idsOs.slice(i, i + 150))
+                    if (osError) throw osError
+                    ;(lote || []).forEach((os: any) => osPorId.set(os.id, os))
+                }
+
+                // Comissão sem OS vinculada (ou com OS apagada) usa a própria data da comissão
+                commissions = todasComissoes.filter((c: any) => {
+                    const os = c.ordem_servico_id ? osPorId.get(c.ordem_servico_id) : null
+                    return dentroDoPeriodo(os ? os.created_at : c.created_at)
+                })
+
+                commissions.forEach((comm: any) => {
+                    const value = Number(comm.valor_comissao) || 0
+                    totalCommission += value
+                    if (comm.ordem_servico_id) osIds.push(comm.ordem_servico_id)
+                    commissionIds.push(comm.id)
+                })
             } catch (e) {
                 console.warn('Tabela historico_comissoes não acessível:', e)
             }
 
             let advancesList: any[] = []
 
-            // 3. Get Pending Advances/Bonuses - with graceful error handling
+            // 3. Get Pending Advances/Bonuses with optional date range
             try {
-                const { data: flows, error: flowError } = await (supabase
+                let flowQuery = (supabase
                     .from('financeiro_fluxo') as any)
                     .select('*')
                     .eq('tecnico_id', technicianId)
                     .eq('status', 'PENDENTE')
+
+                if (inicio) flowQuery = flowQuery.gte('data_lancamento', inicio.toISOString())
+                if (fim) flowQuery = flowQuery.lte('data_lancamento', fim.toISOString())
+
+                const { data: flows, error: flowError } = await flowQuery
 
                 if (!flowError && flows) {
                     flows.forEach((flow: any) => {
@@ -97,16 +140,21 @@ export const financialService = {
                 console.warn('Tabela financeiro_fluxo não acessível:', e)
             }
 
-            // 5. Get Approved Expenses (despesas_tecnicos) to Reimburse
+            // 5. Get Approved Expenses (despesas_tecnicos) to Reimburse with optional date range
             let totalReimbursements = 0
             const expenseIds: string[] = []
             let expenses: any[] = []
             try {
-                const { data: expData, error: expError } = await (supabase
+                let expQuery = (supabase
                     .from('despesas_tecnicos') as any)
                     .select('*')
                     .eq('tecnico_id', technicianId)
                     .eq('status', 'aprovado')
+
+                if (inicio) expQuery = expQuery.gte('created_at', inicio.toISOString())
+                if (fim) expQuery = expQuery.lte('created_at', fim.toISOString())
+
+                const { data: expData, error: expError } = await expQuery
 
                 if (!expError && expData) {
                     expenses = expData
@@ -122,18 +170,20 @@ export const financialService = {
             // 6. Get detailed OS info for display
             let osDetails: any[] = []
             if (osIds.length > 0) {
-                const { data: osData } = await (supabase
-                    .from('ordens_servico') as any)
-                    .select('id, cliente_nome, descricao_servico, data_agendamento, valor_total, status')
-                    .in('id', osIds)
+                // As OS já foram carregadas acima, ao filtrar as comissões pelo período
+                const osData = [...new Set(osIds)].map(id => osPorId.get(id)).filter(Boolean)
 
-                if (osData) {
-                    // Merge with commission info
+                if (osData.length > 0) {
+                    // Merge with commission info and extract readable item description
                     osDetails = osData.map((os: any) => {
-                        // Find commission for this OS
                         const comm = commissions?.find((c: any) => c.ordem_servico_id === os.id)
+                        let serviceDesc = os.descricao_servico
+                        if ((!serviceDesc || serviceDesc === 'Serviço padrão' || serviceDesc === 'Servico padrao') && Array.isArray(os.itens) && os.itens.length > 0) {
+                            serviceDesc = os.itens.map((it: any) => it.descricao || it.nome).filter(Boolean).join(' + ')
+                        }
                         return {
                             ...os,
+                            descricao_servico: serviceDesc || os.descricao_servico || 'Serviço padrão',
                             commissionValue: comm?.valor_comissao || 0
                         }
                     })

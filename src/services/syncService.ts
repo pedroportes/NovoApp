@@ -10,20 +10,34 @@ export const SyncService = {
         try {
 
 
-            // 1. Clients
-            const { data: clients, error: errClients } = await supabase
-                .from('clientes')
-                .select('*')
-                .eq('empresa_id', empresaId)
+            // 1. Clients (paginate to fetch all records)
+            let allClients: any[] = [];
+            let page = 0;
+            const pageSize = 1000;
+            while (true) {
+                const { data: pageClients, error: errClients } = await supabase
+                    .from('clientes')
+                    .select('*')
+                    .eq('empresa_id', empresaId)
+                    .order('created_at', { ascending: false })
+                    .range(page * pageSize, (page + 1) * pageSize - 1);
 
-            if (errClients) throw errClients;
+                if (errClients) throw errClients;
+                if (!pageClients || pageClients.length === 0) break;
+                allClients.push(...pageClients);
+                if (pageClients.length < pageSize) break;
+                page++;
+            }
 
-            if (clients) {
-                // Bulk put (create or update)
-                // We add 'synced: 1' to indicate these match the server
-                const localClients: LocalClient[] = (clients as any[]).map(c => ({
+            if (allClients.length > 0) {
+                // Clear local clients for this company first to purge any deleted test clients
+                await db.clientes.where('empresa_id').equals(empresaId).delete();
+
+                // Bulk put all synced clients
+                const localClients: LocalClient[] = allClients.map(c => ({
                     id: c.id,
                     empresa_id: c.empresa_id || '',
+                    marca_id: c.marca_id || null,
                     nome_razao: c.nome_razao || 'Sem Nome',
                     cpf_cnpj: c.cpf_cnpj || undefined,
                     whatsapp: c.whatsapp || undefined,
@@ -44,8 +58,8 @@ export const SyncService = {
                     created_at: c.created_at || new Date().toISOString(),
                     synced: 1,
                     updated_at: new Date().toISOString()
-                }))
-                await db.clientes.bulkPut(localClients)
+                }));
+                await db.clientes.bulkPut(localClients);
             }
 
             // 2. Services (Catalog)
@@ -68,21 +82,30 @@ export const SyncService = {
                 await db.servicos.bulkPut(localServices)
             }
 
-            // 3. Service Orders (Last 30 days maybe? Or all active)
-            // For now, let's pull all PENDING or AGENDADO or RECENT
-            const { data: oss, error: errOss } = await supabase
-                .from('ordens_servico')
-                .select('*')
-                .eq('empresa_id', empresaId)
-                .order('created_at', { ascending: false })
-                .limit(100) // Limit to 100 recent for performance initially
+            // 3. Service Orders (Paginate to fetch ALL orders for all brands)
+            let allOss: any[] = [];
+            let osPage = 0;
+            const osPageSize = 1000;
+            while (true) {
+                const { data: pageOss, error: errOss } = await supabase
+                    .from('ordens_servico')
+                    .select('*')
+                    .eq('empresa_id', empresaId)
+                    .order('created_at', { ascending: false })
+                    .range(osPage * osPageSize, (osPage + 1) * osPageSize - 1);
 
-            if (errOss) throw errOss;
+                if (errOss) throw errOss;
+                if (!pageOss || pageOss.length === 0) break;
+                allOss.push(...pageOss);
+                if (pageOss.length < osPageSize) break;
+                osPage++;
+            }
 
-            if (oss) {
-                const localOss: LocalServiceOrder[] = (oss as any[]).map(o => ({
+            if (allOss.length > 0) {
+                const localOss: LocalServiceOrder[] = allOss.map(o => ({
                     id: o.id,
                     empresa_id: o.empresa_id || '',
+                    marca_id: o.marca_id || null,
                     cliente_id: o.cliente_id || '',
                     cliente_nome: o.cliente_nome || undefined,
                     tecnico_id: o.tecnico_id || '',
@@ -101,22 +124,25 @@ export const SyncService = {
                     orcamento_gerado: o.orcamento_gerado ?? false,
                     recibo_gerado: o.recibo_gerado ?? false,
                     contrato_gerado: o.contrato_gerado ?? false,
+                    // NFe fields
+                    nfe_status: o.nfe_status || undefined,
+                    nfe_ref: o.nfe_ref || undefined,
+                    nfe_id_focus: o.nfe_id_focus || undefined,
+                    nfe_url_pdf: o.nfe_url_pdf || o.nfe_pdf_url || undefined,
+                    nfe_pdf_url: o.nfe_pdf_url || o.nfe_url_pdf || undefined,
+                    nfe_numero: o.nfe_numero || undefined,
+                    nfe_serie: o.nfe_serie || undefined,
+                    nfe_chave: o.nfe_chave || undefined,
+                    nfe_xml_url: o.nfe_xml_url || undefined,
+                    nfe_mensagem_erro: o.nfe_mensagem_erro || undefined,
                     created_at: o.created_at || new Date().toISOString(),
                     synced: 1,
                     action: undefined,
-                    updated_at: new Date().toISOString()
-                }))
-                // Be careful not to overwrite LOCAL pending changes. 
-                // Strategy: Only overwrite if we don't have a pending local change for this ID.
+                    updated_at: o.updated_at || new Date().toISOString()
+                }));
 
-                await db.transaction('rw', db.ordens_servico, async () => {
-                    for (const os of localOss) {
-                        const existing = await db.ordens_servico.get(os.id);
-                        if (!existing || existing.synced === 1) {
-                            await db.ordens_servico.put(os);
-                        }
-                    }
-                });
+                // Gravação atômica em lote no IndexedDB
+                await db.ordens_servico.bulkPut(localOss);
             }
 
             // 4. Technicians (Usuarios)

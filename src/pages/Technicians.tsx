@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+﻿import { useState, useEffect, useCallback } from 'react'
 import { useOutletContext, useNavigate } from 'react-router-dom'
 import { Plus, Search, Pencil, Trash2, Phone, Mail, User as UserIcon } from 'lucide-react'
 import { compressImage } from '@/lib/utils'
@@ -273,13 +273,18 @@ export function Technicians() {
 
                 if (updateError) throw updateError
 
-                // Atualizar senha se fornecida
+                // Atualizar senha se fornecida via RPC segura
                 if (formData.password) {
-                    const { error: pwdError } = await supabase.auth.admin.updateUserById(
-                        editingTechId,
-                        { password: formData.password }
-                    )
-                    if (pwdError) console.warn('Erro ao atualizar senha:', pwdError)
+                    const { data: pwdData, error: pwdError } = await (supabase as any).rpc('admin_update_technician_password', {
+                        target_user_id: editingTechId,
+                        new_password: formData.password
+                    })
+                    if (pwdError) {
+                        console.warn('Erro ao atualizar senha:', pwdError)
+                        alert('Erro ao atualizar senha: ' + pwdError.message)
+                    } else if (pwdData && !pwdData.success) {
+                        alert('Erro ao atualizar senha: ' + pwdData.error)
+                    }
                 }
 
                 alert('Técnico atualizado!')

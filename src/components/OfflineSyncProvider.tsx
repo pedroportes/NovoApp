@@ -36,17 +36,24 @@ export function OfflineSyncProvider({ children }: { children: React.ReactNode })
         }
     }, [userData, isOnline]);
 
-    const triggerSync = async () => {
+    const triggerSync = async (userInitiated = false) => {
         if (!userData?.empresa_id || isSyncing) return;
 
         setIsSyncing(true);
+        if (userInitiated) {
+            toast.info("Sincronizando todas as ordens e clientes da nuvem...");
+        }
         try {
             await SyncService.pushQueue(); // Push local changes first
             await SyncService.pullAllData(userData.empresa_id); // Then get latest updates
-            // toast.success("Dados sincronizados com sucesso!") 
-            // Optional: don't spam toast on every sync unless user triggered it
-        } catch (error) {
+            if (userInitiated) {
+                toast.success("Dados atualizados com sucesso!");
+            }
+        } catch (error: any) {
             console.error("Sync failed", error);
+            if (userInitiated) {
+                toast.error("Falha ao sincronizar: " + error.message);
+            }
         } finally {
             setIsSyncing(false);
         }
@@ -54,12 +61,14 @@ export function OfflineSyncProvider({ children }: { children: React.ReactNode })
 
     return (
         <>
-            {/* Visual Indicator of Connection Status */}
-            <div
-                title={isSyncing ? "Sincronizando..." : isOnline ? "Online" : "Offline / Local"}
-                className={`fixed bottom-[88px] left-[70px] md:bottom-6 md:right-6 z-[60] flex items-center justify-center w-8 h-8 rounded-full shadow-lg transition-all print:hidden ${isOnline
-                    ? 'bg-emerald-500 text-white border-2 border-white'
-                    : 'bg-amber-500 text-white border-2 border-white'
+            {/* Visual Indicator & Button of Connection Status */}
+            <button
+                type="button"
+                onClick={() => triggerSync(true)}
+                title={isSyncing ? "Sincronizando dados..." : isOnline ? "Online (Clique para sincronizar com o banco)" : "Offline / Local"}
+                className={`fixed bottom-[88px] left-[70px] md:bottom-6 md:right-6 z-[60] flex items-center justify-center w-8 h-8 rounded-full shadow-lg transition-all print:hidden cursor-pointer hover:scale-110 active:scale-95 ${isOnline
+                    ? 'bg-emerald-500 hover:bg-emerald-600 text-white border-2 border-white'
+                    : 'bg-amber-500 hover:bg-amber-600 text-white border-2 border-white'
                     }`}>
                 {isSyncing ? (
                     <RefreshCw className="w-4 h-4 animate-spin" />
@@ -68,7 +77,7 @@ export function OfflineSyncProvider({ children }: { children: React.ReactNode })
                 ) : (
                     <WifiOff className="w-4 h-4" />
                 )}
-            </div>
+            </button>
             {children}
         </>
     );
