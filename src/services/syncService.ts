@@ -143,6 +143,15 @@ export const SyncService = {
 
                 // Gravação atômica em lote no IndexedDB
                 await db.ordens_servico.bulkPut(localOss);
+
+                // Limpeza automática de ordens deletadas no servidor (remove ordens fantasmas locais)
+                const serverOsIds = new Set(allOss.map(o => o.id));
+                const localOsList = await db.ordens_servico.toArray();
+                const osToDelete = localOsList.filter(lo => !serverOsIds.has(lo.id) && lo.synced === 1).map(lo => lo.id);
+                if (osToDelete.length > 0) {
+                    console.log(`[SyncService] 🧹 Removendo ${osToDelete.length} ordens de serviço locais que foram excluídas do servidor...`);
+                    await db.ordens_servico.bulkDelete(osToDelete);
+                }
             }
 
             // 4. Technicians (Usuarios)

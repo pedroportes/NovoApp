@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
-import { Plus, Search, FileText, Calendar, User, Trash2, Phone, MapPin, Receipt, FileSignature, Pencil, AlertCircle } from 'lucide-react'
+import { Building2,  Plus, Search, FileText, Calendar, User, Trash2, Phone, MapPin, Receipt, FileSignature, Pencil, AlertCircle  } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -176,6 +176,8 @@ export function UnfinishedServices() {
                     ESTES REGISTROS NÃO GERAM COMISSÃO
                 </div>
             </div>
+
+            
 
             <div className="relative">
                 <Search className="absolute left-4 top-4 h-6 w-6 text-slate-400" />

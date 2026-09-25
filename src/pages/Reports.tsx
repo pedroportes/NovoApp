@@ -1057,6 +1057,8 @@ Gostaria de agendar uma revisão preventiva com nossa equipe com uma condição 
                 </p>
             </div>
 
+                        
+
             {/* Seletor de relatório: menu no computador, gaveta de baixo no celular */}
             {(() => {
                 const opcoes: { valor: ReportTab | "tecnicos", titulo: string, descricao: string, icone: typeof DollarSign, cor: string }[] = [
@@ -1463,10 +1465,28 @@ Gostaria de agendar uma revisão preventiva com nossa equipe com uma condição 
                                                     <td className="p-4 text-right text-slate-600">{formatCurrency(t.ticketMedio)}</td>
                                                     <td className="p-4 text-center print:hidden">
                                                         <Button
-                                                            variant="ghost"
+                                                            variant="outline"
                                                             size="sm"
-                                                            onClick={() => navigate(`/print/comissoes/${t.id}`)}
-                                                            className="text-xs font-bold text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                                            onClick={() => {
+                                                                const p = new URLSearchParams()
+                                                                const periodosDoExtrato = ['tudo', '15d_1', '15d_2', 'mes_atual', 'mes_anterior']
+                                                                p.set('period', periodosDoExtrato.includes(period) ? period : 'custom')
+                                                                if (period !== 'tudo') {
+                                                                    const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+                                                                    p.set('startDate', ymd(dateRange.start))
+                                                                    p.set('endDate', ymd(dateRange.end))
+                                                                }
+                                                                if (selectedBrandId && selectedBrandId !== 'all') {
+                                                                    p.set('brandId', selectedBrandId)
+                                                                }
+                                                                const url = `/print/comissoes/${t.id}?${p.toString()}`
+                                                                const win = window.open(url, '_blank')
+                                                                if (!win) {
+                                                                    navigate(url)
+                                                                }
+                                                            }}
+                                                            className="text-xs font-bold text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200"
+                                                            title="Ver extrato detalhado do período filtrado"
                                                         >
                                                             Extrato
                                                         </Button>

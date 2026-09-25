@@ -29,7 +29,7 @@ export const financialService = {
      * 3. Fetches pending advances/bonuses from financeiro_fluxo.
      * 4. Calculates totals.
      */
-    getTechnicianBalance: async (technicianId: string, startDate?: string, endDate?: string): Promise<TechnicianBalance> => {
+    getTechnicianBalance: async (technicianId: string, startDate?: string, endDate?: string, brandId?: string): Promise<TechnicianBalance> => {
         try {
             // 1. Get Technician Details
             const { data: tech, error: techError } = await (supabase
@@ -88,7 +88,7 @@ export const financialService = {
                 for (let i = 0; i < idsOs.length; i += 150) {
                     const { data: lote, error: osError } = await (supabase
                         .from('ordens_servico') as any)
-                        .select('id, cliente_id, cliente_nome, descricao_servico, itens, data_agendamento, created_at, valor_total, status')
+                        .select('id, cliente_id, cliente_nome, descricao_servico, itens, data_agendamento, created_at, valor_total, status, marca_id')
                         .in('id', idsOs.slice(i, i + 150))
                     if (osError) throw osError
                     ;(lote || []).forEach((os: any) => osPorId.set(os.id, os))
@@ -97,7 +97,8 @@ export const financialService = {
                 // Comissão sem OS vinculada (ou com OS apagada) usa a própria data da comissão
                 commissions = todasComissoes.filter((c: any) => {
                     const os = c.ordem_servico_id ? osPorId.get(c.ordem_servico_id) : null
-                    return dentroDoPeriodo(os ? os.created_at : c.created_at)
+                    const matchBrand = !brandId || brandId === 'all' || (os && os.marca_id === brandId);
+                    return dentroDoPeriodo(os ? os.created_at : c.created_at) && matchBrand
                 })
 
                 commissions.forEach((comm: any) => {

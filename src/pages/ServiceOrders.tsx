@@ -398,9 +398,11 @@ export function ServiceOrders() {
                 return
             }
 
-            let refParaConsultar = currentOs?.nfe_ref
+            // Se a nota deu erro anteriormente ou foi cancelada, força nova emissão gerando novo ref
+            const isErroOuCancelada = currentOs?.nfe_status === 'erro_autorizacao' || currentOs?.nfe_status === 'erro' || currentOs?.nfe_status === 'cancelado'
+            let refParaConsultar = isErroOuCancelada ? null : currentOs?.nfe_ref
 
-            // 2. Se não tem ref, dispara a emissão inicial
+            // 2. Se não tem ref (ou deu erro antes), dispara a emissão inicial
             if (!refParaConsultar) {
                 toast.info('Enviando NFS-e para a prefeitura via Focus NFe...')
                 const result = await FocusNFeService.emitirNotaFiscal(osId)
@@ -555,8 +557,18 @@ export function ServiceOrders() {
 
     const getClientAddress = (os: ServiceOrder) => {
         const c = os.clientes
-        if (!c) return ''
-        return `${c.logradouro || ''}, ${c.numero || ''} - ${c.bairro || ''}, ${c.cidade || ''}`
+        if (!c) {
+            return (os as any).cliente_endereco || (os as any).endereco || ''
+        }
+        if (c.logradouro) {
+            const parts = [
+                `${c.logradouro}${c.numero ? `, ${c.numero}` : ''}`,
+                c.bairro || '',
+                c.cidade || ''
+            ].filter(Boolean)
+            return parts.join(' - ')
+        }
+        return c.endereco || (os as any).cliente_endereco || (os as any).endereco || ''
     }
 
     const getClientPhone = (os: ServiceOrder) => {
@@ -588,6 +600,8 @@ export function ServiceOrders() {
                     </Button>
                 </div>
             </div>
+
+            
 
             {/* Smart Search Bar */}
             <div className="relative">
@@ -720,6 +734,30 @@ export function ServiceOrders() {
                                             <Pencil className="h-3.5 w-3.5 text-slate-400 group-hover/client:text-emerald-600 opacity-60 group-hover/client:opacity-100 transition-all shrink-0" />
                                         </div>
                                     </div>
+
+                                    {/* Endereço Visível do Cliente no Card */}
+                                    {getClientAddress(os) ? (
+                                        <div 
+                                            className="flex items-start gap-1.5 text-xs text-slate-600 mt-2 pl-0.5 leading-snug group/addr cursor-pointer hover:text-emerald-700 transition-colors"
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                setSelectedOsForNav(os)
+                                                setEtaMinutes('')
+                                                setIsNavDialogOpen(true)
+                                            }}
+                                            title="Clique para navegar até o endereço"
+                                        >
+                                            <MapPin className="h-3.5 w-3.5 text-slate-400 group-hover/addr:text-emerald-600 shrink-0 mt-0.5" />
+                                            <span className="font-medium line-clamp-2">
+                                                {getClientAddress(os)}
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-1.5 text-xs text-slate-400 italic mt-2 pl-0.5">
+                                            <MapPin className="h-3.5 w-3.5 text-slate-300 shrink-0" />
+                                            <span>Endereço não informado</span>
+                                        </div>
+                                    )}
 
                                     {/* Action Buttons */}
                                     <div className="flex items-center gap-2 mt-3 pl-1" onClick={(e) => e.stopPropagation()}>
@@ -1039,6 +1077,74 @@ export function ServiceOrders() {
                     <DialogFooter className="gap-2 sm:gap-0">
                         <Button variant="ghost" onClick={() => setDeleteConfirmOpen(false)}>Cancelar</Button>
                         <Button variant="destructive" onClick={confirmDelete}>Excluir</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            
+            {/* Modal de Cancelamento de NFS-e na Prefeitura */}
+            <Dialog open={cancelModalOpen} onOpenChange={setCancelModalOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-rose-600 font-bold">
+                            <AlertCircle className="h-5 w-5 text-rose-600 shrink-0" />
+                            Cancelar NFS-e nº {osToCancel?.nfe_numero || ''}
+                        </DialogTitle>
+                        <DialogDescription>
+                            Esta ação solicitará o cancelamento oficial da nota fiscal na prefeitura. A anulação da nota fiscal tem efeito jurídico irrevogável.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                        {osToCancel && (
+                            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1">
+                                <div className="text-slate-500">Cliente: <strong className="text-slate-800">{clients.find((c: any) => c.id === osToCancel.cliente_id)?.nome || osToCancel.cliente_nome || 'Cliente'}</strong></div>
+                                <div className="text-slate-500">Valor da NFS-e: <strong className="text-emerald-700">R$ {Number(osToCancel.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></div>
+                                <div className="text-slate-500">Ref Fiscal: <code className="text-slate-700 bg-white px-1.5 py-0.5 rounded border border-slate-200 font-mono text-[11px]">{osToCancel.nfe_ref || 'N/A'}</code></div>
+                            </div>
+                        )}
+                        <div>
+                            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-1">
+                                Justificativa do Cancelamento *
+                            </label>
+                            <Input
+                                placeholder="Informe o motivo (mínimo 10 caracteres)"
+                                value={cancelJustificativa}
+                                onChange={(e) => setCancelJustificativa(e.target.value)}
+                                className="h-11"
+                            />
+                            <p className="text-[11px] text-slate-400 mt-1">
+                                Ex: Cancelamento de serviço solicitado pelo cliente
+                            </p>
+                        </div>
+                    </div>
+                    <DialogFooter className="gap-2 sm:gap-0">
+                        <Button 
+                            type="button" 
+                            variant="outline" 
+                            onClick={() => {
+                                setCancelModalOpen(false)
+                                setOsToCancel(null)
+                            }}
+                            disabled={isCanceling}
+                        >
+                            Fechar
+                        </Button>
+                        <Button 
+                            type="button" 
+                            variant="destructive" 
+                            onClick={handleCancelNFe}
+                            disabled={isCanceling || !cancelJustificativa || cancelJustificativa.trim().length < 10}
+                            className="gap-2 font-bold"
+                        >
+                            {isCanceling ? (
+                                <>
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    Cancelando na Prefeitura...
+                                </>
+                            ) : (
+                                'Confirmar Cancelamento'
+                            )}
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

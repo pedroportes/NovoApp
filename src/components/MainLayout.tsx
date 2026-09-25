@@ -130,22 +130,27 @@ export function MainLayout() {
 
                     {/* Mobile Header Gradient */}
                     {/* Mobile Header Gradient */}
-                    <header className="md:hidden min-h-[140px] banking-gradient rounded-b-[30px] px-6 pt-[calc(3rem+env(safe-area-inset-top))] pb-8 flex flex-col justify-between shadow-2xl relative z-0 shrink-0">
+                    <header className="md:hidden min-h-[150px] banking-gradient rounded-b-[30px] px-6 pt-[calc(3rem+env(safe-area-inset-top))] pb-6 flex flex-col justify-between shadow-2xl relative z-30 shrink-0">
                         <div className="flex items-center justify-between text-white">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border border-white/30">
+                                <div className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border border-white/30 shrink-0">
                                     <span className="font-bold text-lg">{userData?.nome?.[0] || 'F'}</span>
                                 </div>
-                                <div>
-                                    <p className="text-xs text-emerald-100 font-medium opacity-90">
+                                <div className="min-w-0">
+                                    <p className="text-xs text-emerald-100 font-medium opacity-90 truncate">
                                         {location.pathname === '/' ? 'Bem-vindo de volta,' : 'Gerenciamento'}
                                     </p>
-                                    <h1 className="text-xl font-bold leading-tight">{getPageTitle()}</h1>
+                                    <h1 className="text-xl font-bold leading-tight truncate">{getPageTitle()}</h1>
                                 </div>
                             </div>
-                            <button onClick={() => setSidebarOpen(true)} className="p-2 bg-white/10 rounded-full hover:bg-white/20 backdrop-blur-sm transition-colors">
+                            <button onClick={() => setSidebarOpen(true)} className="p-2 bg-white/10 rounded-full hover:bg-white/20 backdrop-blur-sm transition-colors shrink-0">
                                 <Menu className="h-5 w-5 text-white" />
                             </button>
+                        </div>
+
+                        {/* Seletor de Empresa / Filial no Topo Mobile */}
+                        <div className="mt-3 pt-2 border-t border-white/15 relative z-10">
+                            <BrandSwitcher isMobileHeader />
                         </div>
 
                         {/* Decorative Elements */}
@@ -178,6 +183,10 @@ export function MainLayout() {
                                     </button>
                                 </div>
 
+                                <div className="px-4 py-3 bg-slate-50 border-b border-gray-100">
+                                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Empresa Selecionada</p>
+                                    <BrandSwitcher />
+                                </div>
                                 <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
                                     {navItems.map((item) => (
                                         <Link

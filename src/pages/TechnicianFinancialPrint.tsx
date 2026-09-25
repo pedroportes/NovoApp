@@ -124,14 +124,15 @@ export function TechnicianFinancialPrint() {
     }, [searchParams])
 
     useEffect(() => {
+        const brandIdParam = searchParams.get('brandId') || searchParams.get('marca_id') || undefined
         if (targetTechId) {
-            loadReportData(targetTechId, startDate, endDate)
+            loadReportData(targetTechId, startDate, endDate, brandIdParam)
         } else if (userData?.id) {
-            loadReportData(userData.id, startDate, endDate)
+            loadReportData(userData.id, startDate, endDate, brandIdParam)
         }
-    }, [targetTechId, userData?.id, startDate, endDate])
+    }, [targetTechId, userData?.id, startDate, endDate, searchParams])
 
-    const loadReportData = async (techId: string, start?: string, end?: string) => {
+    const loadReportData = async (techId: string, start?: string, end?: string, brandId?: string) => {
         setLoading(true)
         try {
             // 1. Fetch technician profile
@@ -145,12 +146,15 @@ export function TechnicianFinancialPrint() {
                 setTechInfo(techData)
             }
 
-            // 2. Fetch financial balance with date filter
-            const balanceData = await financialService.getTechnicianBalance(techId, start || undefined, end || undefined)
+            // 2. Fetch financial balance with date filter and brand filter
+            const balanceData = await financialService.getTechnicianBalance(techId, start || undefined, end || undefined, brandId)
             setBalance(balanceData)
 
-            // 3. Fallback brand if not set
-            if (!brandInfo) {
+            // 3. Brand selection
+            if (brandId && brandId !== 'all') {
+                const found = brands.find(b => b.id === brandId)
+                if (found) setBrandInfo(found)
+            } else if (!brandInfo) {
                 const { data: brandDb } = await supabase
                     .from('empresas_marcas')
                     .select('*')

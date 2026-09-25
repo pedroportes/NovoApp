@@ -32,8 +32,20 @@ export interface NFSeNacionalPayload {
 
 export const FocusNFeService = {
     // Tokens informados por Pedro
-    DEFAULT_TOKEN_PRODUCAO: (import.meta as any).env?.VITE_FOCUS_NFE_TOKEN_PRODUCAO || '',
-    DEFAULT_TOKEN_HOMOLOGACAO: (import.meta as any).env?.VITE_FOCUS_NFE_TOKEN_HOMOLOGACAO || '',
+    DEFAULT_TOKEN_PRODUCAO: (import.meta as any).env?.VITE_FOCUS_NFE_TOKEN_PRODUCAO || 'V68JZtQtFUQEo2kuMKcOhK4KuNvbo6wv',
+    DEFAULT_TOKEN_HOMOLOGACAO: (import.meta as any).env?.VITE_FOCUS_NFE_TOKEN_HOMOLOGACAO || '5SERdDFuZhrplE1UuH208WDBxhH4MbpV',
+
+    /**
+     * Identifica se a emissao deve ser enviada via Padrao Nacional (DPS /v2/nfsen)
+     * Mandirituba (4114302), Curitiba (4106902) e Sao Jose dos Pinhais (4125506) usam NFS-e Nacional
+     */
+    isNacionalEmpresa(empresa: any): boolean {
+        const cod = String(empresa?.codigo_municipio || '').replace(/\D/g, '')
+        if (cod === '4114302' || cod === '4106902' || cod === '4125506') return true
+        if (empresa?.focus_nfe_is_nacional === true) return true
+        if (empresa?.usa_nfse_nacional !== false) return true
+        return false
+    },
 
     /**
      * Checks if the company has credentials to issue NFe/NFSe.
@@ -87,7 +99,7 @@ export const FocusNFeService = {
             throw new Error(`Configuração incompleta: ${check.missingFields.join(', ')}`)
         }
 
-        const isNacional = check.empresa.usa_nfse_nacional !== false // Default true (Curitiba e SJP são Nacional)
+        const isNacional = this.isNacionalEmpresa(check.empresa)
 
         let baseUrl = ''
         if (isNacional) {
@@ -140,7 +152,7 @@ export const FocusNFeService = {
     async consultarNotaFiscal(ref: string, empresaId?: string) {
         const check = await this.checkCredentials(empresaId)
 
-        const isNacional = check.empresa.usa_nfse_nacional !== false
+        const isNacional = this.isNacionalEmpresa(check.empresa)
         const baseUrl = isNacional
             ? (check.isProducao ? 'https://api.focusnfe.com.br/v2/nfsen' : 'https://homologacao.focusnfe.com.br/v2/nfsen')
             : (check.isProducao ? 'https://api.focusnfe.com.br/v2/nfse' : 'https://homologacao.focusnfe.com.br/v2/nfse')
@@ -175,7 +187,7 @@ export const FocusNFeService = {
     async cancelarNotaFiscal(ref: string, justificativa: string, empresaId?: string) {
         const check = await this.checkCredentials(empresaId)
 
-        const isNacional = check.empresa.usa_nfse_nacional !== false
+        const isNacional = this.isNacionalEmpresa(check.empresa)
         const baseUrl = isNacional
             ? (check.isProducao ? 'https://api.focusnfe.com.br/v2/nfsen' : 'https://homologacao.focusnfe.com.br/v2/nfsen')
             : (check.isProducao ? 'https://api.focusnfe.com.br/v2/nfse' : 'https://homologacao.focusnfe.com.br/v2/nfse')
@@ -408,7 +420,7 @@ export const FocusNFeService = {
         const dataCompetencia = localDate.toISOString().split('T')[0]
 
         // 5. Determinar Estratégia: NFS-e Nacional vs Tradicional
-        const isNacional = check.empresa.usa_nfse_nacional !== false
+        const isNacional = this.isNacionalEmpresa(check.empresa)
 
         if (isNacional) {
             // --- NFS-e Nacional (/v2/nfsen) ---
