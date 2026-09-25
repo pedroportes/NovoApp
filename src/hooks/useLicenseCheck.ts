@@ -9,6 +9,7 @@ interface LicenseStatus {
     isTrial: boolean
     isTrialExpired: boolean
     plan: PlanType
+    expiresAt: string | null
     limits: {
         clients: number | 'unlimited'
         os: number | 'unlimited'
@@ -32,6 +33,7 @@ export function useLicenseCheck() {
         isTrial: true,
         isTrialExpired: false,
         plan: 'free',
+        expiresAt: null,
         limits: { clients: 10, os: 10, team: 1 },
         usage: { clients: 0, os: 0, team: 0, daysUsed: 0 },
         canAddClient: false,
@@ -51,7 +53,7 @@ export function useLicenseCheck() {
             // 1. Get Company Details (Created At & Subscription)
             const { data: companyData, error: companyError } = await supabase
                 .from('empresas')
-                .select('created_at, subscription_status, subscription_price_id')
+                .select('created_at, subscription_status, subscription_price_id, current_period_end')
                 .eq('id', empresaId || '')
                 .single()
 
@@ -67,15 +69,15 @@ export function useLicenseCheck() {
             let plan: PlanType = 'free'
             if (companyData.subscription_status === 'active') {
                 const priceId = companyData.subscription_price_id
-                // Mapeamento de IDs de Produção (Live) - Sincronizado com Plans.tsx
-                if (priceId === 'price_1T02Y8C2SBfOxdrqfPf01e1C') plan = 'essencial'
-                else if (priceId === 'price_1SsUaDC2SBfOxdrq9LBbQkcl') plan = 'pro'
-                else if (priceId === 'price_1SsUe8C2SBfOxdrqRMtj4wjh') plan = 'operacional'
-                else if (priceId === 'price_1SsUkBC2SBfOxdrqofDd7Euj') plan = 'prime'
-                else if (priceId === 'price_1T02TLC2SBfOxdrqrdbCvFEQ') plan = 'free' // Solo is free-tier in logic sometimes, but here we treat it
+                // Mapeamento de IDs de Produção (Live) - Sincronizado com Plans.tsx e com atalhos do Super Admin
+                if (priceId === 'price_1T02Y8C2SBfOxdrqfPf01e1C' || priceId === 'essencial') plan = 'essencial'
+                else if (priceId === 'price_1SsUaDC2SBfOxdrq9LBbQkcl' || priceId === 'pro') plan = 'pro'
+                else if (priceId === 'price_1SsUe8C2SBfOxdrqRMtj4wjh' || priceId === 'operacional') plan = 'operacional'
+                else if (priceId === 'price_1SsUkBC2SBfOxdrqofDd7Euj' || priceId === 'prime') plan = 'prime'
+                else if (priceId === 'price_1T02TLC2SBfOxdrqrdbCvFEQ' || priceId === 'free' || priceId === 'solo') plan = 'free' 
                 
-                // Mantendo compatibilidade com plano de teste de R$ 1,99 (Tratado como Pro)
-                else if (priceId === 'price_1SsN4HC2SBfOxdrq13q2V5ga' || priceId === 'price_1SsOJhC2SBfOxdrqy7Jf2xNO') plan = 'pro'
+                // Mantendo compatibilidade com plano de teste de R$ 1,99 (Tratado como Pro) ou atalho "teste"
+                else if (priceId === 'price_1SsN4HC2SBfOxdrq13q2V5ga' || priceId === 'price_1SsOJhC2SBfOxdrqy7Jf2xNO' || priceId === 'teste') plan = 'pro'
                 
                 // Fallbacks antigos (removendo IDs redundantes/antigos para evitar confusão)
                 else if (priceId === '12990') plan = 'pro'
@@ -153,6 +155,7 @@ export function useLicenseCheck() {
                 isTrial,
                 isTrialExpired,
                 plan,
+                expiresAt: companyData.current_period_end,
                 limits,
                 usage,
                 canAddClient,

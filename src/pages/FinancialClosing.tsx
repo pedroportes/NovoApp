@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { financialService, TechnicianBalance } from '@/services/financialService'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -8,17 +8,75 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { ArrowLeft, CheckCircle2, DollarSign, TrendingUp, TrendingDown, Receipt, Banknote } from 'lucide-react'
+import { Calendar, ArrowLeft, CheckCircle2, DollarSign, TrendingUp, TrendingDown, Receipt, Banknote, ExternalLink, Printer } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
-export function FinancialClosing() {
+interface FinancialClosingProps {
+    initialTechId?: string;
+}
+
+export function FinancialClosing({ initialTechId }: FinancialClosingProps = {}) {
     const { userData } = useAuth()
     const navigate = useNavigate()
     const [loading, setLoading] = useState(true)
     const [submitting, setSubmitting] = useState(false)
     const [technicians, setTechnicians] = useState<any[]>([])
-    const [selectedTech, setSelectedTech] = useState<string | null>(null)
+    const [searchParams] = useSearchParams()
+    const targetTechId = searchParams.get('techId') || initialTechId || null
+    const [selectedTech, setSelectedTech] = useState<string | null>(targetTechId)
+
+    useEffect(() => {
+        const fromParam = searchParams.get('techId') || initialTechId
+        if (fromParam) {
+            setSelectedTech(fromParam)
+        }
+    }, [searchParams, initialTechId])
+    type PeriodPreset = 'tudo' | '15d_1' | '15d_2' | 'mes_atual' | 'mes_anterior' | 'custom'
+
+    const [periodPreset, setPeriodPreset] = useState<PeriodPreset>('tudo')
+    const [startDate, setStartDate] = useState<string>('')
+    const [endDate, setEndDate] = useState<string>('')
+
+    const applyPreset = (preset: PeriodPreset) => {
+        setPeriodPreset(preset)
+        const now = new Date()
+        const year = now.getFullYear()
+        const month = now.getMonth()
+        const pad = (n: number) => String(n).padStart(2, '0')
+
+        if (preset === '15d_1') {
+            const start = `${year}-${pad(month + 1)}-01`
+            const end = `${year}-${pad(month + 1)}-15`
+            setStartDate(start)
+            setEndDate(end)
+        } else if (preset === '15d_2') {
+            const lastDay = new Date(year, month + 1, 0).getDate()
+            const start = `${year}-${pad(month + 1)}-16`
+            const end = `${year}-${pad(month + 1)}-${pad(lastDay)}`
+            setStartDate(start)
+            setEndDate(end)
+        } else if (preset === 'mes_atual') {
+            const lastDay = new Date(year, month + 1, 0).getDate()
+            const start = `${year}-${pad(month + 1)}-01`
+            const end = `${year}-${pad(month + 1)}-${pad(lastDay)}`
+            setStartDate(start)
+            setEndDate(end)
+        } else if (preset === 'mes_anterior') {
+            const prevMonthDate = new Date(year, month, 0)
+            const prevYear = prevMonthDate.getFullYear()
+            const prevMonth = prevMonthDate.getMonth()
+            const lastDay = prevMonthDate.getDate()
+            const start = `${prevYear}-${pad(prevMonth + 1)}-01`
+            const end = `${prevYear}-${pad(prevMonth + 1)}-${pad(lastDay)}`
+            setStartDate(start)
+            setEndDate(end)
+        } else if (preset === 'tudo') {
+            setStartDate('')
+            setEndDate('')
+        }
+    }
+
     const [balance, setBalance] = useState<TechnicianBalance | null>(null)
     const [pendingExpenses, setPendingExpenses] = useState<any[]>([])
     const [approvedExpenses, setApprovedExpenses] = useState<any[]>([])
@@ -45,7 +103,7 @@ export function FinancialClosing() {
             setPendingExpenses([])
             setApprovedExpenses([])
         }
-    }, [selectedTech])
+    }, [selectedTech, startDate, endDate])
 
     const fetchTechnicians = async () => {
         try {
@@ -67,8 +125,10 @@ export function FinancialClosing() {
 
             setTechnicians(filtered)
             if (filtered.length > 0) {
-                // Auto-select if there's only one (user logic) or just strict rule
-                if (userData?.cargo?.toLowerCase() === 'tecnico') {
+                const target = searchParams.get('techId') || initialTechId
+                if (target && filtered.some(t => t.id === target)) {
+                    setSelectedTech(target)
+                } else if (userData?.cargo?.toLowerCase() === 'tecnico') {
                     setSelectedTech(filtered[0].id)
                 }
             }
@@ -79,11 +139,11 @@ export function FinancialClosing() {
         }
     }
 
-    const loadBalance = async (techId: string) => {
+    const loadBalance = async (techId: string, start?: string, end?: string) => {
         setLoading(true)
         try {
             const [balanceData, pendingData, approvedData] = await Promise.all([
-                financialService.getTechnicianBalance(techId),
+                financialService.getTechnicianBalance(techId, start || startDate || undefined, end || endDate || undefined),
                 financialService.getPendingExpenses(techId),
                 financialService.getApprovedExpenses(techId)
             ])
@@ -102,7 +162,7 @@ export function FinancialClosing() {
         try {
             await financialService.approveRejectExpense(id, status)
             // Reload to update list and balance
-            if (selectedTech) await loadBalance(selectedTech)
+            if (selectedTech) await loadBalance(selectedTech, startDate, endDate)
         } catch (error) {
             console.error('Error updating expense:', error)
             alert('Erro ao atualizar despesa')
@@ -112,7 +172,7 @@ export function FinancialClosing() {
     const handleAuthorize = async (id: string, method: 'balance' | 'direct') => {
         try {
             await financialService.authorizeExpense(id, method)
-            if (selectedTech) await loadBalance(selectedTech)
+            if (selectedTech) await loadBalance(selectedTech, startDate, endDate)
         } catch (error) {
             console.error('Error authorizing expense:', error)
             alert('Erro ao autorizar despesa')
@@ -127,7 +187,7 @@ export function FinancialClosing() {
         try {
             await financialService.closeMonth(balance, userData!.empresa_id)
             alert('Mês fechado com sucesso!')
-            if (selectedTech) await loadBalance(selectedTech) // Reload to show zeroed balance
+            if (selectedTech) await loadBalance(selectedTech, startDate, endDate) // Reload to show zeroed balance
         } catch (error) {
             console.error('Error closing month:', error)
             alert('Erro ao realizar fechamento')
@@ -170,7 +230,7 @@ export function FinancialClosing() {
             setIsAdvanceDialogOpen(false)
             setAdvanceValue('')
             setAdvanceNote('')
-            if (selectedTech) await loadBalance(selectedTech) // Refresh balance
+            if (selectedTech) await loadBalance(selectedTech, startDate, endDate) // Refresh balance
         } catch (error) {
             console.error('Erro ao registrar adiantamento:', error)
             toast.error('Erro ao registrar adiantamento')
@@ -250,6 +310,102 @@ export function FinancialClosing() {
                 ))}
             </div>
 
+            {selectedTech && (
+                <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in duration-300">
+                    <div className="flex items-center gap-2">
+                        <div className="p-2 bg-emerald-100 rounded-xl text-emerald-800">
+                            <Calendar className="h-5 w-5" />
+                        </div>
+                        <div>
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Filtro de Período do Fechamento</span>
+                            <span className="text-sm font-black text-slate-800">
+                                {periodPreset === 'tudo' && 'Todo o Período Pendente'}
+                                {periodPreset === '15d_1' && '1ª Quinzena (01 a 15)'}
+                                {periodPreset === '15d_2' && '2ª Quinzena (16 ao fim do mês)'}
+                                {periodPreset === 'mes_atual' && 'Mês Atual'}
+                                {periodPreset === 'mes_anterior' && 'Mês Anterior'}
+                                {periodPreset === 'custom' && 'Período Personalizado'}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        <Button
+                            type="button"
+                            variant={periodPreset === 'tudo' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => applyPreset('tudo')}
+                            className={cn("rounded-xl text-xs font-bold h-8", periodPreset === 'tudo' ? "bg-emerald-600 text-white" : "bg-white text-slate-600")}
+                        >
+                            Em Aberto
+                        </Button>
+                        <Button
+                            type="button"
+                            variant={periodPreset === '15d_1' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => applyPreset('15d_1')}
+                            className={cn("rounded-xl text-xs font-bold h-8", periodPreset === '15d_1' ? "bg-emerald-600 text-white" : "bg-white text-slate-600")}
+                        >
+                            1ª Quinzena
+                        </Button>
+                        <Button
+                            type="button"
+                            variant={periodPreset === '15d_2' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => applyPreset('15d_2')}
+                            className={cn("rounded-xl text-xs font-bold h-8", periodPreset === '15d_2' ? "bg-emerald-600 text-white" : "bg-white text-slate-600")}
+                        >
+                            2ª Quinzena
+                        </Button>
+                        <Button
+                            type="button"
+                            variant={periodPreset === 'mes_atual' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => applyPreset('mes_atual')}
+                            className={cn("rounded-xl text-xs font-bold h-8", periodPreset === 'mes_atual' ? "bg-emerald-600 text-white" : "bg-white text-slate-600")}
+                        >
+                            Este Mês
+                        </Button>
+                        <Button
+                            type="button"
+                            variant={periodPreset === 'mes_anterior' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => applyPreset('mes_anterior')}
+                            className={cn("rounded-xl text-xs font-bold h-8", periodPreset === 'mes_anterior' ? "bg-emerald-600 text-white" : "bg-white text-slate-600")}
+                        >
+                            Mês Anterior
+                        </Button>
+                    </div>
+
+                    <div className="flex items-center gap-2 border-t md:border-t-0 md:border-l border-slate-200 pt-2 md:pt-0 md:pl-4">
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-semibold text-slate-500">De:</span>
+                            <input
+                                type="date"
+                                value={startDate}
+                                onChange={(e) => {
+                                    setPeriodPreset('custom');
+                                    setStartDate(e.target.value);
+                                }}
+                                className="text-xs font-medium border border-slate-200 rounded-lg px-2 py-1 bg-slate-50 text-slate-800 outline-none focus:border-emerald-500"
+                            />
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-semibold text-slate-500">Até:</span>
+                            <input
+                                type="date"
+                                value={endDate}
+                                onChange={(e) => {
+                                    setPeriodPreset('custom');
+                                    setEndDate(e.target.value);
+                                }}
+                                className="text-xs font-medium border border-slate-200 rounded-lg px-2 py-1 bg-slate-50 text-slate-800 outline-none focus:border-emerald-500"
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {selectedTech && balance ? (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
 
@@ -315,6 +471,15 @@ export function FinancialClosing() {
                                 * Ao zerar o mês, todas as OSs listadas serão marcadas como pagas.
                             </p>
                             <div className="grid grid-cols-1 md:flex md:flex-row gap-3 w-full md:w-auto">
+                                <Button
+                                    onClick={() => { const p = new URLSearchParams(); if (periodPreset) p.set('period', periodPreset); if (startDate) p.set('startDate', startDate); if (endDate) p.set('endDate', endDate); window.open(`/print/comissoes/${selectedTech}?${p.toString()}`, '_blank') }}
+                                    variant="outline"
+                                    className="h-14 px-5 rounded-xl font-bold border-slate-300 text-slate-700 bg-white hover:bg-slate-50 hover:border-slate-400 shadow-sm transition-all w-full md:w-auto"
+                                    title="Abrir e imprimir relatório/extrato oficial em PDF para este técnico"
+                                >
+                                    <Printer className="mr-2 h-5 w-5 text-emerald-600" />
+                                    Relatório PDF
+                                </Button>
                                 <Button
                                     onClick={() => setIsAdvanceDialogOpen(true)}
                                     variant="outline"
@@ -549,12 +714,20 @@ export function FinancialClosing() {
                             <div className="md:hidden space-y-3">
                                 {balance.osDetails && balance.osDetails.length > 0 ? (
                                     balance.osDetails.map((os) => (
-                                        <div key={os.id} className="bg-white/60 backdrop-blur-sm p-4 rounded-xl border border-emerald-100 shadow-sm flex flex-col gap-2">
+                                        <div 
+                                            key={os.id} 
+                                            onClick={() => navigate(`/service-orders/${os.id}`)}
+                                            className="bg-white/70 backdrop-blur-sm p-4 rounded-xl border border-emerald-100 shadow-sm flex flex-col gap-2 hover:bg-emerald-50/80 hover:border-emerald-300 transition-all cursor-pointer group"
+                                            title="Clique para conferir esta OS completa"
+                                        >
                                             <div className="flex justify-between items-start">
-                                                <span className="font-bold text-emerald-900 text-sm">{os.cliente_nome || 'Cliente não identificado'}</span>
+                                                <span className="font-bold text-emerald-900 text-sm flex items-center gap-1.5 group-hover:text-emerald-700">
+                                                    {os.cliente_nome || 'Cliente não identificado'}
+                                                    <ExternalLink className="h-3 w-3 text-slate-400 group-hover:text-emerald-600" />
+                                                </span>
                                                 <span className="text-xs text-slate-500 font-medium">{new Date(os.created_at || new Date()).toLocaleDateString('pt-BR')}</span>
                                             </div>
-                                            <div className="text-sm text-slate-600 border-l-2 border-emerald-200 pl-2 my-1">
+                                            <div className="text-sm text-slate-700 border-l-2 border-emerald-300 pl-2 my-1 font-medium line-clamp-2">
                                                 {os.descricao_servico || 'Serviço padrão'}
                                             </div>
                                             <div className="flex justify-between items-center pt-2 border-t border-emerald-50">
@@ -587,15 +760,34 @@ export function FinancialClosing() {
                                         <tbody className="divide-y divide-emerald-900/5">
                                             {balance.osDetails && balance.osDetails.length > 0 ? (
                                                 balance.osDetails.map((os) => (
-                                                    <tr key={os.id} className="hover:bg-emerald-50/50 transition-colors">
-                                                        <td className="p-4 text-slate-600">{new Date(os.created_at || new Date()).toLocaleDateString('pt-BR')}</td>
-                                                        <td className="p-4 font-medium text-emerald-900">{os.cliente_nome || 'Cliente não identificado'}</td>
-                                                        <td className="p-4 text-slate-600 max-w-xs truncate">
-                                                            <span className="font-medium text-slate-900 block">{os.descricao_servico || 'Serviço padrão'}</span>
-                                                            <span className="text-xs text-slate-400">Responsável: {balance.technicianName}</span>
+                                                    <tr 
+                                                        key={os.id} 
+                                                        onClick={() => navigate(`/service-orders/${os.id}`)}
+                                                        className="hover:bg-emerald-50/80 transition-colors cursor-pointer group"
+                                                        title="Clique para conferir esta OS completa, cliente e serviços executados"
+                                                    >
+                                                        <td className="p-4 text-slate-600 whitespace-nowrap">
+                                                            {new Date(os.created_at || new Date()).toLocaleDateString('pt-BR')}
                                                         </td>
-                                                        <td className="p-4 text-slate-600">{formatCurrency(os.valor_total)}</td>
-                                                        <td className="p-4 text-right font-bold text-emerald-600">{formatCurrency(os.commissionValue)}</td>
+                                                        <td className="p-4">
+                                                            <div className="flex items-center gap-1.5 font-bold text-emerald-950 group-hover:text-emerald-700 transition-colors">
+                                                                <span>{os.cliente_nome || 'Cliente não identificado'}</span>
+                                                                <ExternalLink className="h-3.5 w-3.5 text-slate-400 group-hover:text-emerald-600 transition-colors shrink-0" />
+                                                            </div>
+                                                            <span className="text-[11px] text-slate-400 font-normal">OS #{os.id.slice(0, 8)}</span>
+                                                        </td>
+                                                        <td className="p-4 text-slate-600 max-w-xs md:max-w-md">
+                                                            <span className="font-semibold text-slate-800 block line-clamp-2 group-hover:text-emerald-950 transition-colors">
+                                                                {os.descricao_servico || 'Serviço padrão'}
+                                                            </span>
+                                                            <span className="text-xs text-slate-400 mt-0.5 block">Responsável: {balance.technicianName}</span>
+                                                        </td>
+                                                        <td className="p-4 text-slate-700 font-medium whitespace-nowrap">
+                                                            {formatCurrency(os.valor_total)}
+                                                        </td>
+                                                        <td className="p-4 text-right font-black text-emerald-600 whitespace-nowrap text-base">
+                                                            {formatCurrency(os.commissionValue)}
+                                                        </td>
                                                     </tr>
                                                 ))
                                             ) : (

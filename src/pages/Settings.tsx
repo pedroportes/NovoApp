@@ -12,7 +12,9 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 import { usePWAInstall } from '@/hooks/usePWAInstall'
 import { SignaturePad } from '@/components/SignaturePad'
 import { WebmaniaService } from '@/services/webmaniaService'
-import { ConfigurarWebmania } from '@/components/ConfigurarWebmania'
+import { ConfigurarFocusNFe } from '@/components/ConfigurarFocusNFe'
+import { useBrand } from '@/contexts/BrandContext'
+import { toast } from 'sonner'
 
 export function Settings() {
     const { userData } = useAuth()
@@ -51,6 +53,13 @@ export function Settings() {
         can_edit_clients: true
     })
 
+    const { brands, selectedBrandId, selectedBrand, setSelectedBrandId, refreshBrands } = useBrand()
+
+    // Active brand being edited in this settings form
+    const activeBrand = selectedBrandId === 'all'
+        ? (brands.find(b => b.ordem === 1) || brands[0] || null)
+        : (selectedBrand || brands.find(b => b.id === selectedBrandId) || null)
+
     const [formData, setFormData] = useState({
         nome: '',
         razao_social: '',
@@ -58,6 +67,8 @@ export function Settings() {
         telefone: '',
         email_contato: '',
         site: '',
+        chave_pix: '',
+        cor_tema: '#10b981',
         cep: '',
         endereco: '',
         numero: '',
@@ -164,13 +175,39 @@ export function Settings() {
         }
     }, [userData])
 
+    // Sincroniza formulário com a empresa/filial ativa selecionada
     useEffect(() => {
-        if (userData?.empresa_id && !isTecnico) {
+        if (isTecnico) return
+
+        if (activeBrand) {
+            setFormData({
+                nome: activeBrand.nome || '',
+                razao_social: activeBrand.razao_social || activeBrand.nome || '',
+                cnpj: activeBrand.cnpj || '',
+                telefone: activeBrand.telefone || '',
+                email_contato: activeBrand.email_contato || '',
+                site: activeBrand.site || '',
+                chave_pix: activeBrand.chave_pix || '',
+                cor_tema: activeBrand.cor_tema || '#10b981',
+                cep: activeBrand.cep || '',
+                endereco: activeBrand.endereco || '',
+                numero: activeBrand.numero || '',
+                complemento: activeBrand.complemento || '',
+                bairro: activeBrand.bairro || '',
+                cidade: activeBrand.cidade || '',
+                estado: activeBrand.estado || ''
+            })
+            setLogoPreview(activeBrand.logo_url || null)
+            setCompanySignaturePreview(activeBrand.assinatura_url || null)
+            setLogoFile(null)
+            setCompanySignatureBlob(null)
+            setLoading(false)
+        } else if (userData?.empresa_id && brands.length === 0) {
             fetchCompanyData()
         } else if (!isTecnico) {
-            setLoading(false) // Fallback if no company ID for some reason but not tech
+            setLoading(false)
         }
-    }, [userData?.empresa_id, isTecnico, fetchCompanyData])
+    }, [activeBrand?.id, isTecnico, brands.length, fetchCompanyData])
 
 
     // --- Handlers ---
@@ -184,7 +221,8 @@ export function Settings() {
             if (logoFile) {
                 const compressedFile = await compressImage(logoFile, 500, 0.8)
                 const fileExt = logoFile.name.split('.').pop()
-                const fileName = `company_logo_${userData!.empresa_id}_${Date.now()}.${fileExt}`
+                const filePrefix = activeBrand ? `brand_logo_${activeBrand.id}` : `company_logo_${userData!.empresa_id}`
+                const fileName = `${filePrefix}_${Date.now()}.${fileExt}`
 
                 const { error: uploadError } = await supabase.storage
                     .from('avatars')
@@ -203,7 +241,8 @@ export function Settings() {
 
             if (companySignatureBlob) {
                 // Upload Blob directly
-                const fileName = `company_signature_${userData!.empresa_id}_${Date.now()}.png`
+                const filePrefix = activeBrand ? `brand_sig_${activeBrand.id}` : `company_signature_${userData!.empresa_id}`
+                const fileName = `${filePrefix}_${Date.now()}.png`
 
                 const { error: uploadError } = await supabase.storage
                     .from('avatars')
@@ -220,17 +259,73 @@ export function Settings() {
                 signatureUrlToSave = urlData.publicUrl
             }
 
-            const { error } = await (supabase
-                .from('empresas') as any)
-                .update({
-                    ...formData,
-                    configs: configs,
-                    logo_url: logoUrl,
-                    assinatura_url: signatureUrlToSave
-                })
-                .eq('id', userData!.empresa_id)
+            if (activeBrand) {
+                // 1. Atualiza empresas_marcas para a filial específica selecionada
+                const { error: marcaError } = await supabase
+                    .from('empresas_marcas')
+                    .update({
+                        nome: formData.nome,
+                        razao_social: formData.razao_social,
+                        cnpj: formData.cnpj,
+                        telefone: formData.telefone,
+                        email_contato: formData.email_contato,
+                        site: formData.site,
+                        cep: formData.cep,
+                        endereco: formData.endereco,
+                        numero: formData.numero,
+                        complemento: formData.complemento,
+                        bairro: formData.bairro,
+                        cidade: formData.cidade,
+                        estado: formData.estado,
+                        chave_pix: formData.chave_pix,
+                        cor_tema: formData.cor_tema,
+                        logo_url: logoUrl,
+                        assinatura_url: signatureUrlToSave
+                    })
+                    .eq('id', activeBrand.id)
 
-            if (error) throw error
+                if (marcaError) throw marcaError
+
+                // 2. Se for a Matriz, mantém a tabela empresas em sincronia
+                if (activeBrand.ordem === 1) {
+                    await (supabase.from('empresas') as any)
+                        .update({
+                            nome: formData.nome,
+                            razao_social: formData.razao_social,
+                            cnpj: formData.cnpj,
+                            telefone: formData.telefone,
+                            email_contato: formData.email_contato,
+                            site: formData.site,
+                            cep: formData.cep,
+                            endereco: formData.endereco,
+                            numero: formData.numero,
+                            complemento: formData.complemento,
+                            bairro: formData.bairro,
+                            cidade: formData.cidade,
+                            estado: formData.estado,
+                            logo_url: logoUrl,
+                            assinatura_url: signatureUrlToSave,
+                            configs: configs
+                        })
+                        .eq('id', userData!.empresa_id)
+                }
+
+                await refreshBrands()
+                toast.success(`Dados de "${formData.nome}" salvos com sucesso!`)
+            } else {
+                const { error } = await (supabase
+                    .from('empresas') as any)
+                    .update({
+                        ...formData,
+                        configs: configs,
+                        logo_url: logoUrl,
+                        assinatura_url: signatureUrlToSave
+                    })
+                    .eq('id', userData!.empresa_id)
+
+                if (error) throw error
+                toast.success('Configurações salvas com sucesso!')
+            }
 
             // Update Password if provided (Admin)
             if (userPassword) {
@@ -238,15 +333,13 @@ export function Settings() {
                 if (pwdError) throw pwdError
                 setUserPassword('') // Clear password field after successful update
             }
-
-            alert('Configurações salvas com sucesso!')
         } catch (error: any) {
             console.error('Erro ao salvar:', error)
             alert('Erro ao salvar: ' + error.message)
         } finally {
             setSaving(false)
         }
-    }, [formData, configs, logoFile, logoPreview, userData, companySignatureBlob, companySignaturePreview, userPassword])
+    }, [formData, configs, logoFile, logoPreview, userData, companySignatureBlob, companySignaturePreview, userPassword, activeBrand, refreshBrands])
 
     // Technician Submit
     const handleTechSubmit = useCallback(async () => {
@@ -374,6 +467,86 @@ export function Settings() {
                     Salvar Alterações
                 </Button>
             </div>
+
+            {/* Seletor Visual de Filial em Edição */}
+            {!isTecnico && brands.length > 1 && (
+                <div className="bg-white rounded-2xl border-2 border-emerald-500/20 p-5 shadow-sm space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                            <div 
+                                className="w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden bg-slate-50 border-2 shrink-0 shadow-sm"
+                                style={{ borderColor: activeBrand?.cor_tema || '#10b981' }}
+                            >
+                                {activeBrand?.logo_url ? (
+                                    <img src={activeBrand.logo_url} alt={activeBrand.nome} className="w-full h-full object-contain p-1" />
+                                ) : (
+                                    <Building2 className="w-6 h-6 text-slate-400" />
+                                )}
+                            </div>
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                                        Empresa Selecionada para Edição:
+                                    </span>
+                                    {activeBrand?.ordem === 1 ? (
+                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">
+                                            Matriz
+                                        </span>
+                                    ) : (
+                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700">
+                                            Filial
+                                        </span>
+                                    )}
+                                </div>
+                                <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                    {activeBrand?.nome}
+                                    <span 
+                                        className="w-3 h-3 rounded-full inline-block shadow-sm"
+                                        style={{ backgroundColor: activeBrand?.cor_tema || '#10b981' }}
+                                    />
+                                </h3>
+                            </div>
+                        </div>
+
+                        <div className="text-xs text-muted-foreground sm:text-right">
+                            <span className="inline-block bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg font-medium">
+                                💡 Ao trocar no topo ou nos botões abaixo, este formulário edita a empresa ativa
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Botões Rápidos de Cada Filial */}
+                    <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
+                        {brands.map(b => {
+                            const isActive = activeBrand?.id === b.id
+                            return (
+                                <button
+                                    key={b.id}
+                                    type="button"
+                                    onClick={() => setSelectedBrandId(b.id)}
+                                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                                        isActive
+                                            ? 'bg-slate-900 text-white border-slate-900 shadow-md scale-102 ring-2 ring-emerald-500/30'
+                                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-white hover:border-emerald-300'
+                                    }`}
+                                >
+                                    {b.logo_url ? (
+                                        <img src={b.logo_url} alt={b.nome} className="w-4 h-4 object-contain rounded" />
+                                    ) : (
+                                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: b.cor_tema || '#10b981' }} />
+                                    )}
+                                    <span>{b.nome}</span>
+                                    {b.ordem === 1 && (
+                                        <span className={`text-[9px] px-1 py-0.5 rounded ${isActive ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-800'}`}>
+                                            Matriz
+                                        </span>
+                                    )}
+                                </button>
+                            )
+                        })}
+                    </div>
+                </div>
+            )}
 
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {isTecnico ? (
@@ -582,6 +755,41 @@ export function Settings() {
                                         placeholder="instagram.com/suaempresa"
                                     />
                                 </div>
+                                <div className="space-y-2">
+                                    <Label className="flex items-center gap-1.5">
+                                        Chave PIX
+                                        <span className="text-[10px] text-muted-foreground font-normal">(sai no recibo da OS)</span>
+                                    </Label>
+                                    <Input
+                                        value={formData.chave_pix}
+                                        onChange={e => setFormData({ ...formData, chave_pix: e.target.value })}
+                                        placeholder="CNPJ, Celular ou E-mail"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="flex items-center gap-1.5">
+                                        Cor do Tema
+                                        <span 
+                                            className="w-3 h-3 rounded-full border border-gray-200 inline-block ml-1 shadow-xs" 
+                                            style={{ backgroundColor: formData.cor_tema }} 
+                                        />
+                                    </Label>
+                                    <div className="flex items-center gap-2">
+                                        <Input
+                                            type="color"
+                                            value={formData.cor_tema}
+                                            onChange={e => setFormData({ ...formData, cor_tema: e.target.value })}
+                                            className="w-12 h-10 p-1 cursor-pointer rounded-lg border border-border"
+                                        />
+                                        <Input
+                                            value={formData.cor_tema}
+                                            onChange={e => setFormData({ ...formData, cor_tema: e.target.value })}
+                                            placeholder="#10b981"
+                                            className="font-mono text-xs uppercase"
+                                            maxLength={7}
+                                        />
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -655,9 +863,10 @@ export function Settings() {
 
 
 
-                        {/* Fiscal Settings Section (Component Import) */}
+
+
                         <div className="md:col-span-2">
-                            <ConfigurarWebmania empresaId={userData?.empresa_id || ''} />
+                            <ConfigurarFocusNFe empresaId={userData?.empresa_id || ''} />
                         </div>
 
                         {/* Technician Permissions Section */}

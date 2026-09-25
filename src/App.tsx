@@ -1,3 +1,4 @@
+﻿import { BrandProvider } from '@/contexts/BrandContext'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Suspense, lazy } from 'react'
 import { MainLayout } from '@/components/MainLayout'
@@ -25,6 +26,7 @@ const Services = lazy(() => import('@/pages/Services').then(module => ({ default
 const PrintServiceOrder = lazy(() => import('@/pages/PrintServiceOrder').then(module => ({ default: module.PrintServiceOrder })))
 const Settings = lazy(() => import('./pages/Settings').then(module => ({ default: module.Settings })))
 const Financial = lazy(() => import('./pages/Financial').then(module => ({ default: module.Financial })))
+const Reports = lazy(() => import('./pages/Reports').then(module => ({ default: module.Reports })))
 const Schedule = lazy(() => import('./pages/Schedule').then(module => ({ default: module.Schedule })))
 const Plans = lazy(() => import('./pages/Plans').then(module => ({ default: module.Plans })))
 const PlansSuccess = lazy(() => import('./pages/PlansSuccess').then(module => ({ default: module.PlansSuccess })))
@@ -35,6 +37,9 @@ const TechnicianFinancial = lazy(() => import('./pages/TechnicianFinancial').the
 const TechnicianFinancialPrint = lazy(() => import('./pages/TechnicianFinancialPrint').then(module => ({ default: module.TechnicianFinancialPrint })))
 const UnfinishedServices = lazy(() => import('./pages/UnfinishedServices').then(module => ({ default: module.UnfinishedServices })))
 const AIChatbot = lazy(() => import('./pages/admin/AIChatbot').then(module => ({ default: module.AIChatbot })))
+const TechnicalReportEditor = lazy(() => import('./pages/TechnicalReportEditor').then(module => ({ default: module.TechnicalReportEditor })))
+const TechnicalReportsList = lazy(() => import('./pages/TechnicalReportsList').then(module => ({ default: module.TechnicalReportsList })))
+const TechnicalReportPrint = lazy(() => import('./pages/TechnicalReportPrint').then(module => ({ default: module.TechnicalReportPrint })))
 
 // Super Admin Pages
 const SuperAdminDashboard = lazy(() => import('./pages/super-admin/SuperAdminDashboard').then(module => ({ default: module.SuperAdminDashboard })))
@@ -56,7 +61,8 @@ function App() {
     return (
         <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
             <AuthProvider>
-                <OfflineSyncProvider>
+                <BrandProvider>
+                    <OfflineSyncProvider>
                     <Toaster richColors position="top-right" />
                     <ChatAssistant />
                     <BrowserRouter>
@@ -76,6 +82,10 @@ function App() {
                                 <Route path="/print/service-orders/:id" element={<PrintServiceOrder />} />
                                 <Route path="/print/:id" element={<PrintServiceOrder />} />
                                 <Route path="/tecnico/extrato" element={<TechnicianFinancialPrint />} />
+                                <Route path="/tecnico/extrato/:techId" element={<TechnicianFinancialPrint />} />
+                                <Route path="/print/comissoes/:techId" element={<TechnicianFinancialPrint />} />
+                                <Route path="/print/comissoes" element={<TechnicianFinancialPrint />} />
+                                <Route path="/print/relatorio-tecnico/:id" element={<ProtectedRoute><TechnicalReportPrint /></ProtectedRoute>} />
                                 <Route element={
                                     <ProtectedRoute>
                                         <MainLayout />
@@ -91,6 +101,8 @@ function App() {
                                     <Route path="/service-orders/:id" element={<NewServiceOrder />} />
                                     <Route path="/settings" element={<Settings />} />
                                     <Route path="/financial" element={<Financial />} />
+                                    <Route path="/reports" element={<Reports />} />
+                                    <Route path="/relatorios" element={<Reports />} />
                                     <Route path="/schedule" element={<Schedule />} />
                                     <Route path="/tecnico/dashboard" element={<TechnicianDashboard />} />
                                     <Route path="/tech-dashboard" element={<TechnicianDashboard />} />
@@ -99,6 +111,8 @@ function App() {
                                     <Route path="/experiments" element={<TechnicianExpenses />} />
                                     <Route path="/unfinished-services" element={<UnfinishedServices />} />
                                     <Route path="/ai-chatbot" element={<AIChatbot />} />
+                                    <Route path="/relatorios-tecnicos" element={<TechnicalReportsList />} />
+                                    <Route path="/relatorio-tecnico/:id" element={<TechnicalReportEditor />} />
                                     {/* (Super Admin routes movidas para fora do ProtectedRoute) */}
                                 </Route>
 
@@ -134,6 +148,7 @@ function App() {
                         </Suspense>
                     </BrowserRouter>
                 </OfflineSyncProvider>
+                </BrandProvider>
             </AuthProvider>
         </ThemeProvider>
     )

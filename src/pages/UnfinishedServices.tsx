@@ -14,8 +14,9 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
+import { useBrand } from '@/contexts/BrandContext'
 import { SyncService } from '@/services/syncService'
-import { useOfflineServiceOrders, useOfflineClients } from '@/hooks/useOfflineData'
+import { useOfflineServiceOrders, useOfflineClients, useOfflineTechnicians } from '@/hooks/useOfflineData'
 import {
     Dialog,
     DialogContent,
@@ -32,18 +33,42 @@ export function UnfinishedServices() {
     const { userData } = useAuth()
     const { orders: rawOrders, loading: loadingOrders } = useOfflineServiceOrders()
     const { clients } = useOfflineClients()
+    const { technicians: offlineTechs } = useOfflineTechnicians()
+    const { brands, selectedBrandId } = useBrand()
     const [searchTerm, setSearchTerm] = useState('')
+    const [dbTechnicians, setDbTechnicians] = useState<any[]>([])
+
+    // Busca técnicos parceiros do banco para garantir nomes reais
+    useEffect(() => {
+        if (!userData?.empresa_id) return
+        supabase
+            .from('usuarios')
+            .select('id, nome, nome_completo, email')
+            .eq('empresa_id', userData.empresa_id)
+            .then(({ data }) => {
+                if (data && data.length > 0) {
+                    setDbTechnicians(data)
+                }
+            })
+    }, [userData?.empresa_id])
 
     // Delete Modal State
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
     const [osToDelete, setOsToDelete] = useState<string | null>(null)
 
+    const allTechnicians = dbTechnicians.length > 0 ? dbTechnicians : (offlineTechs || [])
+
     const orders = (rawOrders || []).map(order => {
         const client = clients?.find(c => c.id === order.cliente_id)
+        const tech = allTechnicians.find((t: any) => t.id === order.tecnico_id)
+        const techName = tech?.nome_completo || tech?.nome || (order.tecnico_id ? 'Técnico Parceiro' : null)
+        const marca = brands?.find(b => b.id === order.marca_id)
+
         return {
             ...order,
             clientes: client,
-            tecnicos: { nome_completo: 'Técnico' }
+            marca: marca,
+            tecnicos: techName ? { nome_completo: techName } : null
         }
     })
 
@@ -55,6 +80,11 @@ export function UnfinishedServices() {
         // ONLY show "Not Done" statuses
         const isNotDoneStatus = ['orcamento', 'nao_feito_outra_empresa', 'nao_feito_ja_realizado', 'nao_feito_cancelado'].includes(os.status?.toLowerCase())
         if (!isNotDoneStatus) return false
+
+        // Filtro por marca se estiver selecionada no seletor do topo
+        if (selectedBrandId && selectedBrandId !== 'all') {
+            if (os.marca_id && os.marca_id !== selectedBrandId) return false
+        }
 
         if (!term) return true
 
@@ -68,6 +98,17 @@ export function UnfinishedServices() {
 
         return false
     })
+
+    const sortedOrders = [...filteredOrders].sort((a, b) => {
+        const getTime = (val: any) => {
+            if (!val) return 0;
+            const d = new Date(val).getTime();
+            return isNaN(d) ? 0 : d;
+        };
+        const tA = getTime(a.created_at) || getTime(a.updated_at) || getTime(a.data_agendamento);
+        const tB = getTime(b.created_at) || getTime(b.updated_at) || getTime(b.data_agendamento);
+        return tB - tA;
+    });
 
     const formatCurrency = (value: number | null) => {
         if (!value) return 'R$ 0,00'
@@ -86,8 +127,12 @@ export function UnfinishedServices() {
 
     const handleQuickStatusUpdate = async (osId: string, newStatus: string) => {
         try {
+            const rawOs = orders.find(o => o.id === osId)
+            if (!rawOs) return
+            const { clientes, tecnicos, marca, ...osData } = rawOs as any
+
             await SyncService.saveServiceOrder({
-                ...orders.find(o => o.id === osId),
+                ...osData,
                 status: newStatus
             })
             toast.success(`Status atualizado para ${newStatus.replace(/_/g, ' ')}`)
@@ -118,7 +163,14 @@ export function UnfinishedServices() {
     return (
         <div className="p-6 max-w-7xl mx-auto space-y-8 pb-32">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div className="hidden md:block"></div>
+                <div>
+                    <h1 className="text-2xl md:text-3xl font-black text-slate-800 tracking-tight">
+                        Serviços Não Realizados & Orçamentos
+                    </h1>
+                    <p className="text-slate-500 text-sm mt-1">
+                        Acompanhe orçamentos pendentes, serviços cancelados ou realizados por concorrentes
+                    </p>
+                </div>
                 <div className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-100 rounded-2xl text-amber-700 text-xs font-bold">
                     <AlertCircle className="h-4 w-4" />
                     ESTES REGISTROS NÃO GERAM COMISSÃO
@@ -139,39 +191,55 @@ export function UnfinishedServices() {
                 <div className="text-center py-20 text-slate-600 font-medium">Carregando registros...</div>
             ) : filteredOrders.length === 0 ? (
                 <div className="text-center py-20 text-slate-400 bg-white/50 rounded-3xl border-2 border-dashed border-slate-200 mx-4">
-                    Nenhum serviço não realizado encontrado.
+                    Nenhum serviço não realizado encontrado para o filtro selecionado.
                 </div>
             ) : (
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                    {filteredOrders.map((os) => (
+                    {sortedOrders.map((os) => (
                         <div key={os.id}
                             onClick={() => navigate(`/service-orders/${os.id}`)}
                             className="group relative flex flex-col justify-between rounded-[24px] border border-white bg-white/90 backdrop-blur-xl p-6 shadow-xl shadow-slate-900/5 hover:shadow-2xl transition-all duration-300 cursor-pointer overflow-hidden">
 
-                            <div className="flex justify-between items-start mb-5 relative z-10">
-                                <Select
-                                    value={os.status || 'PENDENTE'}
-                                    onValueChange={(value) => handleQuickStatusUpdate(os.id, value)}
-                                >
-                                    <SelectTrigger onClick={(e) => e.stopPropagation()} className={cn(
-                                        "w-fit h-auto px-4 py-1.5 rounded-full text-xs font-bold border flex items-center gap-1.5 transition-all outline-none ring-0 focus:ring-0 select-none",
-                                        getStatusColor(os.status)
-                                    )}>
-                                        <div className="w-1.5 h-1.5 rounded-full bg-current" />
-                                        <SelectValue>
-                                            {(os.status || '').replace(/_/g, ' ').toUpperCase()}
-                                        </SelectValue>
-                                    </SelectTrigger>
-                                    <SelectContent onClick={(e) => e.stopPropagation()} className="rounded-xl shadow-xl border-slate-100">
-                                        <SelectItem value="PENDENTE">Pendente</SelectItem>
-                                        <SelectItem value="EM_ANDAMENTO">Em Andamento</SelectItem>
-                                        <SelectItem value="CONCLUIDO" className="text-emerald-600 font-bold">Concluído</SelectItem>
-                                        <SelectItem value="ORCAMENTO">Somente Orçamento</SelectItem>
-                                        <SelectItem value="NAO_FEITO_CANCELADO">Cancelado</SelectItem>
-                                        <SelectItem value="NAO_FEITO_OUTRA_EMPRESA">Outra Empresa</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <span className="text-xs text-slate-400 font-mono tracking-wider">#{os.id.slice(0, 8)}</span>
+                            <div className="flex justify-between items-center mb-5 relative z-10 gap-2">
+                                <div className="flex items-center gap-2 min-w-0">
+                                    <Select
+                                        value={os.status || 'PENDENTE'}
+                                        onValueChange={(value) => handleQuickStatusUpdate(os.id, value)}
+                                    >
+                                        <SelectTrigger onClick={(e) => e.stopPropagation()} className={cn(
+                                            "w-fit h-7 px-2.5 py-0 rounded-full text-[11px] font-bold border flex items-center gap-1.5 transition-all outline-none ring-0 focus:ring-0 select-none shrink-0 shadow-xs",
+                                            getStatusColor(os.status)
+                                        )}>
+                                            <div className="w-1.5 h-1.5 rounded-full bg-current" />
+                                            <SelectValue>
+                                                {(os.status || '').replace(/_/g, ' ').toUpperCase()}
+                                            </SelectValue>
+                                        </SelectTrigger>
+                                        <SelectContent onClick={(e) => e.stopPropagation()} className="rounded-xl shadow-xl border-slate-100">
+                                            <SelectItem value="PENDENTE">Pendente</SelectItem>
+                                            <SelectItem value="EM_ANDAMENTO">Em Andamento</SelectItem>
+                                            <SelectItem value="CONCLUIDO" className="text-emerald-600 font-bold">Concluído</SelectItem>
+                                            <SelectItem value="ORCAMENTO">Somente Orçamento</SelectItem>
+                                            <SelectItem value="NAO_FEITO_CANCELADO">Cancelado</SelectItem>
+                                            <SelectItem value="NAO_FEITO_OUTRA_EMPRESA">Outra Empresa</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+
+                                    {os.marca && (
+                                        <span 
+                                            className="h-7 px-2.5 flex items-center justify-center rounded-full font-bold text-[11px] shadow-xs shrink-0 whitespace-nowrap"
+                                            style={{ 
+                                                backgroundColor: `${os.marca.cor_primaria || '#10b981'}20`,
+                                                color: os.marca.cor_primaria || '#10b981',
+                                                border: `1px solid ${os.marca.cor_primaria || '#10b981'}40`
+                                            }}
+                                        >
+                                            {os.marca.nome_fantasia}
+                                        </span>
+                                    )}
+                                </div>
+
+                                <span className="text-[11px] text-slate-400 font-mono tracking-wider shrink-0 select-none">#{os.id.slice(0, 8)}</span>
                             </div>
 
                             <div className="space-y-4 mb-8 relative z-10">
@@ -185,6 +253,12 @@ export function UnfinishedServices() {
                                             {os.cliente_nome || 'Cliente Desconhecido'}
                                         </span>
                                     </div>
+                                    {os.tecnicos?.nome_completo && (
+                                        <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 mt-2">
+                                            <User className="h-3.5 w-3.5 text-slate-400" />
+                                            <span>{os.tecnicos.nome_completo}</span>
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div>

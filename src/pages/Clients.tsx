@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import XLSX from 'xlsx-js-style'
 import { useOutletContext, useNavigate, useSearchParams } from 'react-router-dom'
-import { Plus, Search, Pencil, Trash2, Phone, Mail, User as UserIcon, MapPin, FileText, Camera, Upload, Download, Eye, Image as ImageIcon, Mic, MicOff } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Phone, Mail, User as UserIcon, MapPin, FileText, Camera, Upload, Download, Eye, Image as ImageIcon, Mic, MicOff, Building2, MessageSquare, ClipboardPaste, Sparkles } from 'lucide-react'
+import { toast } from 'sonner'
 import { useVoiceRecognition } from '@/hooks/useVoiceRecognition'
 import { SearchAssistant, SmartFilter } from '@/services/searchAssistant'
 import { useLicenseCheck } from '@/hooks/useLicenseCheck'
@@ -10,10 +11,12 @@ import { ocrService } from '@/services/ocrService'
 import { compressImage } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
+import { useBrand } from '@/contexts/BrandContext'
 import { searchCep } from '@/services/cepService'
 import { searchAddress, AddressSuggestion } from '@/services/addressService'
 import { searchCnpj, formatPhone, formatLogradouro } from '@/services/cnpjService'
 import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import {
@@ -33,6 +36,7 @@ import { LocalClient } from '@/lib/db'
 
 export function Clients() {
     const { userData } = useAuth()
+    const { brands, selectedBrandId } = useBrand()
     const navigate = useNavigate()
     const { clients, loading } = useOfflineClients()
     const [searchTerm, setSearchTerm] = useState('')
@@ -74,6 +78,26 @@ export function Clients() {
     const [showUpgradeModal, setShowUpgradeModal] = useState(false)
     const [upgradeMessage, setUpgradeMessage] = useState('')
 
+
+    const maskPhoneInput = (val: string) => {
+        let clean = val.replace(/\D/g, '').slice(0, 11)
+        if (clean.length === 0) return ''
+        if (clean.length <= 2) return `(${clean}`
+        if (clean.length <= 6) return `(${clean.slice(0, 2)}) ${clean.slice(2)}`
+        if (clean.length <= 10) return `(${clean.slice(0, 2)}) ${clean.slice(2, 6)}-${clean.slice(6)}`
+        return `(${clean.slice(0, 2)}) ${clean.slice(2, 7)}-${clean.slice(7, 11)}`
+    }
+
+    const normalizePhoneWithDDD = (val: string) => {
+        if (!val) return ''
+        let clean = val.replace(/\D/g, '')
+        // Se o usuário digitou sem DDD (8 ou 9 dígitos), auto-preenche DDD 41 (Curitiba e Região)
+        if (clean.length === 8 || clean.length === 9) {
+            clean = '41' + clean
+        }
+        return maskPhoneInput(clean)
+    }
+
     const { canAddClient, isTrialExpired, usage, limits } = useLicenseCheck()
 
     // Form Data matches DB columns exactly now
@@ -91,7 +115,8 @@ export function Clients() {
         uf: '',
         referencia: '',
         avatar_url: '',
-        signature_url: ''
+        signature_url: '',
+        marca_id: ''
     }
     const [formData, setFormData] = useState(initialFormState)
     const [searchingCep, setSearchingCep] = useState(false)
@@ -105,7 +130,117 @@ export function Clients() {
     const debounceRef = useRef<NodeJS.Timeout | null>(null)
     const [searchingCnpj, setSearchingCnpj] = useState(false)
     const [processingOcr, setProcessingOcr] = useState(false)
+    const [showTextImport, setShowTextImport] = useState(false)
+    const [rawWhatsappText, setRawWhatsappText] = useState('')
     const ocrInputRef = useRef<HTMLInputElement>(null)
+
+    // Processa Imagem (Ficha física ou Print do WhatsApp)
+    const handleProcessImage = async (file: Blob) => {
+        setProcessingOcr(true)
+        try {
+            const compressedFile = await compressImage(file as File, 1024, 0.7)
+            const data = await ocrService.processHandwriting(compressedFile)
+
+            if (data) {
+                setFormData(prev => ({
+                    ...prev,
+                    nome_razao: data.nome || prev.nome_razao,
+                    whatsapp: data.telefone ? formatPhone(data.telefone) : prev.whatsapp,
+                    cep: data.cep?.replace(/(\d{5})(\d)/, '$1-$2') || prev.cep,
+                    logradouro: data.logradouro || prev.logradouro,
+                    numero: data.numero || prev.numero,
+                    complemento: data.complemento || prev.complemento,
+                    bairro: data.bairro || prev.bairro,
+                    cidade: data.cidade || prev.cidade,
+                    uf: data.uf || prev.uf,
+                }))
+
+                if (data.cep) {
+                    const cepClean = data.cep.replace(/\D/g, '')
+                    if (cepClean.length === 8) {
+                        searchCep(cepClean)
+                    }
+                }
+
+                toast.success('Dados extraídos com sucesso pela IA!')
+            }
+        } catch (error: any) {
+            console.error(error)
+            toast.error(`Erro ao processar imagem: ${error.message || error}`)
+        } finally {
+            setProcessingOcr(false)
+            if (ocrInputRef.current) ocrInputRef.current.value = ''
+        }
+    }
+
+    // Processa Texto do WhatsApp copiado
+    const handleProcessText = async (textToProcess?: string) => {
+        const text = textToProcess || rawWhatsappText
+        if (!text.trim()) {
+            toast.error('Cole o texto da conversa do WhatsApp primeiro.')
+            return
+        }
+
+        setProcessingOcr(true)
+        try {
+            const data = await ocrService.processText(text)
+
+            if (data) {
+                setFormData(prev => ({
+                    ...prev,
+                    nome_razao: data.nome || prev.nome_razao,
+                    whatsapp: data.telefone ? formatPhone(data.telefone) : prev.whatsapp,
+                    cep: data.cep?.replace(/(\d{5})(\d)/, '$1-$2') || prev.cep,
+                    logradouro: data.logradouro || prev.logradouro,
+                    numero: data.numero || prev.numero,
+                    complemento: data.complemento || prev.complemento,
+                    bairro: data.bairro || prev.bairro,
+                    cidade: data.cidade || prev.cidade,
+                    uf: data.uf || prev.uf,
+                }))
+
+                if (data.cep) {
+                    const cepClean = data.cep.replace(/\D/g, '')
+                    if (cepClean.length === 8) {
+                        searchCep(cepClean)
+                    }
+                }
+
+                toast.success('Conversa do WhatsApp analisada com sucesso pela IA!')
+                setShowTextImport(false)
+                setRawWhatsappText('')
+            }
+        } catch (error: any) {
+            console.error(error)
+            toast.error(`Erro ao analisar texto: ${error.message || error}`)
+        } finally {
+            setProcessingOcr(false)
+        }
+    }
+
+    // Suporte a Colar Print da Área de Transferência (Ctrl+V)
+    useEffect(() => {
+        if (!isDialogOpen) return
+
+        const handlePaste = (e: ClipboardEvent) => {
+            const items = e.clipboardData?.items
+            if (!items) return
+
+            for (const item of items) {
+                if (item.type.startsWith('image/')) {
+                    const file = item.getAsFile()
+                    if (file) {
+                        e.preventDefault()
+                        handleProcessImage(file)
+                        break
+                    }
+                }
+            }
+        }
+
+        window.addEventListener('paste', handlePaste)
+        return () => window.removeEventListener('paste', handlePaste)
+    }, [isDialogOpen])
 
     // Upload States
     const [avatarFile, setAvatarFile] = useState<File | null>(null)
@@ -134,7 +269,10 @@ export function Clients() {
     }, [userData])
 
     const resetForm = () => {
-        setFormData(initialFormState)
+        setFormData({
+            ...initialFormState,
+            marca_id: selectedBrandId && selectedBrandId !== 'all' ? selectedBrandId : (brands[0]?.id || '')
+        })
         setAvatarFile(null)
         setAvatarPreview(null)
         setSignatureBlob(null)
@@ -279,6 +417,15 @@ export function Clients() {
     // Filter by permission (if technician and view_all_clients is false)
     const availableClients = (clients || [])
         .filter(c => {
+            if (selectedBrandId && selectedBrandId !== 'all') {
+                if (brands.length > 0 && selectedBrandId === brands[0].id) {
+                    return !c.marca_id || c.marca_id === selectedBrandId;
+                }
+                return c.marca_id === selectedBrandId;
+            }
+            return true;
+        })
+        .filter(c => {
             if (userData?.cargo === 'tecnico' && !configs.view_all_clients) {
                 return c.criado_por === userData.id || servicedClientIds.includes(c.id);
             }
@@ -289,6 +436,27 @@ export function Clients() {
             if (!cityFilter) return true
             return (c.cidade || '').toLowerCase().includes(cityFilter)
         })
+
+    // Processa os parâmetros ?edit=CLIENT_ID e ?search=QUERY da URL
+    useEffect(() => {
+        const editId = searchParams.get('edit')
+        const searchQ = searchParams.get('search')
+
+        if (searchQ) {
+            setSearchTerm(searchQ)
+        }
+
+        if (editId && clients && clients.length > 0) {
+            const target = clients.find(c => c.id === editId)
+            if (target) {
+                handleEdit(target)
+                // Limpa o param da URL para não reabrir em refresh acidental
+                const nextParams = new URLSearchParams(searchParams)
+                nextParams.delete('edit')
+                setSearchParams(nextParams, { replace: true })
+            }
+        }
+    }, [searchParams, clients])
 
     const handleEdit = (client: LocalClient) => {
         if (userData?.cargo === 'tecnico' && !configs.can_edit_clients) {
@@ -315,7 +483,8 @@ export function Clients() {
             uf: client.uf || '',
             referencia: client.referencia || '',
             avatar_url: client.avatar_url || '',
-            signature_url: client.signature_url || ''
+            signature_url: client.signature_url || '',
+            marca_id: client.marca_id || (brands[0]?.id || '')
         })
         setAvatarPreview(client.avatar_url || null)
         setCurrentSignatureUrl(client.signature_url || null)
@@ -456,10 +625,22 @@ export function Clients() {
                 }
             }
 
+            // Normalize whatsapp with DDD
+            let finalWhatsapp = formData.whatsapp ? normalizePhoneWithDDD(formData.whatsapp) : ''
+            if (finalWhatsapp) {
+                const digits = finalWhatsapp.replace(/\D/g, '')
+                if (digits.length < 10) {
+                    alert('O número de WhatsApp precisa conter o DDD (ex: (41) 99999-9999).')
+                    setIsSubmitting(false)
+                    return
+                }
+            }
+
             await SyncService.saveClient({
                 id: editingClientId || undefined,
                 empresa_id: userData.empresa_id,
                 ...formData,
+                whatsapp: finalWhatsapp,
                 avatar_url: avatarUrl,
                 signature_url: signatureUrl,
                 ativo: true,
@@ -497,6 +678,26 @@ export function Clients() {
             (client as any).telefone?.toLowerCase().includes(searchTerm.toLowerCase())
         )
     })
+
+    const [visibleCount, setVisibleCount] = useState(60)
+
+    useEffect(() => {
+        setVisibleCount(60)
+    }, [searchTerm, selectedBrandId])
+
+    // Ordena do mais recém-criado (topo) para o mais antigo (fim)
+    const sortedClients = [...filteredClients].sort((a, b) => {
+        const getTime = (val: any) => {
+            if (!val) return 0;
+            const d = new Date(val).getTime();
+            return isNaN(d) ? 0 : d;
+        };
+        const tA = getTime(a.created_at) || getTime((a as any).criado_em) || getTime(a.updated_at);
+        const tB = getTime(b.created_at) || getTime((b as any).criado_em) || getTime(b.updated_at);
+        return tB - tA;
+    });
+
+    const displayedClients = sortedClients.slice(0, visibleCount)
 
     const handleDownloadExample = () => {
         const headers = ["Nome/Razao Social", "CPF/CNPJ", "Whatsapp", "Email", "CEP", "Logradouro", "Numero", "Complemento", "Bairro", "Cidade", "UF", "Referencia"]
@@ -589,154 +790,175 @@ export function Clients() {
 
                     <form onSubmit={handleSubmit} className="space-y-6 pt-4 pb-48 md:pb-4" autoComplete="off">
 
-                        {/* FOTO DA FACHADA / AVATAR */}
-                        <div className="border-2 border-dashed border-border rounded-lg p-6 flex flex-col items-center justify-center bg-muted/20 relative min-h-[160px]">
-                            {avatarPreview ? (
-                                <>
-                                    <img src={avatarPreview} alt="Fachada" className="absolute inset-0 w-full h-full object-cover rounded-lg opacity-50" />
-                                    <div className="z-10 flex gap-4">
-                                        <button
-                                            type="button"
-                                            onClick={(e) => {
-                                                e.stopPropagation()
-                                                setViewingImage(avatarPreview)
-                                            }}
-                                            className="bg-background/80 p-3 rounded-full shadow-sm hover:bg-background transition-colors"
-                                            title="Visualizar Imagem"
-                                        >
-                                            <Eye className="h-6 w-6 text-foreground" />
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={(e) => {
-                                                e.stopPropagation()
-                                                // Trigger file input manually since we stop propagation
-                                                const fileInput = e.currentTarget.parentElement?.parentElement?.querySelector('input[type="file"]') as HTMLInputElement
-                                                fileInput?.click()
-                                            }}
-                                            className="bg-background/80 p-3 rounded-full shadow-sm hover:bg-background transition-colors"
-                                            title="Alterar Imagem"
-                                        >
-                                            <ImageIcon className="h-6 w-6 text-foreground" />
-                                        </button>
-                                    </div>
-                                </>
-                            ) : (
-                                <div className="flex flex-col items-center text-muted-foreground pointer-events-none">
-                                    <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-2">
-                                        <ImageIcon className="h-6 w-6" />
-                                    </div>
-                                    <span className="font-semibold text-sm">ADICIONAR FOTO DA FACHADA / AVATAR</span>
-                                    <span className="text-xs">Toque para selecionar da galeria</span>
-                                </div>
-                            )}
-                            <input
-                                type="file"
-                                accept="image/*"
-                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-0"
-                                onChange={(e) => {
-                                    const file = e.target.files?.[0]
-                                    if (file) {
-                                        setAvatarFile(file)
-                                        setAvatarPreview(URL.createObjectURL(file))
-                                    }
-                                }}
-                            />
-                        </div>
+                        {/* SELETOR DE DESENTUPIDORA (MARCA) */}
+                        {brands.length > 1 && (
+                            <div className="space-y-2 p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl">
+                                <Label htmlFor="marca_id" className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                                    <Building2 className="h-4 w-4 text-emerald-600" />
+                                    Desentupidora Responsável (Filial)
+                                </Label>
+                                <Select
+                                    value={formData.marca_id || (selectedBrandId !== 'all' ? selectedBrandId : brands[0]?.id)}
+                                    onValueChange={(val) => setFormData(prev => ({ ...prev, marca_id: val }))}
+                                >
+                                    <SelectTrigger className="h-12 bg-white text-sm font-semibold border-slate-200 rounded-xl shadow-sm">
+                                        <SelectValue placeholder="Selecione a desentupidora" />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-white z-50">
+                                        {brands.map((b) => (
+                                            <SelectItem key={b.id} value={b.id} className="cursor-pointer py-2.5">
+                                                <div className="flex items-center gap-2.5">
+                                                    <span 
+                                                        className="w-3.5 h-3.5 rounded-full shrink-0 shadow-sm" 
+                                                        style={{ backgroundColor: b.cor_tema || '#10b981' }} 
+                                                    />
+                                                    <span className="font-bold text-slate-800">{b.nome}</span>
+                                                </div>
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <p className="text-[11px] text-slate-400">
+                                    Define qual desentupidora é a dona deste cliente para relatórios e filtros.
+                                </p>
+                            </div>
+                        )}
 
-                        {/* Image Viewer Dialog */}
-                        <Dialog open={!!viewingImage} onOpenChange={(open) => !open && setViewingImage(null)}>
-                            <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden bg-transparent border-none shadow-none flex items-center justify-center">
-                                {viewingImage && (
-                                    <div className="relative">
-                                        <img
-                                            src={viewingImage}
-                                            alt="Visualização"
-                                            className="max-w-full max-h-[85vh] rounded-lg shadow-2xl"
-                                        />
-                                        <button
-                                            onClick={() => setViewingImage(null)}
-                                            className="absolute -top-4 -right-4 bg-white rounded-full p-2 shadow-lg hover:bg-gray-100"
-                                        >
-                                            <Plus className="h-6 w-6 rotate-45 text-black" />
-                                        </button>
-                                    </div>
-                                )}
-                            </DialogContent>
-                        </Dialog>
-
-                        {/* OCR / Import via Photo */}
-                        {/* OCR / Import via Photo - Glassmorphism */}
-                        <div
-                            onClick={() => !processingOcr && ocrInputRef.current?.click()}
-                            className={`relative overflow-hidden rounded-2xl bg-white/40 backdrop-blur-xl border border-white/50 shadow-lg p-6 mb-8 group transition-all hover:shadow-xl hover:bg-white/50 cursor-pointer ${processingOcr ? 'opacity-70 pointer-events-none' : ''}`}
-                        >
-                            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-purple-500/5 to-blue-500/10 pointer-events-none" />
-
-                            <div className="relative flex items-center gap-6">
-                                <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20 group-hover:scale-110 transition-transform duration-300 shrink-0">
+                        {/* IA Auto-Fill: Ficha Física ou Print do WhatsApp */}
+                        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500/5 via-teal-500/5 to-blue-500/10 border border-emerald-500/20 shadow-md p-5 mb-6 space-y-4">
+                            <div className="flex items-start gap-4">
+                                <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white shadow-lg shadow-emerald-500/20 shrink-0">
                                     {processingOcr ? (
                                         <div className="h-6 w-6 animate-spin rounded-full border-2 border-white border-t-transparent" />
                                     ) : (
-                                        <Camera className="h-6 w-6" />
+                                        <Sparkles className="h-6 w-6 text-white" />
                                     )}
                                 </div>
-                                <div className="flex-1">
-                                    <h3 className="font-bold text-slate-800 text-lg leading-tight">Escanear Ficha Manual</h3>
-                                    <p className="text-sm text-slate-500">
-                                        {processingOcr ? 'Processando imagem...' : 'Toque aqui para usar a IA e preencher os dados automaticamente'}
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                        <h3 className="font-bold text-slate-800 text-base leading-tight">
+                                            Preenchimento com IA
+                                        </h3>
+                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                                            Ficha ou Print do WhatsApp
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                                        {processingOcr
+                                            ? 'A Inteligência Artificial está analisando os dados...'
+                                            : 'Envie um print da conversa do WhatsApp ou foto da ficha de papel para preencher tudo sozinho.'}
                                     </p>
                                 </div>
+                            </div>
 
-                                <input
-                                    type="file"
-                                    ref={ocrInputRef}
-                                    accept="image/*"
-                                    capture="environment"
-                                    className="hidden"
-                                    onChange={async (e) => {
-                                        const file = e.target.files?.[0]
-                                        if (!file) return
+                            {/* Botões de Ação */}
+                            <div className="flex flex-wrap gap-2 pt-1 border-t border-emerald-100/60">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={processingOcr}
+                                    onClick={() => ocrInputRef.current?.click()}
+                                    className="bg-white hover:bg-emerald-50 border-emerald-200 text-emerald-800 font-semibold text-xs h-9 gap-1.5 shadow-xs cursor-pointer"
+                                >
+                                    <Camera className="w-3.5 h-3.5 text-emerald-600" />
+                                    <span>Tirar Foto / Escolher Print</span>
+                                </Button>
 
-                                        setProcessingOcr(true)
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={processingOcr}
+                                    onClick={async () => {
                                         try {
-                                            const compressedFile = await compressImage(file, 1024, 0.7)
-                                            const data = await ocrService.processHandwriting(compressedFile)
-
-                                            if (data) {
-                                                setFormData(prev => ({
-                                                    ...prev,
-                                                    nome_razao: data.nome || prev.nome_razao,
-                                                    whatsapp: data.telefone ? formatPhone(data.telefone) : prev.whatsapp,
-                                                    cep: data.cep?.replace(/(\d{5})(\d)/, '$1-$2') || prev.cep,
-                                                    logradouro: data.logradouro || prev.logradouro,
-                                                    numero: data.numero || prev.numero,
-                                                    complemento: data.complemento || prev.complemento,
-                                                    bairro: data.bairro || prev.bairro,
-                                                    cidade: data.cidade || prev.cidade,
-                                                    uf: data.uf || prev.uf,
-                                                }))
-
-                                                // Trigger CEP search if CEP is new and valid
-                                                if (data.cep && data.cep !== formData.cep) {
-                                                    const cepClean = data.cep.replace(/\D/g, '')
-                                                    if (cepClean.length === 8) {
-                                                        searchCep(cepClean) // Fire and forget update
-                                                    }
+                                            const clipboardItems = await navigator.clipboard.read()
+                                            for (const item of clipboardItems) {
+                                                const imageType = item.types.find(t => t.startsWith('image/'))
+                                                if (imageType) {
+                                                    const blob = await item.getType(imageType)
+                                                    handleProcessImage(blob)
+                                                    return
                                                 }
-
-                                                alert('Ficha processada com sucesso! Verifique os dados.')
                                             }
-                                        } catch (error: any) {
-                                            console.error(error)
-                                            alert(`Erro ao processar imagem: ${error.message || error}`)
-                                        } finally {
-                                            setProcessingOcr(false)
-                                            if (ocrInputRef.current) ocrInputRef.current.value = ''
+                                            toast.info('Nenhum print copiado. Pressione Win+Shift+S no WhatsApp e tente de novo.')
+                                        } catch (err) {
+                                            ocrInputRef.current?.click()
                                         }
                                     }}
-                                />
+                                    className="bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-semibold text-xs h-9 gap-1.5 shadow-xs cursor-pointer"
+                                    title="Cole o print que você tirou com Win+Shift+S ou copiou"
+                                >
+                                    <ClipboardPaste className="w-3.5 h-3.5 text-slate-600" />
+                                    <span>Colar Print (Ctrl+V)</span>
+                                </Button>
+
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    disabled={processingOcr}
+                                    onClick={() => setShowTextImport(!showTextImport)}
+                                    className="text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 text-xs h-9 gap-1.5 cursor-pointer ml-auto"
+                                >
+                                    <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
+                                    <span>{showTextImport ? 'Fechar Texto' : 'Colar Texto do WhatsApp'}</span>
+                                </Button>
                             </div>
+
+                            {/* Campo de Colar Texto do WhatsApp */}
+                            {showTextImport && (
+                                <div className="pt-2 border-t border-slate-100 space-y-2 animate-in fade-in duration-150">
+                                    <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
+                                        <span>Copie e cole a mensagem do WhatsApp aqui:</span>
+                                        <button
+                                            type="button"
+                                            className="text-[11px] text-emerald-600 hover:underline cursor-pointer"
+                                            onClick={async () => {
+                                                try {
+                                                    const text = await navigator.clipboard.readText()
+                                                    if (text) {
+                                                        setRawWhatsappText(text)
+                                                        handleProcessText(text)
+                                                    }
+                                                } catch (err) {
+                                                    toast.info('Cole com Ctrl+V no campo abaixo.')
+                                                }
+                                            }}
+                                        >
+                                            Colar da Área de Transferência
+                                        </button>
+                                    </label>
+                                    <textarea
+                                        value={rawWhatsappText}
+                                        onChange={(e) => setRawWhatsappText(e.target.value)}
+                                        placeholder="Ex: Olá, meu nome é Maria Silva, preciso de desentupimento na Rua XV de Novembro, 1234, Centro. Meu whats é 41 99999-9999"
+                                        rows={3}
+                                        className="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 resize-none"
+                                    />
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        disabled={processingOcr || !rawWhatsappText.trim()}
+                                        onClick={() => handleProcessText()}
+                                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8 rounded-lg shadow-sm cursor-pointer"
+                                    >
+                                        Extrair Dados com IA
+                                    </Button>
+                                </div>
+                            )}
+
+                            {/* Input oculto sem capture para aceitar câmera, galeria ou arquivos */}
+                            <input
+                                type="file"
+                                ref={ocrInputRef}
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                    const file = e.target.files?.[0]
+                                    if (file) handleProcessImage(file)
+                                }}
+                            />
                         </div>
 
                         <div className="space-y-4">
@@ -803,13 +1025,25 @@ export function Clients() {
                                     <p className="text-xs text-slate-400">Para CNPJ, clique em "Buscar" para preencher automaticamente</p>
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="phone">WhatsApp</Label>
+                                    <div className="flex items-center justify-between">
+                                        <Label htmlFor="phone">WhatsApp (com DDD obrigatório)</Label>
+                                        <span className="text-[11px] text-emerald-600 font-semibold">Ex: (41) 98450-1037</span>
+                                    </div>
                                     <Input
                                         id="phone"
                                         className="h-12 text-lg"
-                                        placeholder="(11) 99999-9999"
+                                        placeholder="(41) 99999-9999"
                                         value={formData.whatsapp}
-                                        onChange={e => setFormData({ ...formData, whatsapp: e.target.value })}
+                                        onChange={e => {
+                                            const formatted = maskPhoneInput(e.target.value)
+                                            setFormData({ ...formData, whatsapp: formatted })
+                                        }}
+                                        onBlur={() => {
+                                            if (formData.whatsapp) {
+                                                const withDdd = normalizePhoneWithDDD(formData.whatsapp)
+                                                setFormData(prev => ({ ...prev, whatsapp: withDdd }))
+                                            }
+                                        }}
                                     />
                                 </div>
                             </div>
@@ -990,6 +1224,65 @@ export function Clients() {
                                     onChange={e => setFormData({ ...formData, email: e.target.value })}
                                 />
                             </div>
+
+                            {/* FOTO DA FACHADA / AVATAR (MOVIDA PARA O FINAL) */}
+                            <div className="space-y-2 pt-2">
+                                <Label className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                                    Foto da Fachada / Local (Opcional)
+                                </Label>
+                                <div className="border-2 border-dashed border-border rounded-xl p-5 flex flex-col items-center justify-center bg-muted/20 relative min-h-[140px] hover:bg-muted/40 transition-colors cursor-pointer">
+                                    {avatarPreview ? (
+                                        <>
+                                            <img src={avatarPreview} alt="Fachada" className="absolute inset-0 w-full h-full object-cover rounded-xl opacity-60" />
+                                            <div className="z-10 flex gap-4">
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        setViewingImage(avatarPreview)
+                                                    }}
+                                                    className="bg-background/80 p-3 rounded-full shadow-sm hover:bg-background transition-colors"
+                                                    title="Visualizar Imagem"
+                                                >
+                                                    <Eye className="h-5 w-5 text-foreground" />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        const fileInput = e.currentTarget.parentElement?.parentElement?.querySelector('input[type="file"]') as HTMLInputElement
+                                                        fileInput?.click()
+                                                    }}
+                                                    className="bg-background/80 p-3 rounded-full shadow-sm hover:bg-background transition-colors"
+                                                    title="Alterar Imagem"
+                                                >
+                                                    <ImageIcon className="h-5 w-5 text-foreground" />
+                                                </button>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div className="flex flex-col items-center text-muted-foreground pointer-events-none">
+                                            <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center mb-1.5">
+                                                <ImageIcon className="h-5 w-5" />
+                                            </div>
+                                            <span className="font-semibold text-xs">ADICIONAR FOTO DA FACHADA / AVATAR</span>
+                                            <span className="text-[11px] text-slate-400">Toque para selecionar da galeria</span>
+                                        </div>
+                                    )}
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-0"
+                                        onChange={(e) => {
+                                            const file = e.target.files?.[0]
+                                            if (file) {
+                                                setAvatarFile(file)
+                                                setAvatarPreview(URL.createObjectURL(file))
+                                            }
+                                        }}
+                                    />
+                                </div>
+                            </div>
                         </div>
 
                         <Button type="submit" className="w-full h-14 text-lg font-semibold mt-4 shadow-md" disabled={isSubmitting}>
@@ -1027,6 +1320,13 @@ export function Clients() {
                 </Button>
             </div>
 
+            <div className="flex items-center justify-between text-xs font-semibold text-slate-500 max-w-2xl mx-auto -mt-5 mb-6 px-2">
+                <span>Total: <strong className="text-slate-800 font-bold">{filteredClients.length}</strong> clientes</span>
+                {filteredClients.length > visibleCount && (
+                    <span className="text-slate-400 font-normal">Mostrando primeiros {displayedClients.length}</span>
+                )}
+            </div>
+
             {
                 loading ? (
                     <div className="text-center py-10">Carregando clientes...</div>
@@ -1036,7 +1336,7 @@ export function Clients() {
                     </div>
                 ) : (
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                        {filteredClients.map((client) => (
+                        {displayedClients.map((client) => (
                             <div key={client.id} className="group relative flex flex-col justify-between rounded-xl border border-border bg-card p-4 shadow-md hover:shadow-lg transition-all active:scale-[0.98] min-w-0">
                                 <div className="flex items-start gap-3 md:gap-4">
                                     <div className="h-12 w-12 md:h-14 md:w-14 rounded-lg bg-muted overflow-hidden flex-shrink-0 border border-border">
@@ -1049,7 +1349,24 @@ export function Clients() {
                                         )}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <h3 className="font-bold text-base md:text-lg truncate">{client.nome_razao}</h3>
+                                        <h3 className="font-bold text-base md:text-lg truncate leading-tight">{client.nome_razao}</h3>
+                                        {(() => {
+                                            const brand = brands.find(b => b.id === client.marca_id) || (brands.length > 0 ? brands[0] : null)
+                                            if (!brand) return null
+                                            return (
+                                                <div className="mt-1 mb-1.5 flex items-center">
+                                                    <span 
+                                                        className="text-[10px] px-2.5 py-0.5 rounded-full font-bold truncate max-w-full inline-block"
+                                                        style={{ 
+                                                            backgroundColor: `${brand.cor_tema || '#10b981'}18`,
+                                                            color: brand.cor_tema || '#10b981'
+                                                        }}
+                                                    >
+                                                        {brand.nome}
+                                                    </span>
+                                                </div>
+                                            )
+                                        })()}
                                         <div className="text-sm text-muted-foreground space-y-1">
                                             <div className="flex items-center gap-2">
                                                 <Phone className="h-4 w-4 shrink-0 text-green-500" />
@@ -1133,6 +1450,21 @@ export function Clients() {
                     </div>
                 )
             }
+
+            {visibleCount < filteredClients.length && (
+                <div className="flex flex-col items-center justify-center gap-2 mt-8 pb-10">
+                    <Button
+                        variant="outline"
+                        className="h-12 px-8 rounded-2xl border-slate-300 bg-white font-bold text-slate-700 shadow-sm hover:bg-slate-50 transition-all hover:scale-105"
+                        onClick={() => setVisibleCount(prev => prev + 60)}
+                    >
+                        Carregar mais clientes ({filteredClients.length - visibleCount} restantes)
+                    </Button>
+                    <p className="text-xs text-slate-400">
+                        Exibindo {displayedClients.length} de {filteredClients.length} clientes cadastrados
+                    </p>
+                </div>
+            )}
         </div >
     )
 }

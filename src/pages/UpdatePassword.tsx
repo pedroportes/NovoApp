@@ -17,48 +17,114 @@ export function UpdatePassword() {
     const navigate = useNavigate()
 
     useEffect(() => {
-        const handleAuth = async () => {
-            const urlParams = new URLSearchParams(window.location.search)
-            const tokenHash = urlParams.get('token_hash')
-            const type = urlParams.get('type')
-            const emailParam = urlParams.get('email')
+        let isMounted = true
 
-            if (emailParam) setEmail(emailParam)
-
-            // Se já tem sessão, ok
+        const checkAuth = async () => {
+            // 1. Se já existe sessão ativa (ex: primeiro login obrigatório após Stripe)
             const { data: { session } } = await supabase.auth.getSession()
             if (session) {
-                console.log('Sessão já existente detectada.')
-                setVerifying(false)
+                if (isMounted) {
+                    if (session.user?.email) setEmail(session.user.email)
+                    setVerifying(false)
+                }
                 return
             }
 
-            // Se não tem sessão, PRECISA ter token_hash
-            if (tokenHash && type === 'recovery') {
-                console.log('Tentando trocar token de recuperação por sessão...', { type })
+            const urlParams = new URLSearchParams(window.location.search)
+            const tokenHash = urlParams.get('token_hash')
+            const type = urlParams.get('type')
+            const code = urlParams.get('code')
+            const emailParam = urlParams.get('email')
 
-                const { data, error } = await supabase.auth.verifyOtp({
-                    token_hash: tokenHash,
-                    type: 'recovery'
-                })
+            if (emailParam && isMounted) setEmail(emailParam)
 
-                if (error) {
-                    console.error('Erro ao verificar token:', error)
-                    setVerifyingError('O link de recuperação parece inválido ou expirou. Solicite um novo.')
-                } else if (!data.session) {
-                    console.error('verifyOtp sucesso mas sem sessão retornada.')
-                    setVerifyingError('Falha ao estabelecer sessão segura. Tente novamente.')
-                } else {
-                    console.log('Sessão de recuperação estabelecida com sucesso!')
-                    toast.success('Acesso verificado via link seguro.')
+            // 2. PKCE flow (?code=...)
+            if (code) {
+                try {
+                    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+                    if (!error && data?.session) {
+                        if (isMounted) {
+                            if (data.session.user?.email) setEmail(data.session.user.email)
+                            setVerifying(false)
+                        }
+                        return
+                    }
+                } catch (e) {
+                    console.error('Erro na troca de código PKCE:', e)
                 }
-            } else {
-                setVerifyingError('Link inválido. Verifique se copiou corretamente.')
             }
-            setVerifying(false)
+
+            // 3. Token hash OTP (?token_hash=...)
+            if (tokenHash && type === 'recovery') {
+                try {
+                    const { data, error } = await supabase.auth.verifyOtp({
+                        token_hash: tokenHash,
+                        type: 'recovery'
+                    })
+                    if (!error && data?.session) {
+                        if (isMounted) {
+                            if (data.session.user?.email) setEmail(data.session.user.email)
+                            setVerifying(false)
+                        }
+                        return
+                    } else if (error) {
+                        if (isMounted) {
+                            setVerifyingError('O link de recuperação parece inválido ou expirou. Solicite um novo.')
+                            setVerifying(false)
+                        }
+                        return
+                    }
+                } catch (e) {
+                    console.error('Erro verifyOtp:', e)
+                }
+            }
+
+            // 4. Se a URL contiver hash (#access_token=...&type=recovery),
+            // a biblioteca Supabase Auth processará e disparará o onAuthStateChange
+            const hash = window.location.hash
+            if (hash && (hash.includes('access_token') || hash.includes('type=recovery'))) {
+                // Aguarda o listener capturar o evento de sessão
+                return
+            }
+
+            // 5. Fallback seguro com tolerância de carregamento assíncrono (2.5s)
+            setTimeout(() => {
+                if (isMounted && verifying) {
+                    supabase.auth.getSession().then(({ data: { session: finalSession } }) => {
+                        if (finalSession) {
+                            if (isMounted) {
+                                if (finalSession.user?.email) setEmail(finalSession.user.email)
+                                setVerifying(false)
+                            }
+                        } else {
+                            if (isMounted) {
+                                setVerifyingError('Link de recuperação não reconhecido ou expirado. Por favor, solicite um novo link.')
+                                setVerifying(false)
+                            }
+                        }
+                    })
+                }
+            }, 2500)
         }
 
-        handleAuth()
+        // Listener oficial para capturar evento PASSWORD_RECOVERY ou SIGNED_IN
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            console.log('UpdatePassword Auth Event:', event, session?.user?.email)
+            if (session && (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION')) {
+                if (isMounted) {
+                    if (session.user?.email) setEmail(session.user.email)
+                    setVerifying(false)
+                    setVerifyingError(null)
+                }
+            }
+        })
+
+        checkAuth()
+
+        return () => {
+            isMounted = false
+            subscription.unsubscribe()
+        }
     }, [])
 
     const handleUpdatePassword = async (e: React.FormEvent) => {
@@ -84,13 +150,31 @@ export function UpdatePassword() {
                 throw new Error('Sessão perdida. Por favor, recarregue a página e tente novamente.')
             }
 
-            const { error } = await supabase.auth.updateUser({
-                password: password
-            })
+            // 1. Tenta atualizar via RPC segura no banco (imune ao bloqueio "Password update requires reauthentication")
+            let updated = false
+            try {
+                const { data: rpcData, error: rpcError } = await (supabase as any).rpc('change_my_password', {
+                    new_password: password
+                })
 
-            if (error) throw error
+                if (!rpcError && rpcData?.success) {
+                    updated = true
+                } else {
+                    console.warn('RPC change_my_password falhou, tentando updateUser:', rpcError || rpcData?.error)
+                }
+            } catch (err) {
+                console.warn('Erro ao chamar RPC change_my_password:', err)
+            }
 
-            // Atualiza flag must_change_password se existir usuário
+            // 2. Fallback para updateUser se o RPC não tiver sido executado
+            if (!updated) {
+                const { error } = await supabase.auth.updateUser({
+                    password: password
+                })
+                if (error) throw error
+            }
+
+            // 3. Atualiza flag must_change_password se existir usuário
             const { data: { user } } = await supabase.auth.getUser()
 
             if (user) {

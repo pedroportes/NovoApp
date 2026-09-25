@@ -28,6 +28,20 @@ export const ocrService = {
     /**
      * Sends the image to Supabase Edge Function 'process-handwriting'
      */
+    processText: async (text: string): Promise<OCRResult> => {
+        try {
+            const { data, error } = await supabase.functions.invoke('process-handwriting', {
+                body: { text }
+            });
+            if (error) throw error;
+            if (data && data.error) throw new Error(data.error);
+            return data as OCRResult;
+        } catch (error) {
+            console.error('OCR Service Error:', error);
+            throw error;
+        }
+    },
+
     processHandwriting: async (file: Blob): Promise<OCRResult> => {
         try {
             const base64 = await ocrService.fileToBase64(file)

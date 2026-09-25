@@ -509,42 +509,33 @@ export type Database = {
             servicos: {
                 Row: {
                     ativo: boolean | null
-                    comissao_fixa: number | null
-                    comissao_percentual: number | null
+                    codigo_tributacao_nacional: string | null
                     created_at: string | null
                     descricao: string | null
                     empresa_id: string | null
                     id: string
                     nome: string
-                    preco_padrao: number
-                    tipo_comissao: string | null
-                    codigo_tributacao_nacional: string | null
+                    valor_padrao: number | null
                 }
                 Insert: {
                     ativo?: boolean | null
-                    comissao_fixa?: number | null
-                    comissao_percentual?: number | null
+                    codigo_tributacao_nacional?: string | null
                     created_at?: string | null
                     descricao?: string | null
                     empresa_id?: string | null
                     id?: string
                     nome: string
-                    preco_padrao: number
-                    tipo_comissao?: string | null
-                    codigo_tributacao_nacional?: string | null
+                    valor_padrao?: number | null
                 }
                 Update: {
                     ativo?: boolean | null
-                    comissao_fixa?: number | null
-                    comissao_percentual?: number | null
+                    codigo_tributacao_nacional?: string | null
                     created_at?: string | null
                     descricao?: string | null
                     empresa_id?: string | null
                     id?: string
                     nome?: string
-                    preco_padrao?: number
-                    tipo_comissao?: string | null
-                    codigo_tributacao_nacional?: string | null
+                    valor_padrao?: number | null
                 }
                 Relationships: [
                     {
