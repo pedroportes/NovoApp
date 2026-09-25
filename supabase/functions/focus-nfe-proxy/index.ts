@@ -44,20 +44,24 @@ serve(async (req) => {
             responseData = responseText
         }
 
+        if (!response.ok) {
+            const errMsg = (responseData && typeof responseData === 'object')
+                ? (responseData.mensagem || responseData.message || responseData.erro || JSON.stringify(responseData).slice(0, 300))
+                : String(responseData).slice(0, 300)
+            console.log(`[focus-nfe-proxy] ${method} ${url} -> status ${response.status} | erro: ${errMsg}`)
+        }
+
         return new Response(JSON.stringify({
             ok: response.ok,
             status: response.status,
-            data: responseData,
-            debug: {
-                authSent: `Basic ${auth}`,
-                urlSent: url
-            }
+            data: responseData
         }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200,
         })
 
     } catch (error) {
+        console.log(`[focus-nfe-proxy] ERROR: ${error.message}`)
         return new Response(JSON.stringify({
             ok: false,
             status: 500,
