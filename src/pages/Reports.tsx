@@ -663,7 +663,7 @@ export function Reports() {
     // 2. FISCAL & CONTÁBIL (NFS-e)
     // ==========================================
     const fiscalData = useMemo(() => {
-        const nfseOrders = orders.filter(o => o.nfe_numero || o.nfe_status)
+        const nfseOrders = orders.filter(o => o.nfe_numero || (o.nfe_status && !['nao_emitida', 'pendente'].includes(o.nfe_status.toLowerCase())))
         const autorizadas = nfseOrders.filter(o => 
             ['autorizado', 'autorizada'].includes(o.nfe_status?.toLowerCase() || '')
         )
