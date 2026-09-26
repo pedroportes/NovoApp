@@ -452,6 +452,7 @@ export const FocusNFeService = {
                 cep_tomador: cleanDigits(cliente?.cep) || undefined,
                 codigo_municipio_tomador: Number(codigoMunicipioTomador),
                 email_tomador: (cliente?.email || (os as any).cliente_email || '').trim() || undefined,
+                email_destinatario: (cliente?.email || (os as any).cliente_email || '').trim() || undefined,
                 telefone_tomador: cleanDigits(cliente?.whatsapp) || '',
 
                 // Serviço
