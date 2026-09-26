@@ -131,16 +131,34 @@ const toolsDefinition = [
 
 export const aiService = {
     async sendMessage(userMessage: string, previousHistory: any[], context: { empresaId: string, userName: string, role: string }) {
-        let API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-        if (!API_KEY && context.empresaId) {
+        let API_KEY = "";
+
+        // 1. Prioridade Máxima: Chave atualizada gravada no banco de dados (Supabase)
+        if (context.empresaId) {
             try {
-                const { data } = await supabase.from('empresas').select('configs').eq('id', context.empresaId).single();
-                if (data?.configs && (data.configs as any).gemini_api_key) {
-                    API_KEY = (data.configs as any).gemini_api_key;
+                const { data: rpcKey } = await supabase.rpc('get_gemini_api_key', { p_empresa_id: context.empresaId });
+                if (rpcKey) {
+                    API_KEY = rpcKey;
                 }
             } catch (e) {
-                // ignore
+                // fallback
             }
+
+            if (!API_KEY) {
+                try {
+                    const { data } = await supabase.from('empresas').select('configs').eq('id', context.empresaId).single();
+                    if (data?.configs && (data.configs as any).gemini_api_key) {
+                        API_KEY = (data.configs as any).gemini_api_key;
+                    }
+                } catch (e) {
+                    // ignore
+                }
+            }
+        }
+
+        // 2. Fallback caso não esteja no banco
+        if (!API_KEY) {
+            API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
         }
 
         if (!API_KEY) {
