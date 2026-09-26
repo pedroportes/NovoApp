@@ -4,8 +4,8 @@
     "description": "Sistema de gestão inteligente para desentupidoras.",
     "start_url": "/",
     "display": "standalone",
-    "background_color": "#9333ea",
-    "theme_color": "#9333ea",
+    "background_color": "#10b981",
+    "theme_color": "#10b981",
     "orientation": "portrait",
     "scope": "/",
     "icons": [

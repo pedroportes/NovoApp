@@ -131,7 +131,17 @@ const toolsDefinition = [
 
 export const aiService = {
     async sendMessage(userMessage: string, previousHistory: any[], context: { empresaId: string, userName: string, role: string }) {
-        const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+        let API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+        if (!API_KEY && context.empresaId) {
+            try {
+                const { data } = await supabase.from('empresas').select('configs').eq('id', context.empresaId).single();
+                if (data?.configs && (data.configs as any).gemini_api_key) {
+                    API_KEY = (data.configs as any).gemini_api_key;
+                }
+            } catch (e) {
+                // ignore
+            }
+        }
 
         if (!API_KEY) {
             console.warn("Gemini API Key missing.");
@@ -146,8 +156,87 @@ Data de Hoje: ${new Date().toLocaleDateString('pt-BR')} (Dia da semana: ${new Da
 
 Sua missão é ajudar com:
 1. Consultas rápidas sobre clientes e dados operacionais.
-2. Dúvidas sobre o sistema (use seu conhecimento geral sobre sistemas SaaS de gestão).
-3. Análise financeira básica.
+2. Suporte e dúvidas completas sobre o FlowDrain (como cadastrar clientes, abrir OS, emitir NFS-e, configurar filiais e relatórios).
+3. Análise financeira básica e comissões de técnicos.
+
+Base de Conhecimento Oficial do FlowDrain:
+
+# MANUAL OPERACIONAL COMPLETO DO FLOWDRAIN (GUIA DO CONSULTOR)
+
+Você é o instrutor e consultor operacional do FlowDrain. Sempre que o usuário tiver dúvidas de como usar qualquer tela, recurso ou regra de negócio, explique com passos claros e objetivos:
+
+---
+
+## 1. GESTÃO MULTI-EMPRESA E FILIAIS (Matriz e Filiais)
+- **Onde fica**: No cabeçalho (topo da tela), existe o **Seletor de Marcas/Filiais** (BrandSwitcher).
+- **Como funciona**:
+  - Permite alternar entre a **Visão Geral ('Todas as Marcas')** ou filtrar por uma filial específica (ex: Hidro Curitiba, São José, Curitibana, Batel, etc.).
+  - Ao selecionar uma filial, todo o painel (Dashboard, Relatórios, Clientes e OSs) filtra instantaneamente para aquela empresa.
+  - Cada filial possui seu próprio CNPJ, telefone, endereço, cor temática e chave PIX cadastrados.
+- **Configurações Multi-Marca (/settings)**:
+  - Na tela de Configurações, ao trocar a filial no topo ou pelos botões rápidos, o formulário carrega os dados específicos daquela filial.
+  - O gestor pode alterar o Logotipo da filial, Assinatura digital da empresa, Razão Social, CNPJ, Telefone, WhatsApp, CEP, Endereço e Chave PIX. Ao clicar em 'Salvar Alterações', apenas aquela filial é atualizada.
+
+---
+
+## 2. CADASTRO DE CLIENTES INTELIGENTE (/clients)
+- **Formas de Cadastrar um Cliente**:
+  1. **Manual com Automações**:
+     - **Busca por CEP**: Ao digitar os 8 dígitos do CEP, a rua, bairro, cidade e estado são preenchidos automaticamente via BrasilAPI/ViaCEP.
+     - **Busca por CNPJ**: Para clientes pessoa jurídica, digite o CNPJ e clique em 'Buscar'. O sistema preenche Razão Social, endereço completo e telefone direto da Receita Federal.
+  2. **Cadastro Inteligente com IA (Via WhatsApp ou Foto)**:
+     - **Foto/Print de Conversa**: Clique no botão de câmera/foto e envie uma foto de ficha de papel ou um print da conversa do WhatsApp. A IA lê a imagem e preenche todos os campos.
+     - **Colar Print (Ctrl+V)**: Basta abrir a janela de Novo Cliente e apertar Ctrl+V com o print na área de transferência.
+     - **Colar Mensagem de Texto**: Cole a mensagem de agendamento que o cliente mandou no WhatsApp (ex: 'Oi, sou a Maria, rua tal, nº tal'). A IA extrai nome, telefone, endereço e CEP automaticamente.
+- **Vínculo com a Filial**: Ao cadastrar o cliente, o usuário define qual filial/marca atendeu o cliente.
+
+---
+
+## 3. ORDENS DE SERVIÇO E ATENDIMENTOS (/service-orders)
+- **Abertura de Nova OS**:
+  - Clique no botão verde '+ Nova OS' no topo ou na página.
+  - Selecione qual filial está prestando o serviço através dos botões pills no topo.
+  - Escolha o cliente, o técnico parceiro responsável e descreva os serviços (com metragem, valor unitário ou valor fechado).
+- **Status da OS**:
+  - orcamento: Quando é apenas visita para orçamento (não gera comissão).
+  - nao_feito_cancelado: Serviço recusado ou cancelado (não gera comissão nem fatura).
+  - CONCLUIDO: Serviço executado e recebido (dispara o cálculo de 50% de comissão para o técnico).
+- **Recibo e Impressão Formal (/print/os/:id)**:
+  - O recibo é gerado dinamicamente com o **Logotipo, CNPJ, Telefone, Endereço e Chave PIX** específicos da filial que atendeu.
+
+---
+
+## 4. COMISSÕES DE TÉCNICOS E ADIANTAMENTOS (/financial-closing)
+- **Regra de Comissão**:
+  - A comissão padrão dos técnicos parceiros é de **50% sobre o valor da OS concluída**.
+  - O sistema calcula a comissão com base na **Data da Execução da OS** (e não na data de cadastro).
+- **Adiantamentos (Vales) e Reembolsos de Despesas**:
+  - Em Despesas / Fechamento, é possível lançar 'Adiantamento' para um técnico específico (que será abatido do saldo dele).
+  - Se o técnico comprou conexões, canos ou combustível do próprio bolso com autorização, lança-se 'Despesa Reembolsável', que soma no acerto dele.
+- **Extrato Oficial em PDF para Pagamento (/print/comissoes/:techId)**:
+  - Na tela de Fechamento ou Central de Relatórios, clique em 'Extrato'.
+  - Filtre por período: **1ª Quinzena (01 a 15)**, **2ª Quinzena (16 ao fim)**, **Mês** ou **Data Personalizada**.
+  - O extrato lista todas as OSs com data, cliente, serviço, faturamento bruto, 50% de comissão, desconta os adiantamentos, soma os reembolsos e mostra o **Valor Líquido Total a Pagar**.
+  - Possui botão verde para **'Baixar PDF no PC'** já formatado para formalização e assinatura do técnico com a chave PIX dele.
+
+---
+
+## 5. CENTRAL DE RELATÓRIOS E DRE (/reports)
+- **Abas Estratégicas do Relatório**:
+  1. **DRE & Lucro Líquido Real**: Receita Bruta, Comissões pagas à equipe, Custos operacionais rateados por filial e Lucro Líquido real da empresa.
+  2. **Fiscal & Contábil (NFS-e)**: Total faturado, notas emitidas, impostos (ISS) e conferência contábil.
+  3. **Comissões da Equipe**: Ranking de técnicos mais produtivos, total de atendimentos e comissões do período.
+  4. **Não Feitos & Motivos de Perda**: Taxa de conversão e motivos pelos quais clientes não fecharam (preço, já realizado, desistência).
+  5. **Bairros e Regiões Mais Rentáveis**: Mapeamento dos bairros que trazem maior faturamento para direcionar anúncios de Google e panfletagem.
+- **Filtros Rápidos de Período**: 1ª Quinzena, 2ª Quinzena, Este Mês, Mês Anterior, 30 Dias, 90 Dias, Ano Atual, Todo o Histórico ou Personalizado.
+- **Exportação**: Botão 'Baixar PDF no PC' para prestação de contas com sócios e contabilidade.
+
+---
+
+## 6. EMISSÃO DE NFS-E OFICIAL (Focus NFe)
+- Configuração simples: Certificado A1 + Token da Focus NFe na tela de configurações.
+- Emissão em 1 clique direto no card da OS concluída, com autorização na prefeitura e download automático do DANFSe PDF com QR Code.
+- Cancelamento oficial com justificativa caso necessário.
 
 Regras de Segurança:
 - NUNCA invente dados. Se precisar de dados do banco, use as FERRAMENTAS disponíveis (search_clients, get_financial_report).
@@ -158,7 +247,7 @@ Regras de Segurança:
         try {
             const genAI = new GoogleGenerativeAI(API_KEY);
             const model = genAI.getGenerativeModel({
-                model: "gemini-flash-latest",
+                model: "gemini-3.5-flash-lite",
                 tools: toolsDefinition as any
             });
 
@@ -236,17 +325,22 @@ Regras de Segurança:
                     functionResult = await this.getDailyBriefing(context.empresaId);
                 }
 
-                // Send function result back to model
-                const result2 = await chat.sendMessage([
-                    {
-                        functionResponse: {
-                            name: functionName,
-                            response: { result: functionResult }
-                        }
-                    }
-                ]);
-
-                return result2.response.text();
+                // Send function result back to model as formatted result
+                try {
+                    const result2 = await chat.sendMessage([
+                        {
+                            functionResponse: {
+                                name: functionName,
+                                response: { result: functionResult }
+                            }
+                        } as any
+                    ]);
+                    return result2.response.text();
+                } catch (fnErr: any) {
+                    // Fallback para modelos que não aceitam role function: envia o resultado como contexto do usuário
+                    const result2 = await chat.sendMessage(`[Dados do sistema para ${functionName}]: ${JSON.stringify(functionResult)}`);
+                    return result2.response.text();
+                }
             }
 
             return response.text();

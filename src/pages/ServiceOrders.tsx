@@ -588,15 +588,16 @@ export function ServiceOrders() {
                         type="button"
                         onClick={handleManualSync}
                         disabled={syncing}
-                        className="gap-2 rounded-xl h-11 px-4 border-slate-200 text-slate-700 hover:bg-slate-50 transition-all font-semibold"
+                        className="flex-1 md:flex-initial gap-2 rounded-xl h-11 px-3 sm:px-4 border-slate-200 text-slate-700 hover:bg-slate-50 transition-all font-semibold text-xs sm:text-sm whitespace-nowrap shrink-0"
                         title="Buscar todas as ordens de serviço atualizadas do banco"
                     >
                         <RefreshCw className={`h-4 w-4 text-emerald-600 ${syncing ? 'animate-spin' : ''}`} />
                         {syncing ? 'Sincronizando...' : 'Atualizar Dados'}
                     </Button>
-                    <Button onClick={handleNewOSClick} className="w-full md:w-auto gap-2 bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-600/20 text-white rounded-xl h-11 px-5 font-bold transition-all">
-                        <Plus className="h-5 w-5" />
-                        Nova Ordem de Serviço
+                    <Button onClick={handleNewOSClick} className="flex-1 md:flex-initial gap-1.5 sm:gap-2 bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-600/20 text-white rounded-xl h-11 px-3 sm:px-5 font-bold transition-all text-xs sm:text-sm whitespace-nowrap shrink-0">
+                        <Plus className="h-4 sm:h-5 w-4 sm:w-5 shrink-0" />
+                        <span className="hidden sm:inline">Nova Ordem de Serviço</span>
+                        <span className="sm:hidden">Nova OS</span>
                     </Button>
                 </div>
             </div>
