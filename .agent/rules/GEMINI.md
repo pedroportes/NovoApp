@@ -8,6 +8,16 @@ trigger: always_on
 
 ---
 
+## 📌 PROJETO FLOWDRAIN — LEIA PRIMEIRO (regra do Pedro)
+
+- Antes de qualquer tarefa, **leia o `AGENTS.md` da raiz do projeto**, principalmente a **seção 4G** (estado final da nota fiscal Focus + Contora, regras que não podem ser quebradas e pendências).
+- Responder sempre em **português do Brasil**.
+- **Nunca** usar `npx supabase db push`, **nunca** gravar tokens em arquivos ou commits (repositório público), **nunca** colocar `email_destinatario` no payload da Focus.
+- **Nunca** fazer push/deploy sem autorização explícita do Pedro.
+- Se outro agente (ex.: Claude Code) estiver trabalhando na mesma parte (nota fiscal/Contora), **parar e avisar o Pedro**: um agente por vez.
+
+---
+
 ## CRITICAL: AGENT & SKILL PROTOCOL (START HERE)
 
 > **MANDATORY:** You MUST read the appropriate agent file and its skills BEFORE performing any implementation. This is the highest priority rule.

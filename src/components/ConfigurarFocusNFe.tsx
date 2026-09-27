@@ -10,9 +10,11 @@ import { FocusNFeService } from '@/services/focusNFeService';
 
 interface ConfigurarFocusNFeProps {
     empresaId: string;
+    /** Esconde o "Emissão Ativada": quem decide o emissor em uso é a tela Nota fiscal */
+    esconderAtivacao?: boolean;
 }
 
-export function ConfigurarFocusNFe({ empresaId }: ConfigurarFocusNFeProps) {
+export function ConfigurarFocusNFe({ empresaId, esconderAtivacao = false }: ConfigurarFocusNFeProps) {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [testing, setTesting] = useState(false);
@@ -166,6 +168,7 @@ export function ConfigurarFocusNFe({ empresaId }: ConfigurarFocusNFeProps) {
                         Emissão automatizada de NFS-e integrada ao Padrão Nacional (Curitiba, SJP e Mandirituba).
                     </p>
                 </div>
+                {!esconderAtivacao && (
                 <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-900/50 p-2 px-4 rounded-xl border">
                     <Label htmlFor="habilitar-nfe" className="cursor-pointer font-semibold text-sm">
                         {formData.focus_nfe_habilitado ? 'Emissão Ativada' : 'Emissão Pausada'}
@@ -176,6 +179,7 @@ export function ConfigurarFocusNFe({ empresaId }: ConfigurarFocusNFeProps) {
                         onCheckedChange={(checked) => setFormData(prev => ({ ...prev, focus_nfe_habilitado: checked }))}
                     />
                 </div>
+                )}
             </div>
 
             {/* Live Certificate & Status Card */}
@@ -209,7 +213,7 @@ export function ConfigurarFocusNFe({ empresaId }: ConfigurarFocusNFeProps) {
             )}
 
             {/* Form */}
-            <div className={`space-y-6 ${!formData.focus_nfe_habilitado ? 'opacity-50 pointer-events-none' : ''}`}>
+            <div className={`space-y-6 ${!esconderAtivacao && !formData.focus_nfe_habilitado ? 'opacity-50 pointer-events-none' : ''}`}>
                 <div className="grid gap-6 md:grid-cols-2">
                     {/* Left Column */}
                     <div className="space-y-4">

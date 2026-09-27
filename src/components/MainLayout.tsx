@@ -63,7 +63,7 @@ export function MainLayout() {
             case '/settings': return 'Configurações';
             case '/tecnico/dashboard': return 'Painel do Técnico';
             case '/super-admin': return 'Super Admin';
-            default: return 'FlowDrain';
+            default: return location.pathname.startsWith('/settings/') ? 'Configurações' : 'FlowDrain';
         }
     }
 
@@ -104,12 +104,12 @@ export function MainLayout() {
                                 to={item.path}
                                 className={cn(
                                     "flex items-center gap-4 px-6 py-4 rounded-2xl transition-all duration-300 group",
-                                    location.pathname === item.path
+                                    (location.pathname === item.path || (item.path === '/settings' && location.pathname.startsWith('/settings/')))
                                         ? "bg-slate-900 text-white shadow-lg shadow-slate-900/20 translate-x-1"
                                         : "hover:bg-gray-50 text-gray-500 hover:text-slate-900"
                                 )}
                             >
-                                <item.icon className={cn("h-5 w-5 transition-transform group-hover:scale-110", location.pathname === item.path ? "text-emerald-400" : "")} />
+                                <item.icon className={cn("h-5 w-5 transition-transform group-hover:scale-110", (location.pathname === item.path || (item.path === '/settings' && location.pathname.startsWith('/settings/'))) ? "text-emerald-400" : "")} />
                                 <span className="font-medium">{item.label}</span>
                             </Link>
                         ))}
@@ -195,7 +195,7 @@ export function MainLayout() {
                                             onClick={() => setSidebarOpen(false)}
                                             className={cn(
                                                 "flex items-center gap-4 px-5 py-4 rounded-2xl text-base font-medium transition-all",
-                                                location.pathname === item.path
+                                                (location.pathname === item.path || (item.path === '/settings' && location.pathname.startsWith('/settings/')))
                                                     ? "bg-slate-900 text-white shadow-lg"
                                                     : "text-slate-500 hover:bg-slate-100"
                                             )}
@@ -269,10 +269,10 @@ export function MainLayout() {
                                 to={item.path}
                                 className={cn(
                                     "flex flex-col items-center gap-1 transition-colors p-2",
-                                    location.pathname === item.path ? "text-emerald-600" : "text-gray-400"
+                                    (location.pathname === item.path || (item.path === '/settings' && location.pathname.startsWith('/settings/'))) ? "text-emerald-600" : "text-gray-400"
                                 )}
                             >
-                                <item.icon className="h-6 w-6" strokeWidth={location.pathname === item.path ? 2.5 : 2} />
+                                <item.icon className="h-6 w-6" strokeWidth={(location.pathname === item.path || (item.path === '/settings' && location.pathname.startsWith('/settings/'))) ? 2.5 : 2} />
                             </Link>
                         ))}
 
@@ -295,10 +295,10 @@ export function MainLayout() {
                                 to={item.path}
                                 className={cn(
                                     "flex flex-col items-center gap-1 transition-colors p-2",
-                                    location.pathname === item.path ? "text-emerald-600" : "text-gray-400"
+                                    (location.pathname === item.path || (item.path === '/settings' && location.pathname.startsWith('/settings/'))) ? "text-emerald-600" : "text-gray-400"
                                 )}
                             >
-                                <item.icon className="h-6 w-6" strokeWidth={location.pathname === item.path ? 2.5 : 2} />
+                                <item.icon className="h-6 w-6" strokeWidth={(location.pathname === item.path || (item.path === '/settings' && location.pathname.startsWith('/settings/'))) ? 2.5 : 2} />
                             </Link>
                         ))}
                     </nav>

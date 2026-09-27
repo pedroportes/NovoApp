@@ -191,3 +191,139 @@ Todos configurados com **50% de comissão padrão** em `usuarios` e cadastrados 
    - Atualizados os favicons e ícones PWA do FlowDrain (`logo-flowdrain.jpg` e `favicon.ico`) substituindo ícones genéricos do Vite.
 
 
+
+---
+
+## 4E. Sessão de 27/09/2026 — Integração e Validação da Fiscal Contora (NFS-e)
+
+1. **Laboratório Isolado de Testes (`ContoraLab.tsx` e rota `/teste-contora`):**
+   - **Regra de ouro mantida:** Nenhum arquivo de produção (`src/pages/ServiceOrders.tsx` e `src/services/focusNFeService.ts`) foi alterado. O emissor oficial em produção continua sendo 100% a **Focus NFe**.
+   - Criada a página de laboratório isolada `src/pages/admin/ContoraLab.tsx` e vinculada em `src/App.tsx` para testar toda a API da Fiscal Contora sem nenhum risco para a operação ativa.
+
+2. **Empresa e Certificado Digital A1 na Contora:**
+   - **Empresa Contora ID:** `ddba2acf-d7ae-42bc-8ed1-380939eebdc4`.
+   - **Razão Social:** `GRACINHA DO CARMO GONCALVES LTDA` (Matriz Mandirituba).
+   - **CNPJ:** `38.057.542/0001-73`.
+   - **Inscrição Municipal:** `892830`.
+   - **Município / IBGE:** Mandirituba / PR (`4114302`).
+   - **Parâmetros Fiscais:** Código de Serviço `071001`, NBS `124021000` (9 dígitos), Alíquota ISS `2.0%`, Optante Simples Nacional.
+   - **Certificado Digital A1:** Arquivo `GRACINHA_DO_CARMO_GONCALVES_LTDA_38057542000173... .pfx` enviado e validado com sucesso (ID `c3423ed6-80e9-41d9-bf31-4d6652697520`, validade até **01/09/2027**).
+
+3. **Autenticação e Chaves de API na Contora:**
+   - A Contora exige correspondência estrita entre o ambiente da empresa e o ambiente da chave (erro *"O ambiente da empresa deve ser igual ao ambiente da chave selecionada"*).
+   - Criada chave de produção: `Errp Principal Produção` (Token: `[token removido — fica só no painel da Contora e no servidor; nunca versionar]`).
+   - Empresa configurada no painel com `default_environment: producao`.
+
+4. **Resultados dos Testes de Emissão:**
+   - **Ambiente de Homologação:** Rejeitado pela Receita Federal com `E0037: O código do município emissor informado na DPS é inexistente no cadastro de convênio municipal do sistema nacional`. Mandirituba **não possui convênio ativo no ambiente de testes/homologação federal** (apenas em Produção, exatamente como ocorreu no Focus NFe).
+   - **Ambiente de Produção:**
+     - O primeiro despacho com `rps_number: 1` retornou `E999: Erro não catalogado` da prefeitura (Betha Sistemas), porque a empresa já emitiu centenas de notas no município (as últimas notas autorizadas na Focus foram nº 576 a 580) e a prefeitura rejeita duplicidade/recomeço da sequência 1.
+     - Montado rascunho com a sequência correta: **RPS nº 581, Série 1** (Draft ID `bd87225f-2065-4184-a924-9e981949a5ea`).
+     - Atualizado `ContoraLab.tsx` com campos dinâmicos no Card 4 para definir o `Nº RPS (Sequência)` e `Série` livremente.
+   - **Status Fiscal Real:** Nenhuma NFS-e foi gerada na prefeitura (`nfse_number: null`), com **efeito fiscal ZERO**. Apenas foi consumido 1 evento de franquia de despacho no painel da Contora.
+
+5. **Regras e Campos Esclarecidos com Pedro:**
+   - **`cTribMun padrão`:** Deve ficar **EM BRANCO / VAZIO**. Não se aplica a Mandirituba (exigido apenas por municípios com tabela própria complementar, como RJ).
+   - **`CSRT (Paraná)` e `CSC ID / CSC Token`:** **Não se aplicam a desentupidoras**. CSRT é da SEFAZ para notas de mercadorias (NF-e mod. 55), e CSC é para cupom de balcão (NFC-e mod. 65). Desentupidora emite exclusivamente NFS-e municipal (ISS).
+
+
+---
+
+## 4F. Sessão de 27/09/2026 (noite, Claude Code) — Contora FUNCIONANDO, Configurações em subpáginas, contas duplicadas
+
+> Tudo local em `C:\Users\pedro\NovoApp`, **sem commit, sem push, sem deploy na Vercel**. No Supabase de produção foram criadas só 2 tabelas novas e 1 Edge Function (ver item 3). Backups dos arquivos alterados em `NovoApp/backup_settings_20260927/`.
+
+### 1. Fiscal Contora — o erro foi resolvido (NFS-e AUTORIZADA)
+- **NFS-e nº 1 (RPS 589) autorizada** pela Contora em 27/09 18:18 (Matriz 0001-73, R$ 1,00) e **cancelada** às 18:33 (nota de teste, Ambiente Nacional OK).
+- **Configuração que funciona:** regime **Simples Nacional (ME/EPP)** + **inscrição municipal NÃO enviada** (`nfse_municipal_registration_in_cnc_producao = false`) + **% total de tributos do Simples = 2** (`total_tax_rate_sn`) em cada nota.
+- Significado dos erros encontrados: **E0037** = homologação sem convênio em Mandirituba (usar produção); **E0120** = não mandar a IM pela Contora; **E0160** = situação no Simples divergente (a Receita confirmou que a empresa É optante); **E999** (para ME/EPP) = faltava o `total_tax_rate_sn`.
+- O campo `nfse_simples_nacional_option` citado na documentação da Contora **não existe na API** (é ignorado). A situação no Simples vem do `tax_regime` da empresa.
+- A numeração pela Contora (Sistema Nacional, chave `41143022…`) é **separada** da Focus (sistema da prefeitura, chave `41143021…`, notas 576–581).
+- **Não clicar em "Salvar Alterações" no cadastro da empresa no console da Contora**: aquilo religou a IM uma vez.
+- ⚠️ **Focus declara "Não optante" nas notas**: a tela da Focus grava regime "1" e o serviço repassa como `codigo_opcao_simples_nacional = 1`, que no padrão nacional é Não optante (ME/EPP = 3). A Receita confirmou que a empresa é optante. **Levar ao contador.** Não foi alterado (a Focus continua como estava).
+- ⚠️ A Focus tem o CNPJ do prestador **fixo no código** (`38057542000173`): não serve para outros assinantes sem correção.
+- Chamado **#88** aberto no suporte da Contora (pedido do retorno do E999 e da exclusão da empresa Xaxim `eac0aed9…`, cadastrada por engano, hoje Inativa).
+- Laboratório `/teste-contora` (`src/pages/admin/ContoraLab.tsx`): fixo na Matriz, com quadro de erro, acompanhamento do status, cancelamento, download de PDF/XML e campo "% do Simples".
+
+### 2. Configurações virou menu com subpáginas
+- `/settings` = menu com 5 itens → `/settings/empresa`, `/settings/nota-fiscal`, `/settings/tecnicos`, `/settings/conta`, `/settings/aparencia` (rota `/settings/:secao` em `App.tsx`). Técnico continua vendo só "Meu Perfil". Menu lateral destaca "Configurações" nas subpáginas (`MainLayout.tsx`).
+- Lógica de carregar/salvar de `Settings.tsx` **não mudou**, só o que aparece em cada subpágina.
+
+### 3. Nota fiscal com 2 emissores (Focus ou Contora) — ETAPA 1 pronta
+- Subpágina **Nota fiscal** (`src/components/nfse/ConfiguracaoNotaFiscal.tsx`): botões **Focus NFe / Fiscal Contora**. Focus mostra a tela antiga sem mudança. Contora mostra só **token, ambiente, % do Simples e Testar conexão** (empresa, certificado, IM e códigos ficam no painel da Contora).
+- Banco (produção): tabelas **`empresa_nfse_config`** (emissor ativo, ambiente, CNPJ, % do Simples; RLS por empresa, técnico não altera) e **`empresa_nfse_segredos`** (token; **sem acesso pelo navegador**). Migração `supabase/migrations/20260927_empresa_nfse_config.sql`.
+- ⚠️ **O histórico de migrações local e remoto está desencontrado: NÃO usar `npx supabase db push`** (aplicaria migrações antigas). Aplicar arquivo por arquivo com `npx supabase db query --linked --file <arquivo>`.
+- Edge Function **`nfse-contora`** publicada (ações `carregar`, `salvar_token`, `testar`). O token é conferido na Contora e **nunca volta para o navegador**. Vercel não é necessária para tokens de assinante.
+- A empresa do Pedro está com emissor **Fiscal Contora**, token salvo e "Pronto para emitir". **Falta preencher 2,00 no % do Simples e Salvar.**
+- **ETAPA 2 (pendente): o botão de emitir/cancelar/PDF nas OS ainda usa SEMPRE a Focus**, mesmo com a Contora escolhida. Fazer o botão usar o emissor ativo.
+- A FlowDrain IA (`aiService.ts`) ganhou o manual completo: menu de Configurações novo, passo a passo do cadastro na Contora e no FlowDrain, o que ignorar (CSRT, CSC, Responsável técnico) e tabela de erros.
+
+### 4. Nome do cliente
+- O campo certo do nome do cliente é **`clientes.nome_razao`** (usado pelo app todo; os outros assinantes só têm esse). `clientes.nome` é antigo, só preenchido na importação do Pedro.
+- As OS guardam uma cópia do nome (`ordens_servico.cliente_nome`). Corrigido: os cards de OS mostram o nome atual do cadastro, e editar o cliente atualiza a cópia nas OS dele. O modal de cancelar NFS-e passou a usar `nome_razao`.
+- Na NFS-e o tomador sai como está no `nome_razao` (ex.: "Andreia (Ambipar)"). Avaliar no futuro usar só a parte antes do parêntese.
+
+### 5. Duas contas "Desentupidora Hidro Curitiba" no banco — SÓ REGISTRADO, nada alterado
+- **Conta verdadeira (usada no dia a dia): `58f0512e-8a00-4c31-ba32-f67f9b9ddcbe`**: login pedrosportes@gmail.com, 18 usuários, 3.215 clientes, **1.932 OS**, 7 marcas (as do item 2 deste arquivo).
+- **Conta de teste/cópia: `aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee`**: criada em 01/01/2026, logins de teste (pedrosportes2@gmail.com, pedrotecnico-de-teste@gmail.com, desentupidoracuritibana67w@gmail.com), 3.169 clientes (cópia antiga), **0 OS**, 7 marcas próprias com os mesmos nomes.
+- No uso normal o Pedro **não vê** a conta de teste. Como super admin, o banco permite ler tudo, mas as telas filtram pela conta do usuário.
+- ⚠️ Se um dia for excluir a cópia pelo Super Admin, **conferir o ID `aaaaaaaa…`**, porque as duas têm o mesmo nome. Fazer backup antes.
+
+### 6. Segurança (pendente)
+- O token de produção da Contora antigo (termina em `…PUqq`) ficou exposto nestes arquivos e no laboratório. **Criar um token novo na Contora, trocar na tela Nota fiscal ("Trocar") e apagar o antigo.** Estes arquivos vão para o GitHub público: não gravar tokens aqui.
+- ⚠️ **27/09 à noite — erro na emissão pela Focus:** o commit `937c4d7c` (26/09 16:56, "adicionar email_destinatario") fez a Focus incluir o bloco `dest` no XML, e a prefeitura (Betha/Mandirituba) rejeitou com `Element dest: This element is not expected. Expected is finNFSe`. **A linha foi removida localmente** (volta ao código que emitiu a nota 581). O commit com a linha **está no GitHub (origin/master)**: a produção pode estar com o erro até subir a correção. Para mandar a nota por e-mail, usar outro caminho (ex.: botão Enviar/WhatsApp ou o e-mail do tomador), nunca `email_destinatario`.
+- ✅ **27/09 ~19:50 — ETAPA 2 feita (local + função publicada):** o botão "Emitir NFS-e" das OS usa o emissor ativo. Com a Contora, a Edge Function `nfse-contora` (ações `emitir`, `status`, `cancelar`) cria e despacha a nota, grava o resultado na OS (`nfe_ref = "contora:<id>"`, `nfe_tipo = contora`, `nfe_chave`, `nfe_numero`, erro em `nfe_mensagem_erro`) e guarda o PDF no bucket público `comprovantes/nfse/<empresa>/<chave>.pdf` (os botões PDF e WhatsApp funcionam igual à Focus). Os códigos do serviço vêm do cadastro da empresa na Contora; o % do Simples vem de `empresa_nfse_config`. Notas antigas da Focus continuam pela Focus. Arquivos: `src/services/contoraNFSeService.ts` e `ServiceOrders.tsx`. Também foi cancelada a NFS-e nº 2 da Contora (emitida por outro agente, 19:43).
+
+
+---
+
+## 4G. ESTADO FINAL DE 27/09/2026 (20h) — NFS-e com 2 emissores FUNCIONANDO — LEIA ANTES DE MEXER EM NOTA FISCAL
+
+> Resumo consolidado para qualquer agente (Claude Code, Antigravity/Gemini). As seções 4E e 4F contam o histórico; **esta é a versão que vale**.
+
+### ✅ O que funciona hoje (testado em produção)
+- **Emissão pela Fiscal Contora direto pelo card da OS**: NFS-e **nº 3** autorizada às 20:00 de 27/09 (OS `#1ee5cdb3`, cliente "Pedrinho teste", R$ 1,99, DANFSe com "Optante – ME/EPP", Ambiente Gerador: **Nacional**).
+- **Emissão pela Focus NFe** (nota nº 584 autorizada às 19:36), depois de remover a linha `email_destinatario` (ver "Regras").
+- **Cancelamento pela Contora** (notas nº 1 e nº 2 canceladas pelo Ambiente Nacional).
+- **Cancelamento pela Focus: FALHANDO** ("erro_cancelamento – Não processado") nas notas **581 e 584** (cliente de teste "PEDRO Teste de NF", ainda **autorizadas**). Cancelar pelo portal da prefeitura (Betha/e-Nota Mandirituba) ou abrir chamado na Focus.
+
+### 🧭 Como o sistema escolhe o emissor
+- Tela **Configurações → Nota fiscal** (`/settings/nota-fiscal`, componente `src/components/nfse/ConfiguracaoNotaFiscal.tsx`):
+  - Quadro verde fixo **"As OS emitem nota por: X"** = emissor em uso.
+  - Abas **"Ver configuração de"** só mostram a configuração (NÃO trocam o emissor).
+  - Trocar o emissor só pelo botão **"Passar a usar a …"**, que pede confirmação.
+- Emissor em uso fica em **`empresa_nfse_config.provedor`** (`focus` | `contora`; sem linha = `focus`).
+- O botão **"Emitir NFS-e"** da OS (`src/pages/ServiceOrders.tsx`, `handleQuickEmitNFe`):
+  - Com `provedor = contora` → `ContoraNFSeService` (`src/services/contoraNFSeService.ts`) → Edge Function **`nfse-contora`** (ações `emitir`, `status`, `cancelar`).
+  - Com `provedor = focus` → `FocusNFeService` (código antigo, sem mudança de lógica).
+  - Nota já emitida é sempre consultada/cancelada no emissor onde foi feita: **`nfe_ref` começando com `contora:`** = Contora; senão Focus.
+- Resultado gravado na OS pela Edge Function: `nfe_status`, `nfe_ref = "contora:<id>"`, `nfe_tipo = "contora"`, `nfe_numero`, `nfe_chave`, `nfe_emitida_em`, `nfe_mensagem_erro` (aparece **fixo** no card), `nfe_pdf_url`/`nfe_url_pdf` = PDF guardado no bucket público `comprovantes/nfse/<empresa_id>/<chave>.pdf` (botões PDF e WhatsApp funcionam igual à Focus).
+
+### 🔐 Onde ficam os dados da Contora
+- Tabela **`empresa_nfse_config`** (RLS por empresa; técnico só lê): `provedor`, `contora_ambiente`, `contora_cnpj`, `contora_empresa_id`, `contora_total_tax_rate_sn`.
+- Tabela **`empresa_nfse_segredos`**: token da Contora. **Sem policy nenhuma**: só a Edge Function (service role) lê. O token **nunca** volta para o navegador. **Não precisa (e não deve) ir para a Vercel.**
+- Empresa, certificado A1, IM e códigos do serviço ficam **no painel da Contora** (o assinante cadastra lá). A Edge Function lê os padrões da empresa na Contora (`nfse_service_code_default` → `national_tax_code`, CNAE, ISS, NBS).
+
+### ⚙️ Configuração que FUNCIONA para a Matriz (CNPJ 38.057.542/0001-73, Mandirituba)
+- Contora: `tax_regime = simples` (Optante ME/EPP), **IM NÃO enviada** (`nfse_municipal_registration_in_cnc_producao = false`), serviço 071001, CNAE 8129000, ISS 2%, NBS 124021000, cTribMun vazio.
+- FlowDrain: emissor **Contora**, ambiente **Produção**, **% total de tributos do Simples = 2,00** (obrigatório para ME/EPP).
+- Numeração da Contora (Sistema Nacional, chave `41143022…`) é **separada** da Focus (prefeitura, chave `41143021…`, notas 576–584).
+
+### 🚫 Regras para agentes (NÃO QUEBRAR)
+1. **Nunca usar `npx supabase db push`**: o histórico de migrações local e remoto está desencontrado. Aplicar SQL arquivo por arquivo: `npx supabase db query --linked --file <arquivo.sql>`.
+2. **Nunca adicionar `email_destinatario` no payload da Focus**: cria o bloco `dest` e a prefeitura (Betha) rejeita ("Element dest… Expected is finNFSe").
+3. **Nunca gravar tokens** (Contora `fct_…`, Focus) em AGENTS.md, GEMINI.md, código ou commits. O repositório é público.
+4. **Não clicar em "Salvar Alterações" no cadastro da empresa no console da Contora** sem conferir depois: já religou a IM uma vez.
+5. **Um agente por vez mexendo na Contora e nesta parte do código.** Em 27/09 dois agentes trabalharam ao mesmo tempo e um desfez configurações do outro (IM religada, notas de teste emitidas e esquecidas ativas).
+6. **Toda nota de teste em produção vale de verdade**: cancelar logo depois (justificativa de 15 a 255 caracteres).
+7. O campo certo do nome do cliente é **`clientes.nome_razao`** (o `nome` é antigo, só da importação). Na OS existe a cópia `ordens_servico.cliente_nome`: os cards mostram o nome do cadastro e editar o cliente atualiza a cópia.
+8. **Duas empresas com o mesmo nome "Desentupidora Hidro Curitiba"** no banco: a verdadeira é **`58f0512e-8a00-4c31-ba32-f67f9b9ddcbe`**. A `aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee` é cópia de teste (0 OS). Não excluir nenhuma sem conferir o ID e fazer backup.
+
+### ⚠️ Pendências
+- **Focus declara "Não optante"** nas notas (grava regime "1" e manda `codigo_opcao_simples_nacional = 1`; no nacional ME/EPP = 3). A Receita confirmou que a empresa É optante. **Levar ao contador** antes de mexer.
+- **Focus tem o CNPJ do prestador fixo no código** (`38057542000173`): não serve para assinantes sem correção.
+- **Tokens expostos**: o da Contora (termina em `…PUqq`) e o da Focus (fixo em `focusNFeService.ts`, já no GitHub). **Gerar novos tokens nos painéis e trocar** (Contora: Configurações → Nota fiscal → "Trocar").
+- Cancelar as notas **581 e 584** (Focus) pelo portal da prefeitura.
+- Laboratório `/teste-contora` (`src/pages/admin/ContoraLab.tsx`) continua no app: útil para diagnóstico, mas pode ser removido depois.
+- A FlowDrain IA (`src/services/aiService.ts`) já tem o manual completo (Configurações novas, passo a passo da Contora, erros comuns).
+- Chamado #88 aberto no suporte da Contora (E999 e exclusão da empresa Xaxim `eac0aed9…`, cadastrada por engano).

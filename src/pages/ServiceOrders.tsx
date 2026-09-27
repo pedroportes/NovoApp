@@ -4,6 +4,7 @@ import { Plus, Search, FileText, Calendar, User, Trash2, Phone, MapPin, Receipt,
 import { useVoiceRecognition } from '@/hooks/useVoiceRecognition'
 import { SearchAssistant, SmartFilter } from '@/services/searchAssistant'
 import { FocusNFeService } from '@/services/focusNFeService'
+import { ContoraNFSeService } from '@/services/contoraNFSeService'
 import { db } from '@/lib/db'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -43,6 +44,13 @@ export function ServiceOrders() {
     const { brands, selectedBrandId } = useBrand()
 
     const [dbTechnicians, setDbTechnicians] = useState<any[]>([])
+
+    // Emissor de NFS-e escolhido em Configurações → Nota fiscal (sem configuração = Focus)
+    const [provedorNfse, setProvedorNfse] = useState<'focus' | 'contora'>('focus')
+    useEffect(() => {
+        if (!userData?.empresa_id) return
+        ContoraNFSeService.provedorAtivo(userData.empresa_id).then(setProvedorNfse).catch(() => { })
+    }, [userData?.empresa_id])
 
     // Sincroniza dados fiscais de NFS-e do Supabase para o banco offline local
     useEffect(() => {
@@ -170,6 +178,8 @@ export function ServiceOrders() {
 
             return {
                 ...order,
+                // Nome atual do cadastro; a cópia gravada na OS fica só como reserva
+                cliente_nome: client?.nome_razao || order.cliente_nome,
                 clientes: client,
                 marca: marca,
                 tecnicos: techName ? { nome_completo: techName } : null
@@ -333,14 +343,38 @@ export function ServiceOrders() {
 
     const handleCancelNFe = async () => {
         if (!osToCancel) return
-        if (!cancelJustificativa || cancelJustificativa.trim().length < 10) {
-            toast.error('Informe uma justificativa com no mínimo 10 caracteres para o cancelamento.')
+        const minJustificativa = ContoraNFSeService.ehContora(osToCancel) ? 15 : 10
+        if (!cancelJustificativa || cancelJustificativa.trim().length < minJustificativa) {
+            toast.error(`Informe uma justificativa com no mínimo ${minJustificativa} caracteres para o cancelamento.`)
             return
         }
 
         const ref = osToCancel.nfe_ref
         if (!ref) {
             toast.error('Referência fiscal da nota não encontrada.')
+            return
+        }
+
+        // Nota emitida pela Contora: cancela pela Edge Function (ela já atualiza a OS no banco)
+        if (ContoraNFSeService.ehContora(osToCancel)) {
+            try {
+                setIsCanceling(true)
+                toast.info('Enviando o cancelamento pela Contora...')
+                const r = await ContoraNFSeService.cancelar(osToCancel.id, cancelJustificativa.trim())
+                if (!r.ok) {
+                    toast.error(r.erro || 'Não foi possível cancelar a NFS-e', { duration: 10000 })
+                    return
+                }
+                if (r.os) await db.ordens_servico.update(osToCancel.id, { ...r.os, synced: 1 } as any)
+                if (r.estado === 'cancelado') toast.success('NFS-e cancelada com sucesso!', { duration: 6000 })
+                else toast.info('Cancelamento enviado. A prefeitura está processando a anulação da nota.', { duration: 6000 })
+                setCancelModalOpen(false)
+                setOsToCancel(null)
+            } catch (err: any) {
+                toast.error(`Erro ao cancelar NFS-e: ${err.message}`, { duration: 10000 })
+            } finally {
+                setIsCanceling(false)
+            }
             return
         }
 
@@ -385,6 +419,46 @@ export function ServiceOrders() {
         }
     }
 
+    // Emissão/acompanhamento pela Contora. A Edge Function grava o resultado na OS;
+    // aqui só atualizamos o banco local e avisamos o usuário (erro fica fixo no card).
+    const emitirOuConsultarContora = async (osId: string, jaEmitida: boolean) => {
+        const aplicar = async (campos?: Record<string, any>) => {
+            if (campos && Object.keys(campos).length > 0) await db.ordens_servico.update(osId, { ...campos, synced: 1 } as any)
+        }
+
+        if (!jaEmitida) {
+            toast.info('Enviando NFS-e pela Contora...')
+            const r = await ContoraNFSeService.emitir(osId)
+            await aplicar(r.os)
+            if (!r.ok) {
+                toast.error(`NFS-e não emitida: ${r.erro}`, { duration: 12000 })
+                return
+            }
+        }
+
+        toast.info('Aguardando autorização da prefeitura...', { duration: 4000 })
+        for (let tentativa = 0; tentativa < 12; tentativa++) {
+            await new Promise(resolve => setTimeout(resolve, 3000))
+            const r = await ContoraNFSeService.consultar(osId).catch(() => null)
+            if (!r) continue
+            await aplicar(r.os)
+            if (r.estado === 'autorizado') {
+                toast.success(`🎉 NFS-e nº ${r.os?.nfe_numero || ''} AUTORIZADA com sucesso! Abrindo PDF...`, { duration: 6000 })
+                if (r.os?.nfe_pdf_url) window.open(r.os.nfe_pdf_url, '_blank')
+                return
+            }
+            if (r.estado === 'erro') {
+                toast.error(`NFS-e rejeitada: ${r.os?.nfe_mensagem_erro || 'veja o motivo no card'}`, { duration: 12000 })
+                return
+            }
+            if (r.estado === 'cancelado') {
+                toast.info('Esta NFS-e está cancelada.')
+                return
+            }
+        }
+        toast.info('A nota ainda está sendo processada. Clique em "Consultar agora" em alguns instantes.', { duration: 6000 })
+    }
+
     const handleQuickEmitNFe = async (os: any) => {
         const osId = typeof os === 'string' ? os : os.id
         const currentOs = typeof os === 'string' ? (serviceOrders.find(item => item.id === osId) || os) : os
@@ -400,6 +474,16 @@ export function ServiceOrders() {
 
             // Se a nota deu erro anteriormente ou foi cancelada, força nova emissão gerando novo ref
             const isErroOuCancelada = currentOs?.nfe_status === 'erro_autorizacao' || currentOs?.nfe_status === 'erro' || currentOs?.nfe_status === 'cancelado'
+
+            // Contora: nota já emitida por ela (acompanhar) ou nova emissão com a Contora ativa
+            const usarContora = (!isErroOuCancelada && currentOs?.nfe_ref)
+                ? ContoraNFSeService.ehContora(currentOs)
+                : provedorNfse === 'contora'
+            if (usarContora) {
+                await emitirOuConsultarContora(osId, !isErroOuCancelada && !!currentOs?.nfe_ref)
+                return
+            }
+
             let refParaConsultar = isErroOuCancelada ? null : currentOs?.nfe_ref
 
             // 2. Se não tem ref (ou deu erro antes), dispara a emissão inicial
@@ -1098,7 +1182,7 @@ export function ServiceOrders() {
                     <div className="space-y-4 py-2">
                         {osToCancel && (
                             <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1">
-                                <div className="text-slate-500">Cliente: <strong className="text-slate-800">{clients.find((c: any) => c.id === osToCancel.cliente_id)?.nome || osToCancel.cliente_nome || 'Cliente'}</strong></div>
+                                <div className="text-slate-500">Cliente: <strong className="text-slate-800">{clients.find((c: any) => c.id === osToCancel.cliente_id)?.nome_razao || osToCancel.cliente_nome || 'Cliente'}</strong></div>
                                 <div className="text-slate-500">Valor da NFS-e: <strong className="text-emerald-700">R$ {Number(osToCancel.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></div>
                                 <div className="text-slate-500">Ref Fiscal: <code className="text-slate-700 bg-white px-1.5 py-0.5 rounded border border-slate-200 font-mono text-[11px]">{osToCancel.nfe_ref || 'N/A'}</code></div>
                             </div>

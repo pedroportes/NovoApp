@@ -37,6 +37,7 @@ const TechnicianFinancial = lazy(() => import('./pages/TechnicianFinancial').the
 const TechnicianFinancialPrint = lazy(() => import('./pages/TechnicianFinancialPrint').then(module => ({ default: module.TechnicianFinancialPrint })))
 const UnfinishedServices = lazy(() => import('./pages/UnfinishedServices').then(module => ({ default: module.UnfinishedServices })))
 const AIChatbot = lazy(() => import('./pages/admin/AIChatbot').then(module => ({ default: module.AIChatbot })))
+const ContoraLab = lazy(() => import('./pages/admin/ContoraLab').then(module => ({ default: module.ContoraLab })))
 const TechnicalReportEditor = lazy(() => import('./pages/TechnicalReportEditor').then(module => ({ default: module.TechnicalReportEditor })))
 const TechnicalReportsList = lazy(() => import('./pages/TechnicalReportsList').then(module => ({ default: module.TechnicalReportsList })))
 const TechnicalReportPrint = lazy(() => import('./pages/TechnicalReportPrint').then(module => ({ default: module.TechnicalReportPrint })))
@@ -100,6 +101,7 @@ function App() {
                                     <Route path="/service-orders/new" element={<NewServiceOrder />} />
                                     <Route path="/service-orders/:id" element={<NewServiceOrder />} />
                                     <Route path="/settings" element={<Settings />} />
+                                    <Route path="/settings/:secao" element={<Settings />} />
                                     <Route path="/financial" element={<Financial />} />
                                     <Route path="/reports" element={<Reports />} />
                                     <Route path="/relatorios" element={<Reports />} />
@@ -111,6 +113,8 @@ function App() {
                                     <Route path="/experiments" element={<TechnicianExpenses />} />
                                     <Route path="/unfinished-services" element={<UnfinishedServices />} />
                                     <Route path="/ai-chatbot" element={<AIChatbot />} />
+                                    <Route path="/admin/teste-contora" element={<ContoraLab />} />
+                                    <Route path="/teste-contora" element={<ContoraLab />} />
                                     <Route path="/relatorios-tecnicos" element={<TechnicalReportsList />} />
                                     <Route path="/relatorio-tecnico/:id" element={<TechnicalReportEditor />} />
                                     {/* (Super Admin routes movidas para fora do ProtectedRoute) */}

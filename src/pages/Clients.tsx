@@ -32,7 +32,7 @@ import { SignaturePad } from '@/components/ui/signature-pad'
 import { useOfflineClients } from '@/hooks/useOfflineData'
 import { SyncService } from '@/services/syncService'
 
-import { LocalClient } from '@/lib/db'
+import { LocalClient, db } from '@/lib/db'
 
 export function Clients() {
     const { userData } = useAuth()
@@ -646,6 +646,21 @@ export function Clients() {
                 ativo: true,
                 criado_por: !editingClientId ? userData.id : undefined // Set creator for new clients
             })
+
+            // As OS guardam uma cópia do nome do cliente: mantém essa cópia igual ao cadastro
+            const novoNome = formData.nome_razao?.trim()
+            if (editingClientId && novoNome) {
+                try {
+                    await db.ordens_servico.where('cliente_id').equals(editingClientId).modify({ cliente_nome: novoNome })
+                    await supabase
+                        .from('ordens_servico')
+                        .update({ cliente_nome: novoNome } as any)
+                        .eq('cliente_id', editingClientId)
+                        .eq('empresa_id', userData.empresa_id)
+                } catch (err) {
+                    console.warn('Não foi possível atualizar o nome nas OS deste cliente:', err)
+                }
+            }
 
             setIsDialogOpen(false)
             resetForm()

@@ -5,19 +5,30 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { Building2, Save, Upload, Loader2, Palette, Download, Smartphone, Pencil, Car, PenTool } from 'lucide-react'
+import { Building2, Save, Upload, Loader2, Palette, Download, Smartphone, Pencil, Car, PenTool, Receipt, Users, UserCircle, ChevronRight, ArrowLeft } from 'lucide-react'
 import { compressImage } from '@/lib/utils'
-import { useOutletContext } from 'react-router-dom'
+import { useOutletContext, useParams, useNavigate } from 'react-router-dom'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { usePWAInstall } from '@/hooks/usePWAInstall'
 import { SignaturePad } from '@/components/SignaturePad'
 import { WebmaniaService } from '@/services/webmaniaService'
-import { ConfigurarFocusNFe } from '@/components/ConfigurarFocusNFe'
+import { ConfiguracaoNotaFiscal } from '@/components/nfse/ConfiguracaoNotaFiscal'
 import { useBrand } from '@/contexts/BrandContext'
 import { toast } from 'sonner'
 
+// Subpáginas de Configurações (admin). O técnico continua vendo só o "Meu Perfil".
+const SECOES = [
+    { id: 'empresa', titulo: 'Empresa e marca', descricao: 'Logo, dados, endereço, PIX e cor', icon: Building2, salva: true },
+    { id: 'nota-fiscal', titulo: 'Nota fiscal', descricao: 'Emissor de NFS-e, token e ambiente', icon: Receipt, salva: false },
+    { id: 'tecnicos', titulo: 'Técnicos', descricao: 'Permissões no aplicativo', icon: Users, salva: true },
+    { id: 'conta', titulo: 'Minha conta', descricao: 'E-mail de acesso e senha', icon: UserCircle, salva: true },
+    { id: 'aparencia', titulo: 'Aparência e app', descricao: 'Tema e instalar no celular', icon: Palette, salva: false },
+] as const
+
 export function Settings() {
     const { userData } = useAuth()
+    const { secao } = useParams<{ secao?: string }>()
+    const navigate = useNavigate()
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [logoFile, setLogoFile] = useState<File | null>(null)
@@ -25,6 +36,11 @@ export function Settings() {
 
     // Role Check
     const isTecnico = userData?.cargo?.toLowerCase() === 'tecnico' || userData?.cargo?.toLowerCase() === 'técnico'
+
+    const secaoAtual = isTecnico ? undefined : SECOES.find(s => s.id === secao)
+    const mostrarMenu = !isTecnico && !secaoAtual
+    const mostraSalvar = isTecnico || !!secaoAtual?.salva
+    const mostra = (id: typeof SECOES[number]['id']) => !isTecnico && secaoAtual?.id === id
 
     // PWA Install hook
     const { isInstallable, isInstalled, isLocalhost, install } = usePWAInstall()
@@ -417,9 +433,9 @@ export function Settings() {
     // Set FAB Action
     useEffect(() => {
         const handler = isTecnico ? handleTechSubmit : handleSubmit
-        setFabAction(handler)
+        setFabAction(mostraSalvar ? handler : null)
         return () => setFabAction(null)
-    }, [handleSubmit, handleTechSubmit, setFabAction, isTecnico])
+    }, [handleSubmit, handleTechSubmit, setFabAction, isTecnico, mostraSalvar])
 
 
     // Admin Helper Handlers
@@ -455,21 +471,61 @@ export function Settings() {
 
     if (loading) return <div className="p-8 text-center text-muted-foreground animate-pulse">Carregando configurações...</div>
 
+    // Menu principal de Configurações (admin)
+    if (mostrarMenu) {
+        return (
+            <div className="space-y-6 pb-32 md:pb-0 mt-6 md:mt-0 max-w-2xl">
+                <div>
+                    <h1 className="text-2xl font-bold tracking-tight">Configurações</h1>
+                    <p className="text-muted-foreground">Escolha o que deseja ajustar</p>
+                </div>
+                <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden divide-y divide-border">
+                    {SECOES.map(s => (
+                        <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => navigate(`/settings/${s.id}`)}
+                            className="w-full flex items-center gap-4 px-4 py-4 text-left hover:bg-muted/50 active:bg-muted transition-colors"
+                        >
+                            <div className="p-2.5 bg-primary/10 rounded-xl shrink-0">
+                                <s.icon className="h-5 w-5 text-primary" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-sm">{s.titulo}</p>
+                                <p className="text-xs text-muted-foreground truncate">{s.descricao}</p>
+                            </div>
+                            <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
+                        </button>
+                    ))}
+                </div>
+            </div>
+        )
+    }
+
     return (
         <div className="space-y-6 pb-32 md:pb-0 mt-6 md:mt-0">
-            <div className="flex justify-between items-center">
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight">{isTecnico ? 'Meu Perfil' : 'Configurações da Empresa'}</h1>
-                    <p className="text-muted-foreground">{isTecnico ? 'Gerencie seus dados pessoais' : 'Gerencie os dados da sua desentupidora'}</p>
+            <div className="flex justify-between items-center gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                    {!isTecnico && (
+                        <Button variant="ghost" size="icon" onClick={() => navigate('/settings')} aria-label="Voltar para Configurações" className="shrink-0">
+                            <ArrowLeft className="h-5 w-5" />
+                        </Button>
+                    )}
+                    <div className="min-w-0">
+                        <h1 className="text-2xl font-bold tracking-tight">{isTecnico ? 'Meu Perfil' : secaoAtual?.titulo}</h1>
+                        <p className="text-muted-foreground">{isTecnico ? 'Gerencie seus dados pessoais' : secaoAtual?.descricao}</p>
+                    </div>
                 </div>
-                <Button onClick={isTecnico ? handleTechSubmit : handleSubmit} disabled={saving} className="hidden md:flex shadow-lg hover:shadow-xl transition-all">
-                    {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                    Salvar Alterações
-                </Button>
+                {mostraSalvar && (
+                    <Button onClick={isTecnico ? handleTechSubmit : handleSubmit} disabled={saving} className="hidden md:flex shadow-lg hover:shadow-xl transition-all shrink-0">
+                        {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                        Salvar Alterações
+                    </Button>
+                )}
             </div>
 
             {/* Seletor Visual de Filial em Edição */}
-            {!isTecnico && brands.length > 1 && (
+            {mostra('empresa') && brands.length > 1 && (
                 <div className="bg-white rounded-2xl border-2 border-emerald-500/20 p-5 shadow-sm space-y-4">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
@@ -660,9 +716,10 @@ export function Settings() {
                         </div>
                     </div>
                 ) : (
-                    // TELA DE ADMIN (Mantida Original)
+                    // TELA DE ADMIN (Mantida Original, agora dividida em subpáginas)
                     <>
                         {/* Logo e Dados Básicos */}
+                        {mostra('empresa') && (
                         <div className="space-y-6 bg-card p-6 rounded-xl border border-border shadow-sm">
                             <h2 className="text-lg font-semibold flex items-center gap-2">
                                 <Building2 className="h-5 w-5 text-primary" />
@@ -792,8 +849,10 @@ export function Settings() {
                                 </div>
                             </div>
                         </div>
+                        )}
 
                         {/* Endereço */}
+                        {mostra('empresa') && (
                         <div className="space-y-6 bg-card p-6 rounded-xl border border-border shadow-sm h-fit">
                             <h2 className="text-lg font-semibold flex items-center gap-2">
                                 <Building2 className="h-5 w-5 text-primary" />
@@ -860,16 +919,16 @@ export function Settings() {
                                 </div>
                             </div>
                         </div>
+                        )}
 
-
-
-
-
+                        {mostra('nota-fiscal') && (
                         <div className="md:col-span-2">
-                            <ConfigurarFocusNFe empresaId={userData?.empresa_id || ''} />
+                            <ConfiguracaoNotaFiscal empresaId={userData?.empresa_id || ''} />
                         </div>
+                        )}
 
                         {/* Technician Permissions Section */}
+                        {mostra('tecnicos') && (
                         <div className="space-y-6 bg-card p-6 rounded-xl border border-border shadow-sm h-fit md:col-span-2">
                             <h2 className="text-lg font-semibold flex items-center gap-2">
                                 <Smartphone className="h-5 w-5 text-primary" />
@@ -941,12 +1000,13 @@ export function Settings() {
                                 </div>
                             </div>
                         </div>
+                        )}
                     </>
                 )}
 
 
                 {/* ACCESS DATA SECTION - ADMIN ONLY */}
-                {!isTecnico && (
+                {mostra('conta') && (
                     <div className="space-y-6 bg-card p-6 rounded-xl border border-border shadow-sm h-fit md:col-span-2 lg:col-span-1">
                         <h2 className="text-lg font-semibold flex items-center gap-2">
                             <div className="p-2 bg-primary/10 rounded-lg">
@@ -987,6 +1047,7 @@ export function Settings() {
 
 
                 {/* Appearance Section - VISIBLE TO BOTH */}
+                {(isTecnico || mostra('aparencia')) && (
                 < div className="space-y-6 bg-card p-6 rounded-xl border border-border shadow-sm h-fit md:col-span-2 lg:col-span-1" >
                     <h2 className="text-lg font-semibold flex items-center gap-2">
                         <Palette className="h-5 w-5 text-primary" />
@@ -1004,8 +1065,10 @@ export function Settings() {
                         </div>
                     </div>
                 </div >
+                )}
 
                 {/* Install App Section - VISIBLE TO BOTH */}
+                {(isTecnico || mostra('aparencia')) && (
                 < div className="space-y-6 bg-card p-6 rounded-xl border border-border shadow-sm h-fit md:col-span-2 lg:col-span-1" >
                     <h2 className="text-lg font-semibold flex items-center gap-2">
                         <Smartphone className="h-5 w-5 text-primary" />
@@ -1039,14 +1102,17 @@ export function Settings() {
                         )}
                     </div>
                 </div >
+                )}
             </div >
 
+            {mostraSalvar && (
             <div className="md:hidden">
                 <Button onClick={isTecnico ? handleTechSubmit : handleSubmit} disabled={saving} className="w-full h-12 text-lg mb-4">
                     {saving ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Save className="mr-2 h-5 w-5" />}
                     Salvar Alterações
                 </Button>
             </div>
+            )}
         </div >
     )
 }
