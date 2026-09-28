@@ -12,8 +12,18 @@ interface Service {
     nome: string
     descricao: string | null
     valor_padrao: number
+    unidade: Unidade
     ativo: boolean
 }
+
+type Unidade = 'servico' | 'metro' | 'litro'
+
+// Como o serviço é cobrado: valor fechado, por metro de tubulação ou por litro retirado
+export const UNIDADES: { valor: Unidade; rotulo: string; sufixo: string }[] = [
+    { valor: 'servico', rotulo: 'Valor fixo', sufixo: '' },
+    { valor: 'metro', rotulo: 'Por metro', sufixo: ' / metro' },
+    { valor: 'litro', rotulo: 'Por litro', sufixo: ' / litro' },
+]
 
 export function Services() {
     const { userData } = useAuth()
@@ -27,7 +37,8 @@ export function Services() {
     const [formData, setFormData] = useState({
         nome: '',
         descricao: '',
-        valor_padrao: ''
+        valor_padrao: '',
+        unidade: 'servico' as Unidade
     })
     const [saving, setSaving] = useState(false)
 
@@ -60,6 +71,7 @@ export function Services() {
                 nome: s.nome,
                 descricao: s.descricao,
                 valor_padrao: s.valor_padrao || 0,
+                unidade: ((s as any).unidade || 'servico') as Unidade,
                 ativo: s.ativo ?? true // Default to true if null
             }))
 
@@ -80,8 +92,9 @@ export function Services() {
                 empresa_id: userData!.empresa_id,
                 nome: formData.nome,
                 descricao: formData.descricao,
-                valor_padrao: parseFloat(formData.valor_padrao.replace(',', '.')) || 0
-            }
+                valor_padrao: parseFloat(formData.valor_padrao.replace(',', '.')) || 0,
+                unidade: formData.unidade
+            } as any
 
             if (editingService) {
                 const { error } = await supabase
@@ -129,11 +142,12 @@ export function Services() {
             setFormData({
                 nome: service.nome,
                 descricao: service.descricao || '',
-                valor_padrao: service.valor_padrao.toString()
+                valor_padrao: service.valor_padrao.toString(),
+                unidade: service.unidade
             })
         } else {
             setEditingService(null)
-            setFormData({ nome: '', descricao: '', valor_padrao: '' })
+            setFormData({ nome: '', descricao: '', valor_padrao: '', unidade: 'servico' })
         }
         setIsModalOpen(true)
     }
@@ -197,9 +211,9 @@ export function Services() {
                                 </div>
                             </div>
                             <div className="mt-4 pt-4 border-t border-border flex justify-between items-center">
-                                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Valor Padrão</span>
+                                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{UNIDADES.find(u => u.valor === service.unidade)?.rotulo || 'Valor fixo'}</span>
                                 <span className="font-bold text-primary text-lg">
-                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(service.valor_padrao || 0)}
+                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(service.valor_padrao || 0)}{UNIDADES.find(u => u.valor === service.unidade)?.sufixo}
                                 </span>
                             </div>
                         </div>
@@ -233,7 +247,25 @@ export function Services() {
                             </div>
 
                             <div className="space-y-2">
-                                <Label htmlFor="valor">Valor Padrão (R$)</Label>
+                                <Label>Forma de cobrar</Label>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {UNIDADES.map(u => (
+                                        <button
+                                            key={u.valor}
+                                            type="button"
+                                            onClick={() => setFormData({ ...formData, unidade: u.valor })}
+                                            className={`h-10 rounded-lg border text-sm font-semibold transition-colors ${formData.unidade === u.valor ? 'bg-primary text-primary-foreground border-primary' : 'bg-background border-border text-muted-foreground hover:bg-muted'}`}
+                                        >
+                                            {u.rotulo}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="valor">
+                                    {formData.unidade === 'metro' ? 'Valor por metro (R$)' : formData.unidade === 'litro' ? 'Valor por litro (R$)' : 'Valor do serviço (R$)'}
+                                </Label>
                                 <Input
                                     id="valor"
                                     type="number"

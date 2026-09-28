@@ -11,7 +11,8 @@ export function SignaturePad({ onSignatureChange, initialImage }: SignaturePadPr
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [isDrawing, setIsDrawing] = useState(false);
     const [hasSignature, setHasSignature] = useState(false);
-    const [isLocked, setIsLocked] = useState(false);
+    // Começa travada: rolar a tela por cima não risca e não estraga assinatura já salva
+    const [isLocked, setIsLocked] = useState(true);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -135,7 +136,7 @@ export function SignaturePad({ onSignatureChange, initialImage }: SignaturePadPr
 
     return (
         <div className="w-full space-y-2">
-            <div className={`border-2 border-dashed rounded-md bg-white touch-none relative overflow-hidden transition-colors ${isLocked ? 'border-emerald-500/50 bg-emerald-50/30 cursor-not-allowed' : 'border-input'}`}>
+            <div className={`border-2 border-dashed rounded-md bg-white relative overflow-hidden transition-colors ${isLocked ? 'border-emerald-500/50 bg-emerald-50/30' : 'border-input touch-none'}`}>
                 <canvas
                     ref={canvasRef}
                     onMouseDown={startDrawing}
@@ -145,11 +146,16 @@ export function SignaturePad({ onSignatureChange, initialImage }: SignaturePadPr
                     onTouchStart={startDrawing}
                     onTouchMove={draw}
                     onTouchEnd={stopDrawing}
-                    className={`w-full h-[200px] touch-none ${isLocked ? 'pointer-events-none' : 'cursor-crosshair'}`}
+                    className={`w-full h-[200px] ${isLocked ? 'pointer-events-none' : 'touch-none cursor-crosshair'}`}
                 />
                 {!hasSignature && !isLocked && (
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-muted-foreground/50">
                         Assine aqui
+                    </div>
+                )}
+                {!hasSignature && isLocked && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-muted-foreground/60 text-sm px-4 text-center">
+                        Toque em "Assinar" para liberar
                     </div>
                 )}
                 {isLocked && (
@@ -169,12 +175,12 @@ export function SignaturePad({ onSignatureChange, initialImage }: SignaturePadPr
                     {isLocked ? (
                         <>
                             <Unlock className="w-4 h-4 mr-2" />
-                            Destravar Assinatura
+                            {hasSignature ? 'Destravar para refazer' : 'Assinar'}
                         </>
                     ) : (
                         <>
                             <Lock className="w-4 h-4 mr-2" />
-                            Travar Assinatura
+                            Travar assinatura
                         </>
                     )}
                 </Button>

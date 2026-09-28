@@ -244,6 +244,7 @@ export function ServiceOrders() {
 
         // Search by client name
         if ((os.cliente_nome || '').toLowerCase().includes(term)) return true
+        if ((os.clientes?.empresa_condominio || '').toLowerCase().includes(term)) return true
         // Search by ID
         if (os.id.toLowerCase().includes(term)) return true
         // Search by address
@@ -812,11 +813,16 @@ export function ServiceOrders() {
                                         <div className="p-2 rounded-xl bg-slate-100 text-slate-600 group-hover/client:bg-emerald-100 group-hover/client:text-emerald-700 transition-colors shrink-0">
                                             <User className="h-5 w-5" />
                                         </div>
-                                        <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                                            <span className="font-bold text-slate-800 text-lg truncate group-hover/client:text-emerald-700 group-hover/client:underline underline-offset-2 transition-colors">
-                                                {os.cliente_nome || 'Cliente Desconhecido'}
-                                            </span>
-                                            <Pencil className="h-3.5 w-3.5 text-slate-400 group-hover/client:text-emerald-600 opacity-60 group-hover/client:opacity-100 transition-all shrink-0" />
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                <span className="font-bold text-slate-800 text-lg truncate group-hover/client:text-emerald-700 group-hover/client:underline underline-offset-2 transition-colors">
+                                                    {os.cliente_nome || 'Cliente Desconhecido'}
+                                                </span>
+                                                <Pencil className="h-3.5 w-3.5 text-slate-400 group-hover/client:text-emerald-600 opacity-60 group-hover/client:opacity-100 transition-all shrink-0" />
+                                            </div>
+                                            {os.clientes?.empresa_condominio && (
+                                                <p className="text-sm text-slate-500 truncate">🏢 {os.clientes.empresa_condominio}</p>
+                                            )}
                                         </div>
                                     </div>
 

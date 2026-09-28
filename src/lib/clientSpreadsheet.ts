@@ -5,7 +5,7 @@ import XLSX from 'xlsx-js-style'
 
 export type ClientField =
     | 'nome_razao' | 'whatsapp' | 'cpf_cnpj' | 'email' | 'cep' | 'logradouro' | 'numero'
-    | 'complemento' | 'bairro' | 'cidade' | 'uf' | 'referencia' | 'endereco_completo'
+    | 'complemento' | 'bairro' | 'cidade' | 'uf' | 'referencia' | 'endereco_completo' | 'empresa_condominio'
 
 export interface ClientRow {
     nome_razao: string
@@ -20,10 +20,12 @@ export interface ClientRow {
     cidade: string
     uf: string
     referencia: string
+    empresa_condominio: string
 }
 
 export const TEMPLATE_COLUMNS: { field: ClientField; header: string; width: number; ajuda: string; exemplo: string }[] = [
-    { field: 'nome_razao', header: 'Nome *', width: 32, ajuda: 'Obrigatório. Nome da pessoa ou da empresa. Ex.: Maria Silva, Condomínio Solar.', exemplo: 'Maria Silva' },
+    { field: 'nome_razao', header: 'Nome do cliente ou quem atendeu *', width: 32, ajuda: 'Obrigatório. Nome da pessoa. A empresa/condomínio vai na coluna ao lado.', exemplo: 'Maria Silva' },
+    { field: 'empresa_condominio', header: 'Empresa / Comércio / Condomínio', width: 28, ajuda: 'Opcional. Onde a pessoa trabalha ou mora. Ex.: síndica Joana -> Condomínio Sol e Mar.', exemplo: 'Condomínio Sol e Mar' },
     { field: 'whatsapp', header: 'Telefone / WhatsApp', width: 18, ajuda: 'Com DDD. Pode ter parênteses, espaço ou traço. Um número por cliente.', exemplo: '(41) 99999-1234' },
     { field: 'cpf_cnpj', header: 'CPF / CNPJ', width: 20, ajuda: 'Opcional. Necessário para emitir nota fiscal no nome do cliente.', exemplo: '123.456.789-09' },
     { field: 'email', header: 'E-mail', width: 26, ajuda: 'Opcional.', exemplo: 'maria@email.com' },
@@ -39,7 +41,7 @@ export const TEMPLATE_COLUMNS: { field: ClientField; header: string; width: numb
 
 // Nomes de coluna aceitos (sem acento, minúsculo). Serve para planilhas que não usam o modelo.
 const HEADER_ALIASES: Record<ClientField, string[]> = {
-    nome_razao: ['nome', 'nome *', 'nome/razao social', 'nome / razao social', 'razao social', 'cliente', 'nome do cliente', 'nome_razao'],
+    nome_razao: ['nome', 'nome *', 'nome do cliente ou quem atendeu *', 'nome do cliente ou quem atendeu', 'nome/razao social', 'nome / razao social', 'razao social', 'cliente', 'nome do cliente', 'nome_razao'],
     whatsapp: ['telefone / whatsapp', 'telefone', 'whatsapp', 'whats', 'celular', 'fone', 'contato', 'tel'],
     cpf_cnpj: ['cpf / cnpj', 'cpf/cnpj', 'cpf', 'cnpj', 'documento', 'cpf_cnpj'],
     email: ['e-mail', 'email'],
@@ -52,6 +54,7 @@ const HEADER_ALIASES: Record<ClientField, string[]> = {
     uf: ['uf', 'estado'],
     referencia: ['referencia / observacao', 'referencia', 'observacao', 'observacoes', 'obs', 'ponto de referencia'],
     endereco_completo: ['endereco', 'endereco completo', 'endereço completo'],
+    empresa_condominio: ['empresa / comercio / condominio', 'empresa / condominio', 'empresa/condominio', 'empresa condominio', 'condominio', 'empresa', 'emp.cond', 'emp cond', 'empresa comercio condominio', 'local de trabalho'],
 }
 
 export const FIELD_LABELS: Record<ClientField, string> = {
@@ -68,6 +71,7 @@ export const FIELD_LABELS: Record<ClientField, string> = {
     uf: 'UF',
     referencia: 'Referência / Observação',
     endereco_completo: 'Endereço completo (tudo numa coluna)',
+    empresa_condominio: 'Empresa / Comércio / Condomínio',
 }
 
 export const semAcento = (s: string) =>
@@ -89,6 +93,7 @@ export function detectField(header: unknown): ClientField | '' {
     if (h.includes('cidade')) return 'cidade'
     if (h.includes('complemento')) return 'complemento'
     if (h.includes('referencia') || h.startsWith('obs')) return 'referencia'
+    if (h.includes('condominio') || h.startsWith('empresa') || h.startsWith('emp.')) return 'empresa_condominio'
     if (h.includes('endereco')) return 'endereco_completo'
     if (h.startsWith('nome') || h.includes('razao')) return 'nome_razao'
     return ''

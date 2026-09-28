@@ -129,6 +129,13 @@ const ReceiptLayout = ({ os, company, title }: { os: any, company: any, title: s
                         <div className="w-32 bg-gray-100 p-1 px-2 font-bold border-r border-black flex items-center">Nome Cliente</div>
                         <div className="flex-1 p-1 px-2 uppercase">{os.cliente_nome || os.clientes?.nome_razao || 'Cliente não informado'}</div>
                     </div>
+                    {os.clientes?.empresa_condominio &&
+                        !(os.cliente_nome || '').toLowerCase().includes(os.clientes.empresa_condominio.toLowerCase()) && (
+                        <div className="flex border-b border-black">
+                            <div className="w-32 bg-gray-100 p-1 px-2 font-bold border-r border-black flex items-center">Empresa/Cond.</div>
+                            <div className="flex-1 p-1 px-2 uppercase">{os.clientes.empresa_condominio}</div>
+                        </div>
+                    )}
                     <div className="flex border-b border-black">
                         <div className="w-32 bg-gray-100 p-1 px-2 font-bold border-r border-black flex items-center">CPF/CNPJ</div>
                         <div className="flex-1 p-1 px-2">{os.clientes?.cpf_cnpj || ''}</div>
@@ -155,7 +162,7 @@ const ReceiptLayout = ({ os, company, title }: { os: any, company: any, title: s
                         <div key={index} className="flex border-b border-black text-sm">
                             <div className="flex-1 p-2 border-r-2 border-black uppercase min-h-[32px]">
                                 {item.descricao}
-                                {item.qtd > 1 && <span className="text-xs text-gray-500 ml-2">(x{item.qtd})</span>}
+                                {item.unidade === 'metro' || item.unidade === 'litro' ? <span className="text-xs text-gray-500 ml-2">({String(item.qtd).replace('.', ',')} {item.unidade === 'metro' ? 'm' : 'L'} x {formatCurrency(item.valor_unitario)})</span> : item.qtd > 1 && <span className="text-xs text-gray-500 ml-2">(x{item.qtd})</span>}
                             </div>
                             <div className="w-32 p-2 text-right flex items-center justify-end font-semibold">
                                 {formatCurrency(item.total)}
@@ -328,7 +335,7 @@ const ContractLayout = ({ os, company }: { os: any, company: any }) => {
                 {effectiveItems && effectiveItems.map((item: any, index: number) => (
                     <li key={index}>
                         <span className="font-bold">{item.descricao}</span>
-                        {item.qtd > 1 ? ` (Qtd: ${item.qtd})` : ''} - {formatCurrency(item.total)}
+                        {item.unidade === 'metro' || item.unidade === 'litro' ? ` (${String(item.qtd).replace('.', ',')} ${item.unidade === 'metro' ? 'm' : 'L'})` : item.qtd > 1 ? ` (Qtd: ${item.qtd})` : ''} - {formatCurrency(item.total)}
                     </li>
                 ))}
             </ul>

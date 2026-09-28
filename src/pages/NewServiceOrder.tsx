@@ -21,7 +21,11 @@ interface ServiceItem {
     qtd: number
     valor_unitario: number
     total: number
+    unidade?: 'servico' | 'metro' | 'litro' // por metro/litro: qtd = metros/litros
 }
+
+const SUFIXO_UNIDADE: Record<string, string> = { metro: ' / metro', litro: ' / litro' }
+const QTD_UNIDADE: Record<string, string> = { metro: 'Metros', litro: 'Litros' }
 
 export function NewServiceOrder() {
     const navigate = useNavigate()
@@ -108,6 +112,8 @@ export function NewServiceOrder() {
     // Calculator State
     const [isCalculatorOpen, setIsCalculatorOpen] = useState(false)
     const [calcType, setCalcType] = useState<'rectangular' | 'cilindrico'>('rectangular')
+    // O que está sendo limpo: vai no nome do item do orçamento/recibo
+    const [calcAlvo, setCalcAlvo] = useState<'gordura' | 'fossa'>('gordura')
     const [calcDimensions, setCalcDimensions] = useState({
         largura: '',
         comprimento: '',
@@ -219,6 +225,7 @@ export function NewServiceOrder() {
         const search = clientSearch.toLowerCase()
         return sorted.filter(c =>
             c.nome_razao.toLowerCase().includes(search) ||
+            (c.empresa_condominio && c.empresa_condominio.toLowerCase().includes(search)) ||
             (c.cpf_cnpj && c.cpf_cnpj.includes(search)) ||
             (c.whatsapp && c.whatsapp.includes(search))
         )
@@ -426,11 +433,13 @@ export function NewServiceOrder() {
         if (service) {
             // DB field is valor_padrao
             const val = Number(service.valor_padrao) || 0
+            const unidade = service.unidade || 'servico'
             setItems(prev => [...prev, {
                 descricao: service.descricao ? `${service.nome} - ${service.descricao} ` : service.nome,
-                qtd: 1,
+                qtd: 1, // por metro/litro: o técnico troca pela quantidade de metros/litros
                 valor_unitario: val,
-                total: val
+                total: val,
+                unidade
             }])
             setSelectedServiceId('') // Reset selection
         }
@@ -467,15 +476,18 @@ export function NewServiceOrder() {
 
         if (currentTotal <= 0) return
 
+        const alvo = calcAlvo === 'gordura' ? 'Limpeza de caixa de gordura' : 'Limpeza de fossa'
         const desc = calcType === 'rectangular'
-            ? `Limpeza Fossa Retangular(${largura}x${comprimento}x${profundidade}cm) - ${volumeLitros} L`
-            : `Limpeza Fossa Cilíndrica(Ø${diametro}x${profundidade}cm) - ${volumeLitros} L`
+            ? `${alvo} retangular (${largura}x${comprimento}x${profundidade} cm)`
+            : `${alvo} cilíndrica (Ø${diametro}x${profundidade} cm)`
 
+        // Entra como litros x preço do litro (o recibo mostra "35,34 L x R$ 16,90")
         setItems(prev => [...prev, {
             descricao: desc,
-            qtd: 1,
-            valor_unitario: currentTotal,
-            total: currentTotal
+            qtd: volumeLitros,
+            valor_unitario: preco,
+            total: currentTotal,
+            unidade: 'litro'
         }])
         setIsCalculatorOpen(false)
     }
@@ -870,6 +882,9 @@ export function NewServiceOrder() {
                                                         <div className="flex items-center justify-between w-full">
                                                             <div className="flex-1 min-w-0 pr-2">
                                                                 <div className="font-bold truncate">{client.nome_razao}</div>
+                                                                {client.empresa_condominio && (
+                                                                    <div className="text-xs text-slate-500 truncate">🏢 {client.empresa_condominio}</div>
+                                                                )}
                                                                 <div className="text-xs text-slate-400 flex gap-3 mt-1">
                                                                     {client.cpf_cnpj && <span>{client.cpf_cnpj}</span>}
                                                                     {client.whatsapp && <span>{client.whatsapp}</span>}
@@ -1013,7 +1028,7 @@ export function NewServiceOrder() {
                         >
                             <option value="">+ Adicionar serviço do catálogo...</option>
                             {services.map((s: any) => (
-                                <option key={s.id} value={s.id}>{s.nome} - {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(s.valor_padrao) || 0)}</option>
+                                <option key={s.id} value={s.id}>{s.nome} - {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(s.valor_padrao) || 0)}{SUFIXO_UNIDADE[s.unidade] || ''}</option>
                             ))}
                         </select>
                     </div>
@@ -1039,6 +1054,17 @@ export function NewServiceOrder() {
 
                     {isCalculatorOpen && (
                         <div className="p-6 bg-white space-y-6">
+                            <div className="space-y-2">
+                                <Label className="text-xs ml-1 font-bold text-slate-600">O que vai limpar?</Label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {([['gordura', '🧈 Caixa de gordura'], ['fossa', '🚽 Fossa']] as const).map(([v, rotulo]) => (
+                                        <button key={v} type="button" onClick={() => setCalcAlvo(v)}
+                                            className={`h-11 rounded-xl border text-sm font-bold transition-all ${calcAlvo === v ? 'bg-emerald-600 border-emerald-600 text-white shadow-lg' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                                            {rotulo}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
                             <div className="flex bg-slate-200 p-1.5 rounded-xl">
                                 <button type="button" onClick={() => setCalcType('rectangular')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${calcType === 'rectangular' ? 'bg-sky-600 text-white shadow-lg' : 'text-slate-600 hover:text-slate-800'}`}>RETANGULAR</button>
                                 <button type="button" onClick={() => setCalcType('cilindrico')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${calcType === 'cilindrico' ? 'bg-sky-600 text-white shadow-lg' : 'text-slate-600 hover:text-slate-800'}`}>CILÍNDRICO</button>
@@ -1083,8 +1109,8 @@ export function NewServiceOrder() {
                                 </div>
                                 <div className="col-span-3 md:col-span-2">
                                     <div className="bg-white rounded-lg px-2 py-1 border border-slate-200 flex items-center">
-                                        <span className="text-[10px] text-slate-400 mr-2">Qtd</span>
-                                        <input type="number" min="1" value={item.qtd} onChange={e => updateItem(index, 'qtd', e.target.value)} className="w-full bg-transparent outline-none text-sm font-bold text-slate-700" />
+                                        <span className="text-[10px] text-slate-400 mr-2">{QTD_UNIDADE[item.unidade || ''] || 'Qtd'}</span>
+                                        <input type="number" min="0" step={item.unidade && item.unidade !== 'servico' ? '0.1' : '1'} value={item.qtd} onChange={e => updateItem(index, 'qtd', e.target.value)} className="w-full bg-transparent outline-none text-sm font-bold text-slate-700" />
                                     </div>
                                 </div>
                                 <div className="col-span-4 md:col-span-2">

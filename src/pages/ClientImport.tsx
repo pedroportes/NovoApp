@@ -27,8 +27,8 @@ interface LinhaAnalisada {
     repeteLinha?: number
 }
 
-const CAMPOS: (keyof ClientRow)[] = ['nome_razao', 'whatsapp', 'cpf_cnpj', 'email', 'cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf', 'referencia']
-const OPCOES_COLUNA: ClientField[] = ['nome_razao', 'whatsapp', 'cpf_cnpj', 'email', 'cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf', 'referencia', 'endereco_completo']
+const CAMPOS: (keyof ClientRow)[] = ['nome_razao', 'empresa_condominio', 'whatsapp', 'cpf_cnpj', 'email', 'cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf', 'referencia']
+const OPCOES_COLUNA: ClientField[] = ['nome_razao', 'empresa_condominio', 'whatsapp', 'cpf_cnpj', 'email', 'cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf', 'referencia', 'endereco_completo']
 
 const vazio = (v: unknown) => v === null || v === undefined || String(v).trim() === ''
 
@@ -121,7 +121,7 @@ export function ClientImport() {
 
     // ---------- 2. Montar os dados e comparar com o que já existe ----------
     const montarLinha = (r: string[]): ClientRow => {
-        const d: ClientRow = { nome_razao: '', whatsapp: '', cpf_cnpj: '', email: '', cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', uf: '', referencia: '' }
+        const d: ClientRow = { nome_razao: '', whatsapp: '', cpf_cnpj: '', email: '', cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', uf: '', referencia: '', empresa_condominio: '' }
         let enderecoCompleto = ''
         Object.entries(columnMapping).forEach(([idx, field]) => {
             if (!field) return
@@ -153,7 +153,7 @@ export function ClientImport() {
         for (let page = 0; ; page++) {
             const { data, error } = await supabase
                 .from('clientes')
-                .select('id, nome_razao, whatsapp, telefone, cpf_cnpj, email, cep, logradouro, numero, complemento, bairro, cidade, uf, referencia')
+                .select('id, nome_razao, empresa_condominio, whatsapp, telefone, cpf_cnpj, email, cep, logradouro, numero, complemento, bairro, cidade, uf, referencia')
                 .eq('empresa_id', empresaId!)
                 .range(page * pageSize, (page + 1) * pageSize - 1)
             if (error) throw error

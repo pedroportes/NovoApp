@@ -158,6 +158,17 @@ os_db = load_json('ordens_servico')
 usuarios = {u['id']: u for u in load_json('usuarios')}
 marcas = {m['id']: m for m in load_json('empresas_marcas')}
 novos = [r for r in load_csv('Novos.csv') if r['Id'].strip() or r['Nome Cliente'].strip()]
+# Linhas lançadas em dobro na planilha (mesmo Id, data, valor e cliente): o Pedro mandou manter uma só (28/09).
+DOBRADAS = {'2e94bfd4', '5e6d6e1d'}  # Rosa 18/10/2024 e Vanessa 19/11/2024
+_vistas = set()
+_sem_dobra = []
+for r in novos:
+    k = (r['Id'].strip(), r['Data'], r['Valor Total'], r['Nome Cliente'].strip())
+    if k[0] in DOBRADAS and k in _vistas:
+        continue
+    _vistas.add(k)
+    _sem_dobra.append(r)
+novos = _sem_dobra
 antigos = [r for r in load_csv('Antigos.csv') if r['Cliente'].strip() or r['Celular'].strip()]
 cli_by_id = {c['id']: c for c in clientes}
 nome_tec = {v['nome']: k for k, v in usuarios.items() if v.get('nome')}

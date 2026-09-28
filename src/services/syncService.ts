@@ -40,6 +40,8 @@ export const SyncService = {
                     empresa_id: c.empresa_id || '',
                     marca_id: c.marca_id || null,
                     nome_razao: c.nome_razao || 'Sem Nome',
+                    empresa_condominio: c.empresa_condominio || null,
+                    empresa_condominio_id: c.empresa_condominio_id || null,
                     cpf_cnpj: c.cpf_cnpj || undefined,
                     whatsapp: c.whatsapp || undefined,
                     email: c.email || undefined,
@@ -77,6 +79,7 @@ export const SyncService = {
                     nome: s.nome,
                     descricao: s.descricao || undefined,
                     valor_padrao: s.valor_padrao || 0,
+                    unidade: (s as any).unidade || 'servico',
                     empresa_id: s.empresa_id || '',
                     ativo: s.ativo ?? true
                 }))
@@ -236,7 +239,8 @@ export const SyncService = {
             'id', 'empresa_id', 'nome_razao', 'cpf_cnpj', 'whatsapp', 'email',
             'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf', 'cep',
             'referencia', 'ativo', 'criado_por', 'created_at', 'assinatura_url',
-            'avatar_url', 'observacoes' // Add any other columns from schema if needed
+            'avatar_url', 'observacoes',
+            'empresa_condominio' // o banco liga à tabela empresas_condominios da mesma empresa (gatilho)
         ];
 
         const finalPayload: any = {};
@@ -251,6 +255,10 @@ export const SyncService = {
         if (typeof finalPayload.whatsapp === 'string') {
             finalPayload.whatsapp = formatPhoneBR(finalPayload.whatsapp) || null;
             finalPayload.telefone = finalPayload.whatsapp;
+        }
+
+        if (typeof finalPayload.empresa_condominio === 'string') {
+            finalPayload.empresa_condominio = finalPayload.empresa_condominio.trim() || null
         }
 
         // SANITIZE: Convert empty strings to null for UUID fields

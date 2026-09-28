@@ -97,6 +97,7 @@ export function Clients() {
     // Form Data matches DB columns exactly now
     const initialFormState = {
         nome_razao: '',
+        empresa_condominio: '',
         cpf_cnpj: '',
         whatsapp: '',
         email: '',
@@ -120,6 +121,16 @@ export function Clients() {
         if (!k) return null
         return (clients || []).find(c => c.id !== editingClientId && phoneKey(c.whatsapp) === k) || null
     }, [formData.whatsapp, clients, editingClientId])
+
+    // Empresas/condomínios já usados nesta empresa (sugestões ao digitar; funciona offline)
+    const empresasCondominios = useMemo(() => {
+        const vistos = new Map<string, string>()
+        for (const c of clients || []) {
+            const nome = c.empresa_condominio?.trim()
+            if (nome && !vistos.has(nome.toLowerCase())) vistos.set(nome.toLowerCase(), nome)
+        }
+        return [...vistos.values()].sort((a, b) => a.localeCompare(b, 'pt-BR'))
+    }, [clients])
     const [searchingCep, setSearchingCep] = useState(false)
 
     // Autocomplete de endereço
@@ -472,6 +483,7 @@ export function Clients() {
 
         setFormData({
             nome_razao: client.nome_razao || '',
+            empresa_condominio: client.empresa_condominio || '',
             cpf_cnpj: client.cpf_cnpj || '',
             whatsapp: client.whatsapp || '',
             email: client.email || '',
@@ -684,6 +696,7 @@ export function Clients() {
         const address = getClientAddress(client);
         return (
             client.nome_razao?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            client.empresa_condominio?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             client.whatsapp?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             address.toLowerCase().includes(searchTerm.toLowerCase()) ||
             (client as any).telefone?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -941,15 +954,32 @@ export function Clients() {
                             <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Informações Básicas</h3>
 
                             <div className="space-y-2">
-                                <Label htmlFor="name">Nome Completo / Razão Social</Label>
+                                <Label htmlFor="name">Nome do cliente ou quem atendeu</Label>
                                 <Input
                                     id="name"
                                     required
                                     className="h-12 text-lg"
-                                    placeholder="Ex: João da Silva"
+                                    placeholder="Ex: Joana (síndica)"
                                     value={formData.nome_razao}
                                     onChange={e => setFormData({ ...formData, nome_razao: e.target.value })}
                                 />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="empresa_condominio">Empresa / Comércio / Condomínio <span className="font-normal text-muted-foreground">(opcional)</span></Label>
+                                <Input
+                                    id="empresa_condominio"
+                                    list="lista-empresas-condominios"
+                                    autoComplete="off"
+                                    className="h-12 text-lg"
+                                    placeholder="Ex: Condomínio Sol e Mar"
+                                    value={formData.empresa_condominio}
+                                    onChange={e => setFormData({ ...formData, empresa_condominio: e.target.value })}
+                                />
+                                <datalist id="lista-empresas-condominios">
+                                    {empresasCondominios.map(nome => <option key={nome} value={nome} />)}
+                                </datalist>
+                                <p className="text-xs text-slate-400">Onde a pessoa trabalha ou mora. Ex.: síndica Joana → Condomínio Sol e Mar.</p>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1292,7 +1322,7 @@ export function Clients() {
             <div className="relative group max-w-2xl mx-auto mb-8">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-blue-500 transition-colors" />
                 <Input
-                    placeholder="Buscar por nome ou telefone..."
+                    placeholder="Buscar por nome, condomínio ou telefone..."
                     className="pl-12 pr-14 h-14 text-lg shadow-2xl shadow-blue-900/5 border-0 bg-white/80 backdrop-blur-xl rounded-2xl focus:ring-2 focus:ring-blue-500/20 transition-all"
                     value={searchTerm}
                     onChange={(e) => {
@@ -1346,6 +1376,9 @@ export function Clients() {
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <h3 className="font-bold text-base md:text-lg truncate leading-tight">{client.nome_razao}</h3>
+                                        {client.empresa_condominio && (
+                                            <p className="text-xs md:text-sm text-muted-foreground truncate mt-0.5">🏢 {client.empresa_condominio}</p>
+                                        )}
                                         {(() => {
                                             const brand = brands.find(b => b.id === client.marca_id) || (brands.length > 0 ? brands[0] : null)
                                             if (!brand) return null

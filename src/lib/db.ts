@@ -24,6 +24,8 @@ export interface LocalClient {
     criado_por?: string | null;
     created_at?: string;
     marca_id?: string | null;
+    empresa_condominio?: string | null; // Empresa / Condomínio (ex.: síndica Joana -> Condomínio Sol e Mar)
+    empresa_condominio_id?: string | null;
 
     // Sync metadata
     synced: number; // 0 = false, 1 = true
@@ -79,6 +81,7 @@ export interface LocalService {
     nome: string;
     descricao?: string;
     valor_padrao: number;
+    unidade?: 'servico' | 'metro' | 'litro'; // como é cobrado: fixo, por metro ou por litro
     ativo: boolean;
 }
 
