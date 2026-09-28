@@ -1,3 +1,4 @@
+import { enderecoDaMarca } from '@/lib/brandAddress'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { financialService, TechnicianBalance } from '@/services/financialService'
@@ -151,15 +152,23 @@ export function TechnicianFinancialPrint() {
             setBalance(balanceData)
 
             // 3. Brand selection
+            // Busca a filial direto no banco (a lista do topo pode ainda não ter carregado) e,
+            // sem filial escolhida, a primeira filial DESTA empresa (existem 2 contas com o mesmo nome).
             if (brandId && brandId !== 'all') {
                 const found = brands.find(b => b.id === brandId)
                 if (found) setBrandInfo(found)
-            } else if (!brandInfo) {
-                const { data: brandDb } = await supabase
+                else {
+                    const { data: brandDb } = await (supabase as any).from('empresas_marcas').select('*').eq('id', brandId).maybeSingle()
+                    if (brandDb) setBrandInfo(brandDb)
+                }
+            } else if (!brandInfo && userData?.empresa_id) {
+                const { data: brandDb } = await (supabase as any)
                     .from('empresas_marcas')
                     .select('*')
-                    .eq('ordem', 1)
-                    .single()
+                    .eq('empresa_matriz_id', userData.empresa_id)
+                    .order('ordem', { ascending: true })
+                    .limit(1)
+                    .maybeSingle()
                 if (brandDb) setBrandInfo(brandDb)
             }
 
@@ -454,7 +463,7 @@ export function TechnicianFinancialPrint() {
                                     CNPJ: {brandInfo?.cnpj || '38.057.542/0002-54'}
                                 </p>
                                 <p className="text-xs text-slate-500">
-                                    {brandInfo?.endereco || 'R. Primeiro de Maio, 1515 - Sala 2, Xaxim'} • Curitiba - PR
+                                    {enderecoDaMarca(brandInfo) || 'R. Primeiro de Maio, 1515 - Sala 2, Xaxim - Curitiba - PR'}
                                 </p>
                                 <p className="text-xs text-slate-500 font-medium">
                                     Tel/WhatsApp: {brandInfo?.telefone || '(41) 3540-0220'}

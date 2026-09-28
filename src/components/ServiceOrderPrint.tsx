@@ -50,6 +50,7 @@ const ReceiptLayout = ({ os, company, title }: { os: any, company: any, title: s
     const formatAddress = (obj: any) => {
         if (!obj) return '';
         if (typeof obj === 'string') return obj;
+        if (obj.endereco_completo) return obj.endereco_completo; // filial: endereço já montado só com os dados dela
 
         const street = obj.logradouro || obj.endereco || '';
         const num = obj.numero ? (String(obj.numero).toLowerCase().includes('n') ? String(obj.numero) : `nº ${obj.numero}`) : '';
@@ -280,6 +281,7 @@ const ContractLayout = ({ os, company }: { os: any, company: any }) => {
     const formatAddress = (obj: any) => {
         if (!obj) return '';
         if (typeof obj === 'string') return obj;
+        if (obj.endereco_completo) return obj.endereco_completo; // filial: endereço já montado só com os dados dela
 
         const street = obj.logradouro || obj.endereco || '';
         const num = obj.numero ? (String(obj.numero).toLowerCase().includes('n') ? String(obj.numero) : `nº ${obj.numero}`) : '';

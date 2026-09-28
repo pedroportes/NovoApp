@@ -1,3 +1,4 @@
+import { enderecoDaMarca } from '@/lib/brandAddress'
 import { useEffect, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
@@ -55,6 +56,8 @@ export function PrintServiceOrder() {
             setOs(osWithClient)
 
             // Set Company (prioritizing the specific brand/branch that executed the OS)
+            // Endereço vai pronto e montado SÓ com os dados da filial: antes o número, bairro, cidade
+            // e CEP vinham da matriz e o recibo da Curitibana saía com o endereço do Xaxim.
             const finalCompany = {
                 ...(companyData || { nome: 'FlowDrain Services' }),
                 ...(brandData ? {
@@ -62,10 +65,15 @@ export function PrintServiceOrder() {
                     razao_social: brandData.razao_social || companyData?.razao_social,
                     cnpj: brandData.cnpj || companyData?.cnpj,
                     telefone: brandData.telefone || companyData?.telefone,
-                    endereco: brandData.endereco || companyData?.endereco,
+                    email: brandData.email_contato || companyData?.email,
+                    endereco_completo: enderecoDaMarca(brandData),
+                    endereco: brandData.endereco, logradouro: brandData.endereco, numero: brandData.numero,
+                    complemento: brandData.complemento, bairro: brandData.bairro, cidade: brandData.cidade,
+                    estado: brandData.estado, uf: brandData.estado, cep: brandData.cep,
                     chave_pix: brandData.chave_pix || companyData?.chave_pix,
                     logo_url: brandData.logo_url || companyData?.logo_url,
                     cor_tema: brandData.cor_tema || companyData?.cor_tema,
+                    assinatura_url: brandData.assinatura_url || companyData?.assinatura_url,
                 } : {})
             }
             setCompany(finalCompany)

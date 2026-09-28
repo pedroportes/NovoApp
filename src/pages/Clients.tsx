@@ -1,5 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import XLSX from 'xlsx-js-style'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useOutletContext, useNavigate, useSearchParams } from 'react-router-dom'
 import { Plus, Search, Pencil, Trash2, Phone, Mail, User as UserIcon, MapPin, FileText, Camera, Upload, Download, Eye, Image as ImageIcon, Mic, MicOff, Building2, MessageSquare, ClipboardPaste, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
@@ -33,6 +32,8 @@ import { useOfflineClients } from '@/hooks/useOfflineData'
 import { SyncService } from '@/services/syncService'
 
 import { LocalClient, db } from '@/lib/db'
+import { downloadClientTemplate, formatPhoneBR, phoneKey } from '@/lib/clientSpreadsheet'
+import { HistoricoAntigo } from '@/components/clients/HistoricoAntigo'
 
 export function Clients() {
     const { userData } = useAuth()
@@ -88,15 +89,8 @@ export function Clients() {
         return `(${clean.slice(0, 2)}) ${clean.slice(2, 7)}-${clean.slice(7, 11)}`
     }
 
-    const normalizePhoneWithDDD = (val: string) => {
-        if (!val) return ''
-        let clean = val.replace(/\D/g, '')
-        // Se o usuário digitou sem DDD (8 ou 9 dígitos), auto-preenche DDD 41 (Curitiba e Região)
-        if (clean.length === 8 || clean.length === 9) {
-            clean = '41' + clean
-        }
-        return maskPhoneInput(clean)
-    }
+    // Padrão único de telefone: sem DDD -> 41, celular antigo ganha o 9, (41) 99999-9999
+    const normalizePhoneWithDDD = (val: string) => formatPhoneBR(val)
 
     const { canAddClient, isTrialExpired, usage, limits } = useLicenseCheck()
 
@@ -119,6 +113,13 @@ export function Clients() {
         marca_id: ''
     }
     const [formData, setFormData] = useState(initialFormState)
+
+    // Cliente que já tem este telefone (compara os 8 últimos números: com ou sem DDD/9)
+    const clienteMesmoTelefone = useMemo(() => {
+        const k = phoneKey(formData.whatsapp)
+        if (!k) return null
+        return (clients || []).find(c => c.id !== editingClientId && phoneKey(c.whatsapp) === k) || null
+    }, [formData.whatsapp, clients, editingClientId])
     const [searchingCep, setSearchingCep] = useState(false)
 
     // Autocomplete de endereço
@@ -540,24 +541,19 @@ export function Clients() {
         try {
             // Check for duplicates before expensive uploads
             if (!editingClientId) {
-                const cleanPhone = formData.whatsapp.replace(/\D/g, '')
                 const cleanLogradouro = formData.logradouro.trim().toLowerCase()
                 const cleanNumero = formData.numero.trim()
 
-                const duplicateAddressAndPhone = (clients || []).find(c => {
-                    const cPhone = (c.whatsapp || '').replace(/\D/g, '')
-                    const cLogradouro = (c.logradouro || '').trim().toLowerCase()
-                    const cNumero = (c.numero || '').trim()
-                    return cPhone === cleanPhone && cLogradouro === cleanLogradouro && cNumero === cleanNumero
-                })
-
-                if (duplicateAddressAndPhone) {
-                    alert(`Este cliente já está cadastrado: ${duplicateAddressAndPhone.nome_razao}\n(Mesmo endereço e WhatsApp)`)
-                    setIsSubmitting(false)
-                    return
+                // Mesmo telefone (com ou sem DDD) = mesmo cliente: abrir a OS no cadastro que já existe
+                if (clienteMesmoTelefone) {
+                    const cadastrarMesmoAssim = confirm(`Este telefone já é do cliente "${clienteMesmoTelefone.nome_razao}"${clienteMesmoTelefone.logradouro ? ` (${clienteMesmoTelefone.logradouro}${clienteMesmoTelefone.numero ? ', ' + clienteMesmoTelefone.numero : ''})` : ''}.\n\nOK = cadastrar outro cliente mesmo assim\nCancelar = voltar e usar o cadastro que já existe`)
+                    if (!cadastrarMesmoAssim) {
+                        setIsSubmitting(false)
+                        return
+                    }
                 }
 
-                const duplicateAddressOnly = (clients || []).find(c => {
+                const duplicateAddressOnly = cleanLogradouro && cleanNumero && (clients || []).find(c => {
                     const cLogradouro = (c.logradouro || '').trim().toLowerCase()
                     const cNumero = (c.numero || '').trim()
                     return cLogradouro === cleanLogradouro && cNumero === cleanNumero
@@ -714,45 +710,8 @@ export function Clients() {
 
     const displayedClients = sortedClients.slice(0, visibleCount)
 
-    const handleDownloadExample = () => {
-        const headers = ["Nome/Razao Social", "CPF/CNPJ", "Whatsapp", "Email", "CEP", "Logradouro", "Numero", "Complemento", "Bairro", "Cidade", "UF", "Referencia"]
-        const exampleRow = ["João Exemplo", "123.456.789-00", "41999999999", "joao@email.com", "80000-000", "Rua das Flores", "123", "Apto 101", "Centro", "Curitiba", "PR", "Perto da Praça"]
+    const handleDownloadExample = () => downloadClientTemplate()
 
-        const worksheet = XLSX.utils.aoa_to_sheet([headers, exampleRow])
-
-        // Add styles to header row
-        const cols = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"]
-        cols.forEach(col => {
-            const cell = worksheet[`${col}1`]
-            if (cell) {
-                cell.s = {
-                    font: { bold: true, color: { rgb: "FFFFFF" } },
-                    fill: { fgColor: { rgb: "4F46E5" } }, // Indigo-600 like
-                    alignment: { horizontal: "center" }
-                }
-            }
-        })
-
-        // Adjust column widths
-        worksheet['!cols'] = [
-            { wch: 30 }, // Nome
-            { wch: 18 }, // CPF
-            { wch: 15 }, // Whatsapp
-            { wch: 25 }, // Email
-            { wch: 12 }, // CEP
-            { wch: 30 }, // Logradouro
-            { wch: 10 }, // Numero
-            { wch: 20 }, // Complemento
-            { wch: 20 }, // Bairro
-            { wch: 20 }, // Cidade
-            { wch: 5 },  // UF
-            { wch: 30 }, // Referencia
-        ]
-
-        const workbook = XLSX.utils.book_new()
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Modelo Importação")
-        XLSX.writeFile(workbook, "modelo_importacao_clientes.xlsx")
-    }
 
     return (
         <div className="space-y-6 pb-20 md:pb-0 mt-6 md:mt-0">
@@ -838,6 +797,8 @@ export function Clients() {
                                 </p>
                             </div>
                         )}
+
+                        {editingClientId && <div className="mb-4"><HistoricoAntigo clienteId={editingClientId} /></div>}
 
                         {/* IA Auto-Fill: Ficha Física ou Print do WhatsApp */}
                         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500/5 via-teal-500/5 to-blue-500/10 border border-emerald-500/20 shadow-md p-5 mb-6 space-y-4">
@@ -1060,6 +1021,24 @@ export function Clients() {
                                             }
                                         }}
                                     />
+                                    {clienteMesmoTelefone && (
+                                        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 space-y-2">
+                                            <p>
+                                                <strong>Este cliente já existe:</strong> {clienteMesmoTelefone.nome_razao}
+                                                {clienteMesmoTelefone.logradouro && <> · {clienteMesmoTelefone.logradouro}{clienteMesmoTelefone.numero ? `, ${clienteMesmoTelefone.numero}` : ''}</>}
+                                            </p>
+                                            <div className="flex flex-wrap gap-2">
+                                                <Button type="button" size="sm" className="h-8 bg-amber-600 hover:bg-amber-700 text-white"
+                                                    onClick={() => { setIsDialogOpen(false); navigate(`/service-orders/new?client_id=${clienteMesmoTelefone.id}`) }}>
+                                                    Abrir OS para ele
+                                                </Button>
+                                                <Button type="button" size="sm" variant="outline" className="h-8"
+                                                    onClick={() => handleEdit(clienteMesmoTelefone as LocalClient)}>
+                                                    Ver cadastro
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>

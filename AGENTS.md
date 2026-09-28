@@ -328,3 +328,51 @@ Todos configurados com **50% de comissão padrão** em `usuarios` e cadastrados 
 - A FlowDrain IA (`src/services/aiService.ts`) já tem o manual completo (Configurações novas, passo a passo da Contora, erros comuns).
 - Chamado #88 aberto no suporte da Contora (E999 e exclusão da empresa Xaxim `eac0aed9…`, cadastrada por engano).
 - **Fechamento 27/09 20:10:** a NFS-e **nº 3** (Contora, OS #1ee5cdb3) foi **cancelada** às 20:04 pelo card da OS. No console da Contora o selo continua "Autorizado": o cancelamento aparece no "Histórico de tentativas" (Action: cancel, completed). Com as notas nº 1 e nº 2 foi igual. **Contora sem nenhuma nota ativa.** Cada assinante salva o próprio token em Configurações → Nota fiscal; ele vai para `empresa_nfse_segredos` da empresa dele e a Edge Function usa o token da empresa de quem está logado (sem Vercel, sem deploy).
+
+
+---
+
+## 4H. Sessão de 28/09/2026 (Claude Code) — Migração da planilha AppSheet, clientes duplicados, telefone padrão
+
+> Banco de produção ALTERADO (com o OK do Pedro). Código só local, **sem commit/push**. Backups: NovoApp/backup_migracao_20260928/ (JSON de todas as tabelas + ntes_de_aplicar/ + planilha original em CSV).
+
+### O que foi feito no banco (uma transação só, ackup_migracao_20260928/aplicar.sql)
+- Fonte: planilha AppSheet 19NzyHN_bexDuGa2--kwmczIhPl2vQyRKWYJI3dZJhDc (abas **Novos** 2022–26 = OS, **Antigos** 2015–21, **Empresas** = código → empresa). Scripts: scripts/migracao_planilha/simular.py (só lê; gera simulacao.xlsx e plano.json) e plicar.py (gera o SQL).
+- **Clientes**: 3.216 → **3.079**. 139 duplicados juntados (mesmo telefone ou mesmo nome+rua+número; fica o cadastro mais antigo e as OS passam para ele); 3 clientes de teste com o telefone do Pedro (41) 98450-1037 apagados; 140 endereços corrigidos; 13 com dois telefones grudados separados (2º vai na referência); todos os telefones no padrão.
+- **OS**: 1.933 → **1.931** (6 de teste apagadas, 4 novas de 24–25/09). Nova coluna **ordens_servico.origem_id** = Id da linha da planilha (rodar de novo atualiza, não duplica). 23 OS da O Desentupidor: só vão para lá se o técnico foi o Paulo. Técnico: onde a planilha diz "Jorge e Pedro" ou "Pedro e Graça", fica assim (comissões acompanham).
+- **Técnico novo "Jorge e Pedro"** 0da0000-0000-0000-0000-000000000016 (cadastro sem login, igual ao Pedro e Graça).
+- **CNPJs**: Curitibana **57.717.453/0001-50**; São José **38.057.542/0001-73**.
+- **Tabela nova historico_servicos_antigos** (1.739 serviços 2015–2021, 1.719 ligados a cliente). NÃO é baixada com o app: aparece só ao abrir o cliente (componente src/components/clients/HistoricoAntigo.tsx). RLS: leitura por empresa.
+
+### Regras (NÃO QUEBRAR)
+1. **Telefone sempre (41) 99999-9999 / (41) 3333-4444**: sem DDD → 41; celular antigo de 8 dígitos ganha o 9; tira +55 e 0 da frente. Função única ormatPhoneBR em src/lib/clientSpreadsheet.ts (mesma regra do simular.py); aplicada no formulário, no importador e no syncService.processClientSync.
+2. **Cliente repetido = mesmo telefone (8 últimos dígitos, phoneKey)**. O cadastro mostra aviso ao digitar o telefone ("Este cliente já existe", com botões Abrir OS / Ver cadastro) e pede confirmação ao salvar.
+3. No sistema antigo cada chamado recriava o cliente: **um cliente, várias OS**. Cada OS guarda sua empresa (um cliente pode ter OS de duas empresas).
+4. Endereço sem número (loja grande, ex.: Atacadão) é normal: não tratar como erro.
+5. Importação de clientes: tela /clients/import + planilha modelo (downloadClientTemplate). Compara com quem já existe e só completa campos vazios.
+
+### Conferência depois de aplicar
+- 0 OS ligadas a cliente de outra empresa; 0 OS concluídas sem comissão; 0 comissões com técnico diferente da OS; 0 clientes com o telefone de teste.
+- 8 grupos com o mesmo telefone que são pessoas diferentes (não juntados de propósito).
+- 5 OS sem empresa (O Desentupidor feitas por Pedro e já estavam sem empresa).
+
+### ⚠️ Pendências (decisão do Pedro)
+- **Restos antigos (anteriores a esta migração)**: 32 comissões (R$ 179,04, nenhuma paga) e 158 receitas "PENDENTE" (R$ 106.365,90) apontando para OS que não existem mais (sobras das OS duplicadas/antigas apagadas antes). Inflam a tela Financeiro. SQL pronto: ackup_migracao_20260928/limpar_restos_sem_OS.sql (a trava de segurança do agente bloqueou rodar sozinho).
+- **Possíveis OS em dobro na própria planilha**: Rosa (18/10/2024, R$ 480) e Vanessa (19/11/2024, R$ 480), duas OS concluídas cada, mesmo Id. Lista em ackup_migracao_20260928/possiveis_OS_duplicadas.csv.
+- **Assinaturas e fotos (442 OS)** estão no Google Drive (10 pastas "Novos_Images"): falta o Pedro indicar a pasta certa para copiar.
+- A planilha ainda é usada: combinar a data a partir da qual tudo vai só no app. Rodar simular.py de novo pega as OS novas (pelo origem_id).
+- Cliente "Pedrinho teste" (41) 98450-1097 (teste da Contora) continua no banco.
+### 4H (continuação, 28/09 à noite) — limpeza + assinaturas e fotos
+- **Limpeza autorizada pelo Pedro** (ackup_migracao_20260928/limpeza_28_09.sql): apagadas 32 comissões e 158 receitas de OS que não existem mais; apagado o cliente de teste "Pedrinho teste" (41) 98450-1097 e sua OS (NFS-e nº 3 Contora, cancelada). Resultado: **3.078 clientes, 1.930 OS, 1.362 comissões, 1.364 lançamentos**, nenhum resto sem OS.
+- **Assinaturas e fotos da planilha** copiadas do Google Drive para o Storage público **vatars/os-planilha/<arquivo>** e ligadas às OS pelo origem_id (**393 OS com assinatura, 112 com fotos**; Imagem → fotos.antes, Imagem 2 → fotos.depois). Só preencheu OS sem assinatura/foto (não sobrescreve o que o app já tinha). Scripts: scripts/migracao_planilha/midias.py e midias_sql.py.
+  - As imagens estavam em 3 pastas "Novos_Images" do Drive: ppsheet/data/Desentupidora-SeuPedro-6012555/Novos_Images (principal), ppsheet/data/DesentupidoraFabiola-6012555/Novos_Images e Meu Drive/Novos_Images. Cópias dos zips em ackup_migracao_20260928/midias/.
+  - Não achados: 48c03240.Assinatura (OS de teste já apagada) e 1 vídeo.
+- A planilha NÃO foi alterada (o Pedro ainda usa).
+- ⚠️ Pendência antiga vista no teste: o recibo impresso da **Curitibana** mostra o endereço da matriz (Rua Primeiro de Maio, Xaxim), embora empresas_marcas tenha o endereço certo (Rua Anne Frank, 844). Problema da tela/RPC de impressão, não dos dados.
+### 4H (final) — Recibos e extrato com os dados verdadeiros de cada filial
+- **Erro**: o recibo (PrintServiceOrder.tsx) trocava só o nome da rua pela da filial e mantinha número, bairro, cidade e CEP da **matriz** (a Curitibana saía com o endereço do Xaxim). Valia para todas as filiais.
+- **Correção**: endereço montado só com os dados da filial (src/lib/brandAddress.ts → enderecoDaMarca), usado no recibo/orçamento/contrato e no **extrato de comissões** (TechnicianFinancialPrint.tsx, que também tinha "Curitiba - PR" fixo e, sem filial, pegava "ordem = 1" do banco inteiro — quebrava por existirem 2 contas Hidro Curitiba).
+- **Função get_service_order_for_print** (migração supabase/migrations/20260928_print_os_dados_filial.sql, aplicada): (1) o fallback usava colunas inexistentes (empresa_id/matriz em empresas_marcas) e quebrava recibo de OS sem filial; (2) devolvia a linha inteira de empresas (tokens Focus/Webmania) para quem abrisse o link — agora só dados de cabeçalho; (3) não altera mais a OS ao abrir o recibo.
+- Conferido na tela: Curitibana, Hidro, Nossa Cidade, São José e O Desentupidor saem com endereço/CNPJ/telefone certos; extrato com e sem filial idem.
+- Conferência contra a planilha (scripts/migracao_planilha/conferir.py): 1.929 OS sem nenhuma divergência de empresa/técnico/assinatura. 18 códigos repetidos na planilha conferidos à mão (5 assinaturas estavam nas duas OS do mesmo código → corrigido em midias_correcao_repetidos.sql).
+- As 4 OS sem filial (O Desentupidor feitas por Pedro/Pedro e Graça, "ficam onde estavam") imprimem com a filial do **cliente**.

@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import { db, LocalClient, LocalServiceOrder, LocalService, SyncQueueItem } from '@/lib/db'
+import { formatPhoneBR } from '@/lib/clientSpreadsheet'
 
 export const SyncService = {
     // --- PULL: Get data from Cloud to Local ---
@@ -244,6 +245,12 @@ export const SyncService = {
             if (payload[key] !== undefined) {
                 finalPayload[key] = payload[key];
             }
+        }
+
+        // Telefone sempre no padrão (41) 99999-9999, venha de onde vier; "telefone" acompanha o WhatsApp
+        if (typeof finalPayload.whatsapp === 'string') {
+            finalPayload.whatsapp = formatPhoneBR(finalPayload.whatsapp) || null;
+            finalPayload.telefone = finalPayload.whatsapp;
         }
 
         // SANITIZE: Convert empty strings to null for UUID fields
