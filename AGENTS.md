@@ -376,3 +376,4 @@ Todos configurados com **50% de comissão padrão** em `usuarios` e cadastrados 
 - Conferido na tela: Curitibana, Hidro, Nossa Cidade, São José e O Desentupidor saem com endereço/CNPJ/telefone certos; extrato com e sem filial idem.
 - Conferência contra a planilha (scripts/migracao_planilha/conferir.py): 1.929 OS sem nenhuma divergência de empresa/técnico/assinatura. 18 códigos repetidos na planilha conferidos à mão (5 assinaturas estavam nas duas OS do mesmo código → corrigido em midias_correcao_repetidos.sql).
 - As 4 OS sem filial (O Desentupidor feitas por Pedro/Pedro e Graça, "ficam onde estavam") imprimem com a filial do **cliente**.
+- **28/09 (último ajuste)**: as 3 OS sem filial feitas por Pedro e Graça (6ffadd4b, 84eb4289, 2da204ef) foram para a **Hidro Curitiba** (decisão do Pedro); a do Marcio/Translovato (a636f52f, técnico Paulo) foi para a **O Desentupidor**. Nenhuma OS sem filial.
