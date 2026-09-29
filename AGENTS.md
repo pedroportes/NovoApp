@@ -474,3 +474,9 @@ Todos configurados com **50% de comissão padrão** em `usuarios` e cadastrados 
 7. Segurança (seção 4B) continua sem correção.
 
 - **30/09:** o Pedro vai trabalhar em OUTRA coisa no app ORIGINAL (5173/master) antes de voltar à cópia.
+
+### 4M. 29/09/2026 (fim da noite) — Alertas no app oficial + chamado Contora #96
+- **Alertas do cliente trazidos para o app OFICIAL** (master `75a132c9`, local, SEM push): só a função, sem o visual novo. Selo no cliente e no card de OS, filtros "Com alerta"/"Lista negra"/"Bom cliente", campo no cadastro (só dono/admin), faixa + pergunta na Nova OS, Configurações → Alertas de clientes (`/settings/alertas`). `syncService` envia `alerta_nivel`/`alerta_motivo`. Conferido na 5173.
+- **Contora — chamado #88 respondido** (27/09 18:38): E999 = pTotTribSN 0.00; E0120 = Mandirituba sem CNC (não mandar IM); via API opSimpNac = 3 (ME/EPP); filial Xaxim excluída.
+- **Contora — chamado #96 aberto** (29/09 18:33, `console/suporte/83a5d643-a825-4d92-ad2a-b480f91ae1af`): local da prestação dinâmico por nota. A OpenAPI tem `service.incidence_city_code` (IBGE 7 dígitos, por nota; omitido = cidade da sede), mas cita o leiaute ABRASF: perguntado se vale na NFS-e Nacional, se muda ISS/alíquota/retenção, e por que o Município do tomador saiu só "PR" na nota nº 4 (cliente com `codigo_municipio` NULL). **Aguardar resposta + OK do contador antes de implementar.**
+- Falta publicar (só com OK): correção do marca_id (e8e9c799, 19e420cd) e os alertas (75a132c9).
