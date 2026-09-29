@@ -240,6 +240,7 @@ export const SyncService = {
             'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf', 'cep',
             'referencia', 'ativo', 'criado_por', 'created_at', 'assinatura_url',
             'avatar_url', 'observacoes',
+            'marca_id', // empresa (filial) dona do cliente: sem isto o cliente criado pelo app chegava ao banco sem empresa
             'empresa_condominio' // o banco liga à tabela empresas_condominios da mesma empresa (gatilho)
         ];
 
@@ -299,7 +300,8 @@ export const SyncService = {
             'status', 'data_agendamento', 'descricao', 'observacoes',
             'valor_total', 'itens', 'fotos', 'deslocamento_iniciado_em',
             'previsao_chegada', 'endereco', 'created_at', 'updated_at',
-            'assinatura_cliente_url', 'orcamento_gerado', 'recibo_gerado', 'contrato_gerado'
+            'assinatura_cliente_url', 'orcamento_gerado', 'recibo_gerado', 'contrato_gerado',
+            'marca_id' // empresa (filial) que atendeu: sem isto a OS criada pelo app chegava ao banco sem empresa
         ];
 
         const finalPayload: any = {};
