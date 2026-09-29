@@ -26,6 +26,9 @@ export interface LocalClient {
     marca_id?: string | null;
     empresa_condominio?: string | null; // Empresa / Condomínio (ex.: síndica Joana -> Condomínio Sol e Mar)
     empresa_condominio_id?: string | null;
+    alerta_nivel?: 'bom_cliente' | 'atencao' | 'cobrar_mais' | 'lista_negra' | null; // alerta para o próximo atendimento
+    alerta_motivo?: string | null;
+    alerta_em?: string | null;
 
     // Sync metadata
     synced: number; // 0 = false, 1 = true

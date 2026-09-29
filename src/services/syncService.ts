@@ -42,6 +42,9 @@ export const SyncService = {
                     nome_razao: c.nome_razao || 'Sem Nome',
                     empresa_condominio: c.empresa_condominio || null,
                     empresa_condominio_id: c.empresa_condominio_id || null,
+                    alerta_nivel: c.alerta_nivel || null,
+                    alerta_motivo: c.alerta_motivo || null,
+                    alerta_em: c.alerta_em || null,
                     cpf_cnpj: c.cpf_cnpj || undefined,
                     whatsapp: c.whatsapp || undefined,
                     email: c.email || undefined,
@@ -241,7 +244,8 @@ export const SyncService = {
             'referencia', 'ativo', 'criado_por', 'created_at', 'assinatura_url',
             'avatar_url', 'observacoes',
             'marca_id', // empresa (filial) dona do cliente: sem isto o cliente criado pelo app chegava ao banco sem empresa
-            'empresa_condominio' // o banco liga à tabela empresas_condominios da mesma empresa (gatilho)
+            'empresa_condominio', // o banco liga à tabela empresas_condominios da mesma empresa (gatilho)
+            'alerta_nivel', 'alerta_motivo' // o banco só aceita se quem salvou for dono/administrador
         ];
 
         const finalPayload: any = {};

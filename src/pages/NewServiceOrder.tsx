@@ -15,6 +15,7 @@ import { useOfflineClients, useOfflineTechnicians, useOfflineServices } from '@/
 import { compressImage } from '@/lib/utils'
 import { WebmaniaService } from '@/services/webmaniaService'
 import { toast } from 'sonner'
+import { AlertaNivel, CampoAlerta, FaixaAlerta, SeloAlerta, perguntaConfirmacao, useAlertasConfig } from '@/components/clients/AlertaCliente'
 
 interface ServiceItem {
     descricao: string
@@ -108,6 +109,12 @@ export function NewServiceOrder() {
     }
 
     const [selectedServiceId, setSelectedServiceId] = useState('')
+
+    // Alerta do cliente (lista negra etc.)
+    const [listaNegraConfirmada, setListaNegraConfirmada] = useState<string | null>(null)
+    const [editandoAlerta, setEditandoAlerta] = useState(false)
+    const [alertaRascunho, setAlertaRascunho] = useState<{ nivel: AlertaNivel | null; motivo: string }>({ nivel: null, motivo: '' })
+    const [salvandoAlerta, setSalvandoAlerta] = useState(false)
 
     // Calculator State
     const [isCalculatorOpen, setIsCalculatorOpen] = useState(false)
@@ -230,6 +237,37 @@ export function NewServiceOrder() {
             (c.whatsapp && c.whatsapp.includes(search))
         )
     }, [rawClients, clientSearch])
+
+    // Cliente escolhido (independe da busca) e alerta dele
+    const clienteAtual = useMemo(
+        () => (rawClients || []).find(c => c.id === formData.cliente_id) || null,
+        [rawClients, formData.cliente_id]
+    )
+    const podeMarcarAlerta = userData?.cargo === 'admin' || !!(userData as any)?.is_super_admin
+    const alertasCfg = useAlertasConfig()
+
+    const salvarAlertaCliente = async () => {
+        if (!clienteAtual) return
+        if (alertaRascunho.nivel && !alertaRascunho.motivo.trim()) {
+            alert('Escreva o motivo do alerta (ex.: "Não pagou a OS de 10/08").')
+            return
+        }
+        setSalvandoAlerta(true)
+        try {
+            await SyncService.saveClient({
+                ...clienteAtual,
+                alerta_nivel: alertaRascunho.nivel,
+                alerta_motivo: alertaRascunho.nivel ? alertaRascunho.motivo.trim() : null,
+                alerta_em: alertaRascunho.nivel ? new Date().toISOString() : null,
+            })
+            setEditandoAlerta(false)
+            toast.success(alertaRascunho.nivel ? 'Alerta salvo no cadastro do cliente.' : 'Alerta retirado do cliente.')
+        } catch (err: any) {
+            alert('Não foi possível salvar o alerta: ' + (err?.message || err))
+        } finally {
+            setSalvandoAlerta(false)
+        }
+    }
 
     const services = rawServices || []
 
@@ -562,6 +600,16 @@ export function NewServiceOrder() {
             return
         }
 
+        // Alerta que pede confirmação (padrão: lista negra; o assinante escolhe em Configurações → Alertas).
+        // Só pergunta ao abrir OS nova; edição de OS existente não pergunta.
+        const pergunta = !id && clienteAtual && listaNegraConfirmada !== clienteAtual.id
+            ? perguntaConfirmacao(clienteAtual.alerta_nivel, clienteAtual.nome_razao, clienteAtual.alerta_motivo, alertasCfg)
+            : null
+        if (pergunta && clienteAtual) {
+            if (!confirm(pergunta)) return
+            setListaNegraConfirmada(clienteAtual.id)
+        }
+
         setLoading(true)
 
         try {
@@ -890,7 +938,10 @@ export function NewServiceOrder() {
                                                     >
                                                         <div className="flex items-center justify-between w-full">
                                                             <div className="flex-1 min-w-0 pr-2">
-                                                                <div className="font-bold truncate">{client.nome_razao}</div>
+                                                                <div className="flex items-center gap-1.5 min-w-0">
+                                                                    <span className="font-bold truncate">{client.nome_razao}</span>
+                                                                    <SeloAlerta nivel={client.alerta_nivel} />
+                                                                </div>
                                                                 {client.empresa_condominio && (
                                                                     <div className="text-xs text-slate-500 truncate">🏢 {client.empresa_condominio}</div>
                                                                 )}
@@ -945,6 +996,32 @@ export function NewServiceOrder() {
                                 </Button>
                             )}
                         </div>
+
+                        {/* Alerta do cliente: aparece sozinho ao escolher o cliente */}
+                        {clienteAtual && !editandoAlerta && (
+                            <>
+                                <FaixaAlerta nivel={clienteAtual.alerta_nivel} motivo={clienteAtual.alerta_motivo} em={clienteAtual.alerta_em} />
+                                {podeMarcarAlerta && (
+                                    <button type="button" className="text-xs font-semibold text-slate-500 hover:text-slate-800 underline underline-offset-2 ml-1"
+                                        onClick={() => { setAlertaRascunho({ nivel: (clienteAtual.alerta_nivel as AlertaNivel) || null, motivo: clienteAtual.alerta_motivo || '' }); setEditandoAlerta(true) }}>
+                                        {clienteAtual.alerta_nivel ? 'Alterar alerta deste cliente' : 'Marcar alerta neste cliente'}
+                                    </button>
+                                )}
+                            </>
+                        )}
+                        {clienteAtual && editandoAlerta && (
+                            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 space-y-3">
+                                <p className="text-sm font-bold text-slate-700">Alerta para o próximo atendimento de {clienteAtual.nome_razao}</p>
+                                <CampoAlerta nivel={alertaRascunho.nivel} motivo={alertaRascunho.motivo} podeEditar
+                                    onChange={(nivel, motivo) => setAlertaRascunho({ nivel, motivo: nivel ? motivo : '' })} />
+                                <div className="flex gap-2 justify-end">
+                                    <Button type="button" variant="outline" size="sm" onClick={() => setEditandoAlerta(false)}>Cancelar</Button>
+                                    <Button type="button" size="sm" disabled={salvandoAlerta} onClick={salvarAlertaCliente}>
+                                        {salvandoAlerta ? 'Salvando...' : 'Salvar alerta'}
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <div className="space-y-3">

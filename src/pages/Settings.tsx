@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { Building2, Save, Upload, Loader2, Palette, Download, Smartphone, Pencil, Car, PenTool, Receipt, Users, UserCircle, ChevronRight, ArrowLeft } from 'lucide-react'
+import { Building2, Save, Upload, Loader2, Palette, Download, Smartphone, Pencil, Car, PenTool, Receipt, Users, UserCircle, ChevronRight, ArrowLeft, ShieldAlert } from 'lucide-react'
 import { compressImage } from '@/lib/utils'
 import { useOutletContext, useParams, useNavigate } from 'react-router-dom'
 import { ThemeToggle } from '@/components/ThemeToggle'
@@ -13,6 +13,7 @@ import { usePWAInstall } from '@/hooks/usePWAInstall'
 import { SignaturePad } from '@/components/SignaturePad'
 import { WebmaniaService } from '@/services/webmaniaService'
 import { ConfiguracaoNotaFiscal } from '@/components/nfse/ConfiguracaoNotaFiscal'
+import { ConfiguracaoAlertas } from '@/components/clients/ConfiguracaoAlertas'
 import { useBrand } from '@/contexts/BrandContext'
 import { toast } from 'sonner'
 
@@ -21,6 +22,7 @@ const SECOES = [
     { id: 'empresa', titulo: 'Empresa e marca', descricao: 'Logo, dados, endereço, PIX e cor', icon: Building2, salva: true },
     { id: 'nota-fiscal', titulo: 'Nota fiscal', descricao: 'Emissor de NFS-e, token e ambiente', icon: Receipt, salva: false },
     { id: 'tecnicos', titulo: 'Técnicos', descricao: 'Permissões no aplicativo', icon: Users, salva: true },
+    { id: 'alertas', titulo: 'Alertas de clientes', descricao: 'Lista negra, cobrar mais, bom cliente e textos', icon: ShieldAlert, salva: false },
     { id: 'conta', titulo: 'Minha conta', descricao: 'E-mail de acesso e senha', icon: UserCircle, salva: true },
     { id: 'aparencia', titulo: 'Aparência e app', descricao: 'Tema e instalar no celular', icon: Palette, salva: false },
 ] as const
@@ -924,6 +926,12 @@ export function Settings() {
                         {mostra('nota-fiscal') && (
                         <div className="md:col-span-2">
                             <ConfiguracaoNotaFiscal empresaId={userData?.empresa_id || ''} />
+                        </div>
+                        )}
+
+                        {mostra('alertas') && (
+                        <div className="md:col-span-2">
+                            <ConfiguracaoAlertas empresaId={userData?.empresa_id || ''} />
                         </div>
                         )}
 

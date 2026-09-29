@@ -32,6 +32,7 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { SyncService } from '@/services/syncService'
 import { useOfflineServiceOrders, useOfflineClients, useOfflineTechnicians } from '@/hooks/useOfflineData'
+import { SeloAlerta } from '@/components/clients/AlertaCliente'
 
 type ServiceOrder = any
 
@@ -818,6 +819,7 @@ export function ServiceOrders() {
                                                 <span className="font-bold text-slate-800 text-lg truncate group-hover/client:text-emerald-700 group-hover/client:underline underline-offset-2 transition-colors">
                                                     {os.cliente_nome || 'Cliente Desconhecido'}
                                                 </span>
+                                                <SeloAlerta nivel={os.clientes?.alerta_nivel} compacto />
                                                 <Pencil className="h-3.5 w-3.5 text-slate-400 group-hover/client:text-emerald-600 opacity-60 group-hover/client:opacity-100 transition-all shrink-0" />
                                             </div>
                                             {os.clientes?.empresa_condominio && (

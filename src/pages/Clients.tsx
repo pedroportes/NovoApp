@@ -34,6 +34,7 @@ import { SyncService } from '@/services/syncService'
 import { LocalClient, db } from '@/lib/db'
 import { downloadClientTemplate, formatPhoneBR, phoneKey } from '@/lib/clientSpreadsheet'
 import { HistoricoAntigo } from '@/components/clients/HistoricoAntigo'
+import { CampoAlerta, FaixaAlerta, SeloAlerta, nivelValido, nivelVisivel, useAlertasConfig, CORES } from '@/components/clients/AlertaCliente'
 
 export function Clients() {
     const { userData } = useAuth()
@@ -41,6 +42,10 @@ export function Clients() {
     const navigate = useNavigate()
     const { clients, loading } = useOfflineClients()
     const [searchTerm, setSearchTerm] = useState('')
+    // Filtro de alerta: todos / com qualquer alerta / só lista negra
+    const [filtroAlerta, setFiltroAlerta] = useState<'todos' | 'com_alerta' | 'lista_negra' | 'bons'>('todos')
+    const alertasCfg = useAlertasConfig()
+    const podeMarcarAlerta = userData?.cargo === 'admin' || !!(userData as any)?.is_super_admin
     const [smartFilter, setSmartFilter] = useState<SmartFilter | null>(null)
 
     const { isListening, startListening, stopListening } = useVoiceRecognition({
@@ -98,6 +103,8 @@ export function Clients() {
     const initialFormState = {
         nome_razao: '',
         empresa_condominio: '',
+        alerta_nivel: '' as string,
+        alerta_motivo: '',
         cpf_cnpj: '',
         whatsapp: '',
         email: '',
@@ -484,6 +491,8 @@ export function Clients() {
         setFormData({
             nome_razao: client.nome_razao || '',
             empresa_condominio: client.empresa_condominio || '',
+            alerta_nivel: client.alerta_nivel || '',
+            alerta_motivo: client.alerta_motivo || '',
             cpf_cnpj: client.cpf_cnpj || '',
             whatsapp: client.whatsapp || '',
             email: client.email || '',
@@ -550,6 +559,12 @@ export function Clients() {
             return
         }
 
+        if (nivelValido(formData.alerta_nivel) && !formData.alerta_motivo.trim()) {
+            alert('Escreva o motivo do alerta (ex.: "Não pagou a OS de 10/08").')
+            setIsSubmitting(false)
+            return
+        }
+
         try {
             // Check for duplicates before expensive uploads
             if (!editingClientId) {
@@ -558,7 +573,11 @@ export function Clients() {
 
                 // Mesmo telefone (com ou sem DDD) = mesmo cliente: abrir a OS no cadastro que já existe
                 if (clienteMesmoTelefone) {
-                    const cadastrarMesmoAssim = confirm(`Este telefone já é do cliente "${clienteMesmoTelefone.nome_razao}"${clienteMesmoTelefone.logradouro ? ` (${clienteMesmoTelefone.logradouro}${clienteMesmoTelefone.numero ? ', ' + clienteMesmoTelefone.numero : ''})` : ''}.\n\nOK = cadastrar outro cliente mesmo assim\nCancelar = voltar e usar o cadastro que já existe`)
+                    const nivelRepetido = nivelVisivel(clienteMesmoTelefone.alerta_nivel, alertasCfg)
+                    const avisoAlerta = nivelRepetido
+                        ? `${CORES[nivelRepetido].emoji} ${alertasCfg[nivelRepetido].mensagem}${clienteMesmoTelefone.alerta_motivo ? `\nMotivo: ${clienteMesmoTelefone.alerta_motivo}` : ''}\n\n`
+                        : ''
+                    const cadastrarMesmoAssim = confirm(`${avisoAlerta}Este telefone já é do cliente "${clienteMesmoTelefone.nome_razao}"${clienteMesmoTelefone.logradouro ? ` (${clienteMesmoTelefone.logradouro}${clienteMesmoTelefone.numero ? ', ' + clienteMesmoTelefone.numero : ''})` : ''}.\n\nOK = cadastrar outro cliente mesmo assim\nCancelar = voltar e usar o cadastro que já existe`)
                     if (!cadastrarMesmoAssim) {
                         setIsSubmitting(false)
                         return
@@ -648,6 +667,8 @@ export function Clients() {
                 id: editingClientId || undefined,
                 empresa_id: userData.empresa_id,
                 ...formData,
+                alerta_nivel: nivelValido(formData.alerta_nivel),
+                alerta_motivo: nivelValido(formData.alerta_nivel) ? formData.alerta_motivo.trim() : null,
                 whatsapp: finalWhatsapp,
                 avatar_url: avatarUrl,
                 signature_url: signatureUrl,
@@ -692,7 +713,17 @@ export function Clients() {
         ].filter(Boolean).join(', ');
     }
 
+    // Contagens pelos níveis ligados na configuração do assinante (o verde fica à parte)
+    const nivelDe = (c: LocalClient) => nivelVisivel(c.alerta_nivel, alertasCfg)
+    const totalComAlerta = availableClients.filter(c => { const n = nivelDe(c); return !!n && n !== 'bom_cliente' }).length
+    const totalListaNegra = availableClients.filter(c => nivelDe(c) === 'lista_negra').length
+    const totalBons = availableClients.filter(c => nivelDe(c) === 'bom_cliente').length
+
     const filteredClients = availableClients.filter(client => {
+        const nivelCliente = nivelDe(client)
+        if (filtroAlerta === 'com_alerta' && (!nivelCliente || nivelCliente === 'bom_cliente')) return false
+        if (filtroAlerta === 'lista_negra' && nivelCliente !== 'lista_negra') return false
+        if (filtroAlerta === 'bons' && nivelCliente !== 'bom_cliente') return false
         const address = getClientAddress(client);
         return (
             client.nome_razao?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -707,7 +738,7 @@ export function Clients() {
 
     useEffect(() => {
         setVisibleCount(60)
-    }, [searchTerm, selectedBrandId])
+    }, [searchTerm, selectedBrandId, filtroAlerta])
 
     // Ordena do mais recém-criado (topo) para o mais antigo (fim)
     const sortedClients = [...filteredClients].sort((a, b) => {
@@ -950,6 +981,18 @@ export function Clients() {
                             />
                         </div>
 
+                        {(podeMarcarAlerta || nivelValido(formData.alerta_nivel)) && (
+                            <div className="space-y-2">
+                                <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Alerta para o próximo atendimento</h3>
+                                <CampoAlerta
+                                    nivel={formData.alerta_nivel}
+                                    motivo={formData.alerta_motivo}
+                                    podeEditar={podeMarcarAlerta}
+                                    onChange={(nivel, motivo) => setFormData(prev => ({ ...prev, alerta_nivel: nivel || '', alerta_motivo: nivel ? motivo : '' }))}
+                                />
+                            </div>
+                        )}
+
                         <div className="space-y-4">
                             <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Informações Básicas</h3>
 
@@ -1057,6 +1100,7 @@ export function Clients() {
                                                 <strong>Este cliente já existe:</strong> {clienteMesmoTelefone.nome_razao}
                                                 {clienteMesmoTelefone.logradouro && <> · {clienteMesmoTelefone.logradouro}{clienteMesmoTelefone.numero ? `, ${clienteMesmoTelefone.numero}` : ''}</>}
                                             </p>
+                                            <FaixaAlerta nivel={clienteMesmoTelefone.alerta_nivel} motivo={clienteMesmoTelefone.alerta_motivo} em={clienteMesmoTelefone.alerta_em} />
                                             <div className="flex flex-wrap gap-2">
                                                 <Button type="button" size="sm" className="h-8 bg-amber-600 hover:bg-amber-700 text-white"
                                                     onClick={() => { setIsDialogOpen(false); navigate(`/service-orders/new?client_id=${clienteMesmoTelefone.id}`) }}>
@@ -1346,6 +1390,23 @@ export function Clients() {
                 </Button>
             </div>
 
+            {(totalComAlerta > 0 || totalBons > 0) && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 max-w-2xl mx-auto -mt-4 mb-6 px-2">
+                    {([
+                        ['todos', 'Todos', true],
+                        ['com_alerta', `⚠️ Com alerta (${totalComAlerta})`, totalComAlerta > 0],
+                        ['lista_negra', `${CORES.lista_negra.emoji} ${alertasCfg.lista_negra.rotulo} (${totalListaNegra})`, totalListaNegra > 0],
+                        ['bons', `${CORES.bom_cliente.emoji} ${alertasCfg.bom_cliente.rotulo} (${totalBons})`, totalBons > 0],
+                    ] as const).filter(([, , mostrar]) => mostrar).map(([v, rotulo]) => (
+                        <button key={v} type="button" onClick={() => setFiltroAlerta(v)}
+                            className={cn('h-10 rounded-full border px-3 text-xs font-bold transition-colors truncate',
+                                filtroAlerta === v ? 'bg-slate-800 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50')}>
+                            {rotulo}
+                        </button>
+                    ))}
+                </div>
+            )}
+
             <div className="flex items-center justify-between text-xs font-semibold text-slate-500 max-w-2xl mx-auto -mt-5 mb-6 px-2">
                 <span>Total: <strong className="text-slate-800 font-bold">{filteredClients.length}</strong> clientes</span>
                 {filteredClients.length > visibleCount && (
@@ -1375,7 +1436,10 @@ export function Clients() {
                                         )}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <h3 className="font-bold text-base md:text-lg truncate leading-tight">{client.nome_razao}</h3>
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                            <h3 className="font-bold text-base md:text-lg truncate leading-tight">{client.nome_razao}</h3>
+                                            <SeloAlerta nivel={client.alerta_nivel} />
+                                        </div>
                                         {client.empresa_condominio && (
                                             <p className="text-xs md:text-sm text-muted-foreground truncate mt-0.5">🏢 {client.empresa_condominio}</p>
                                         )}
