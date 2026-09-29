@@ -635,6 +635,15 @@ export function NewServiceOrder() {
 
             // if (error) throw error // No error throwing here, SyncService handles it or throws validation error
 
+            // Cliente ainda sem empresa: passa a ser da empresa desta OS (a escolhida no topo / nos botões)
+            if (selectedClient && !selectedClient.marca_id && payload.marca_id) {
+                try {
+                    await SyncService.saveClient({ ...selectedClient, marca_id: payload.marca_id })
+                } catch (e) {
+                    console.warn('Não foi possível gravar a empresa no cliente', e)
+                }
+            }
+
             if (options?.print && savedId) {
                 // Open PDF in new tab
                 window.open(`/print/service-orders/${savedId}?type=${finalType}`, '_blank')
