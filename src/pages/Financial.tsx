@@ -73,12 +73,24 @@ export function Financial() {
 
     const fetchFluxo = async () => {
         try {
+            // O Supabase devolve no máximo 1.000 linhas por vez: busca em páginas para os totais não saírem cortados
+            const buscarFluxoCompleto = async () => {
+                const todos: any[] = []
+                for (let pagina = 0; ; pagina++) {
+                    const { data, error } = await supabase
+                        .from('financeiro_fluxo')
+                        .select('*')
+                        .eq('empresa_id', userData!.empresa_id!)
+                        .order('data_lancamento', { ascending: false })
+                        .range(pagina * 1000, pagina * 1000 + 999)
+                    if (error) return { data: null, error }
+                    todos.push(...(data || []))
+                    if (!data || data.length < 1000) return { data: todos, error: null }
+                }
+            }
+
             const [fluxoResponse, expensesResponse, recentOSResponse] = await Promise.all([
-                supabase
-                    .from('financeiro_fluxo')
-                    .select('*')
-                    .eq('empresa_id', userData!.empresa_id!)
-                    .order('data_lancamento', { ascending: false }),
+                buscarFluxoCompleto(),
                 supabase
                     .from('despesas_tecnicos')
                     .select('*, tecnico:tecnico_id(nome_completo)')

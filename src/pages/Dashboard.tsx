@@ -166,7 +166,6 @@ export function Dashboard() {
                 allOSRes,
                 historicalOSRes,
                 recentOSRes,
-                commissionRes,
                 expenseRes,
                 clientDataRes,
                 pendingExpensesRes
@@ -177,20 +176,6 @@ export function Dashboard() {
                 historicalOSQuery,
                 // Recentes
                 recentOSQuery,
-                // Comissões da empresa
-                supabase
-                    .from('historico_comissoes')
-                    .select(`
-                        id,
-                        valor_comissao,
-                        status_pagamento,
-                        tecnico_id,
-                        created_at,
-                        tecnico:tecnico_id (id, nome, nome_completo)
-                    `)
-                    .eq('empresa_id', userData.empresa_id)
-                    .gte('created_at', dateRange.start.toISOString())
-                    .lte('created_at', dateRange.end.toISOString()),
                 // Despesas operacionais aprovadas a pagar (excluindo despesas já pagas)
                 supabase
                     .from('despesas_tecnicos')
@@ -230,7 +215,21 @@ export function Dashboard() {
             const allOS = allOSRes.data || []
             const historicalOS = historicalOSRes.data || []
             const recentOS = recentOSRes.data || []
-            const commissionData = commissionRes.data || []
+
+            // Comissões SEMPRE pela data da OS (regra do Pedro), nunca pela data em que a comissão foi
+            // gravada (a carga retroativa de 22/09 punha anos de comissão "neste mês"). Pega as comissões
+            // das OS do período (já filtradas por data e filial), em blocos para não estourar a URL.
+            // (historico_comissoes não tem chave estrangeira para ordens_servico, então não dá para juntar na consulta.)
+            const idsDoPeriodo = allOS.map((os: any) => os.id)
+            const commissionData: any[] = []
+            for (let i = 0; i < idsDoPeriodo.length; i += 200) {
+                const { data: bloco } = await supabase
+                    .from('historico_comissoes')
+                    .select('id, valor_comissao, status_pagamento, tecnico_id, created_at, ordem_servico_id, tecnico:tecnico_id (id, nome, nome_completo)')
+                    .eq('empresa_id', userData.empresa_id)
+                    .in('ordem_servico_id', idsDoPeriodo.slice(i, i + 200))
+                commissionData.push(...(bloco || []))
+            }
             const expenseData = expenseRes.data || []
             const clientData = clientDataRes.data || []
             const expensesPending = pendingExpensesRes.data || []
