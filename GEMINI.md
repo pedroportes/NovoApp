@@ -421,3 +421,16 @@ Todos configurados com **50% de comissão padrão** em `usuarios` e cadastrados 
   - Testado em 320, 360 e 1366 px sem rolagem lateral. Mockups das direções mostrados ao Pedro no chat (A/B/C, Egovern, 4 paletas).
 
 - **Fim da sessão 29/09:** tudo salvo em commits LOCAIS, sem push: NovoApp master `11a53aa9` (correções do painel e do financeiro + docs) e NovoApp-design ramo `design-novo` `71cbae82` (alertas + visual novo). Próximo passo: cards de OS no visual novo; depois juntar `design-novo` no master e publicar, só com o OK do Pedro.
+
+### 4K. 29/09/2026 (tarde) — Visual novo em mais telas (CÓPIA) + erro da empresa sumindo
+- **Cópia `NovoApp-design` (ramo `design-novo`, NÃO publicado)**, tudo com amostra aprovada pelo Pedro antes:
+  - **Cards de OS** (modelo B): faixa na cor da empresa (borda do card), status tocável, data e técnico, ligar/WhatsApp/navegar 44 px, rodapé azul petróleo com valor e documentos (verde-limão = já gerado); editar/excluir no menu ⋮; alerta com selo completo + motivo.
+  - **Clientes**: cartões iguais aos de OS, motivo do alerta, "+ OS", rodapé "N OS · última em dd/mm/aaaa" (das OS do aparelho); "Sem empresa" quando vazio.
+  - **Nova OS**: empresas com nome curto, cliente em cartãozinho, Documento em botões, "+ Do catálogo"/Manual/"Calcular litros", total azul petróleo, barra fixa embaixo (Total, Orçamento, Salvar OS laranja). No formulário de OS a barra de navegação de baixo some. Aceita `?date=` e `?time=`.
+  - **Agenda**: abre no **Mês** (Pedro escolheu), Semana a um toque; pontinho com nº de OS; lista do dia em cartões; OS sem horário = "sem hora" (datas meia-noite UTC da planilha); filtra pela empresa do topo; arrastar reagenda no computador.
+  - Topo do app mostra "Nova OS", "Editar OS", "Agenda".
+- **ERRO REAL corrigido (app oficial E cópia, local, SEM push):** `syncService` (fila por onde passa TODA gravação do app) não enviava `marca_id` de clientes nem de OS → tudo criado pelo app chegava ao banco sem empresa. Commits master `e8e9c799` + `19e420cd` (Nova OS grava a empresa no cliente que não tem). **Precisa publicar** (até lá, clientes/OS novos continuam sem empresa).
+- Regra do Pedro: **com uma empresa escolhida no topo, todo cadastro vai para ela**. Cliente sem empresa: o formulário usa a do topo; com "Todas as Marcas" pede para escolher.
+- Banco: Luiz Seiti Hatashita (cliente 2ca6817b) e OS 75ff80f2 colocados na **Hidro Curitiba** (backup_migracao_20260928/luiz_seiti_hidro.sql).
+- Aparelho guarda 3.118 clientes x 3.077 no banco (apagados na junção continuam no Dexie) + 1 item na fila de sync recusado (cliente inexistente). Ver depois.
+- Próximo: Financeiro/Serviços/Equipe/Relatórios no visual novo, ou juntar `design-novo` no master e publicar — só com OK do Pedro.
