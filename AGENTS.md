@@ -434,3 +434,43 @@ Todos configurados com **50% de comissão padrão** em `usuarios` e cadastrados 
 - Banco: Luiz Seiti Hatashita (cliente 2ca6817b) e OS 75ff80f2 colocados na **Hidro Curitiba** (backup_migracao_20260928/luiz_seiti_hidro.sql).
 - Aparelho guarda 3.118 clientes x 3.077 no banco (apagados na junção continuam no Dexie) + 1 item na fila de sync recusado (cliente inexistente). Ver depois.
 - Próximo: Financeiro/Serviços/Equipe/Relatórios no visual novo, ou juntar `design-novo` no master e publicar — só com OK do Pedro.
+
+
+### 4L. 29/09/2026 (noite) — Redesenho da CÓPIA concluído em todas as telas + o que falta (retomar em 30/09)
+
+> Tudo em commits LOCAIS. **Nada publicado** (GitHub/Vercel). Cópia = `C:\Users\pedro\NovoApp-design`, ramo `design-novo`, servidor `novoapp-design` porta **5174**. App oficial = `C:\Users\pedro\NovoApp` (master), porta **5173**. Os dois usam o MESMO banco de produção.
+
+#### Estado de cada tela na cópia (5174)
+| Tela | Como ficou | Commit |
+|---|---|---|
+| Painel | visual novo (petróleo/laranja/limão), faturamento no topo, 8 atalhos, 2x2 | 71cbae82 + revisão |
+| Cards de OS | modelo B: faixa na cor da empresa (borda do card), nome da empresa NA COR DELA, status tocável, data/técnico, ligar/WhatsApp/navegar 44 px, rodapé petróleo com valor e documentos, editar/excluir no menu ⋮, alerta com selo completo + motivo | be7d2254, 5a9b8744, ec08c534 |
+| Clientes | cartões iguais aos de OS, "+ OS", rodapé "N OS · última em", "Sem empresa" quando vazio | 93c53dd1 |
+| Nova OS | empresas com nome curto, cliente em cartãozinho, Documento em botões, "+ Do catálogo"/Manual/"Calcular litros", total petróleo, barra fixa (Total, Orçamento, Salvar OS); barra de navegação some no formulário; aceita ?date=&time= | 5a140d08 |
+| Agenda | abre no MÊS (escolha do Pedro), Semana a um toque, pontinho com nº de OS, lista do dia em cartões, "sem hora" para datas meia-noite UTC, filtra pela empresa do topo | 655dea6b |
+| Financeiro | **VISUAL ORIGINAL** (Pedro rejeitou o novo no celular); só ganhou: um mês por vez, cartão "Comissões a pagar", saldo descontando comissões, data certa na lista | d06b7dca |
+| Serviços | cartõezinhos SEPARADOS (pedido do Pedro), preço à direita, filtros Fixo/Metro/Litro, "+ Novo", excluir dentro da edição | 7d2bd8c9 |
+| Equipe | cartões com o mês de cada técnico (OS + comissão a pagar + botão Extrato), Ativos/Inativos, iniciais, desativar dentro da edição | aec20b14 |
+| Relatórios | tabelas dos 7 relatórios viram cartões no celular (CSS `.tabela-cartoes` em index.css + data-label automático), DRE em 2x2, topo compacto | fda0e042 |
+
+#### Revisão com a skill ui-ux-pro-max (767ce824) e o que o Pedro mandou VOLTAR
+- Mantido da revisão: letras ≥ 12 px, alvos de toque ≥ 44 px, cinzas de texto mais escuros (slate-500/600), campos da Nova OS ligados aos títulos, microfone com nome.
+- **Voltou por gosto do Pedro (não trocar de novo sem perguntar):** nome da empresa escrito na COR da empresa (7abe6e9d); botões no laranja CLARO `fd-laranja` com letra branca (7abe6e9d); filtros e selos de alerta com EMOJIS COLORIDOS ⚠️ ⛔ ✅ 💲 (2b30bb7b).
+- Títulos repetidos no computador removidos (o topo do app já mostra o nome da tela) (9f9b3deb).
+- Método combinado: a cada tela, rodar as buscas da skill + medir em 375 px (contraste, toque, letra, rolagem lateral), mostrar amostra ao lado do original, só aplicar com OK, e pedir para ele conferir no celular.
+
+#### Correções de erro (não são visual)
+- **Empresa sumindo:** a fila de envio (`syncService`) não mandava `marca_id` → todo cliente/OS criado pelo app ia sem empresa. Corrigido no **app oficial** (e8e9c799) e na cópia. Regra do Pedro: com empresa escolhida no topo, todo cadastro vai para ela; cliente sem empresa ganha a empresa da OS aberta para ele (19e420cd). Luiz Seiti Hatashita + OS 75ff80f2 colocados na Hidro Curitiba (banco).
+- **Dois servidores juntos quebravam a cópia** ("Invalid hook call", tela branca): o node_modules é compartilhado e os dois gravavam a mesma pasta `.vite`. A cópia agora usa `node_modules/.vite-design` (vite.config.ts, 03a0e683). No app oficial nada muda.
+- Se a tela ficar branca depois do servidor cair: limpar service worker + cache só daquele localhost.
+
+#### O QUE FALTA (retomar)
+1. **Publicar a correção da empresa (marca_id) do app oficial** — até publicar, clientes/OS novos criados no app oficial continuam chegando sem empresa. Pode subir sozinha, antes do visual. Só com OK do Pedro.
+2. Pedro disse que **"ainda tem mais coisas"** no design: revisar com ele no celular tela por tela (comparando 5173 x 5174) e anotar o que mudar.
+3. Telas ainda NÃO redesenhadas: Configurações (e subpáginas), Não Feitos, Super Admin, telas do técnico (/tecnico/*), impressões (recibo/PDF não devem mudar), login.
+4. Não verificado: modo escuro e celular deitado.
+5. Juntar `design-novo` no master (merge) e publicar — só com OK do Pedro. Cuidado: master tem commits próprios (11a53aa9, b97657ad, e8e9c799, 19e420cd, 62c0773e + este doc) que a cópia também tem em versão própria; resolver conflitos em syncService/NewServiceOrder/Dashboard/Financial.
+6. Pendências antigas: Graça aparece na Equipe só com R$ 134 da conta de TESTE (aaaaaaaa) — não é da empresa; aparelho guarda 3.118 clientes x 3.077 no banco e 1 item recusado na fila de sync (cliente apagado); nomes duplicados "Jorge"/"Pedro" na lista de técnicos do Fechamento; tokens Focus/Contora a trocar; notas Focus 581/584; "Não optante" com o contador; data de virada da planilha; 7 telefones inválidos.
+7. Segurança (seção 4B) continua sem correção.
+
+- **30/09:** o Pedro vai trabalhar em OUTRA coisa no app ORIGINAL (5173/master) antes de voltar à cópia.
