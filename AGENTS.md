@@ -419,3 +419,5 @@ Todos configurados com **50% de comissão padrão** em `usuarios` e cadastrados 
   - Painel (`Dashboard.tsx` + `components/dashboard/DashboardStats.tsx`, que agora exporta `ResumoFaturamento`, `NumerosLinha`, `PorEmpresa`, `Cartao`, `brlCurto`, `nomeCurto`): faturamento no topo (celular) ou cartão petróleo (computador), busca de cliente, grade de 8 atalhos, período 7/15/30/90 (vira 7d/15d… abaixo de 360 px), 3 números (Média, A receber, A pagar), Últimas OS, Por empresa (barra dividida), Equipe, gráficos.
   - Bolinha de conexão (`OfflineSyncProvider.tsx`) virou selo no canto da foto do perfil no celular; botão da IA (`ChatAssistant.tsx`) menor, azul petróleo, acima da barra.
   - Testado em 320, 360 e 1366 px sem rolagem lateral. Mockups das direções mostrados ao Pedro no chat (A/B/C, Egovern, 4 paletas).
+
+- **Fim da sessão 29/09:** tudo salvo em commits LOCAIS, sem push: NovoApp master `11a53aa9` (correções do painel e do financeiro + docs) e NovoApp-design ramo `design-novo` `71cbae82` (alertas + visual novo). Próximo passo: cards de OS no visual novo; depois juntar `design-novo` no master e publicar, só com o OK do Pedro.
