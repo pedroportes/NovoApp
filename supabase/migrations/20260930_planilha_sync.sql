@@ -7,11 +7,14 @@
 --   * Senão cria a OS; o cliente é achado pelo telefone (8 últimos dígitos) ou criado.
 --   * Comissão e receita saem sozinhas pelo gatilho handle_os_completion (OS CONCLUIDO).
 -- p_simular = true: faz tudo e desfaz no fim (só devolve o relatório).
+-- p_limite = N: grava no máximo N OS por chamada (as outras ficam "na fila" para a próxima). O n8n usa 1.
 -- Só o service_role (n8n) pode chamar.
 
 alter table public.ordens_servico add column if not exists origem_atualizado_em text;
 
-create or replace function public.planilha_sync(p_empresa_id uuid, p_linhas jsonb, p_simular boolean default true)
+drop function if exists public.planilha_sync(uuid, jsonb, boolean);
+
+create or replace function public.planilha_sync(p_empresa_id uuid, p_linhas jsonb, p_simular boolean default true, p_limite integer default null)
 returns jsonb
 language plpgsql
 security definer
@@ -38,6 +41,7 @@ declare
     v_desc text;
     v_acao text;
     v_motivo text;
+    v_feitas integer := 0;
     v_marcas constant jsonb := '{
         "86676733": "93bd1248-9bcd-4e69-9d13-5569ae63db03",
         "46a54a5d": "2c6b7aee-3453-49f6-88a5-f09879f8aafb",
@@ -92,7 +96,10 @@ begin
                         v_os_id := v_os.id;
                         if v_upd is not null and v_os.origem_atualizado_em = v_upd then
                             v_acao := 'sem mudança';
+                        elsif p_limite is not null and v_feitas >= p_limite then
+                            v_acao := 'na fila'; v_motivo := 'vai na próxima rodada (uma por vez)';
                         else
+                            v_feitas := v_feitas + 1;
                             update public.ordens_servico o set
                                 marca_id = coalesce(v_marca, o.marca_id),
                                 tecnico_id = v_tec,
@@ -122,11 +129,15 @@ begin
                              or lower(split_part(trim(coalesce(o.cliente_nome, cl.nome_razao, '')), ' ', 1)) = lower(split_part(v_nome, ' ', 1))
                            )
                          order by o.created_at limit 1;
-                        if v_os_id is not null then
+                        if p_limite is not null and v_feitas >= p_limite then
+                            v_acao := 'na fila'; v_motivo := 'vai na próxima rodada (uma por vez)'; v_os_id := null;
+                        elsif v_os_id is not null then
+                            v_feitas := v_feitas + 1;
                             update public.ordens_servico set origem_id = v_origem, origem_atualizado_em = v_upd where id = v_os_id;
                             v_acao := 'ligada'; v_motivo := 'OS já criada no app (mesma data, valor e cliente)';
                         else
                             -- 3) Nova: acha o cliente pelo telefone ou cria
+                            v_feitas := v_feitas + 1;
                             v_cli := null;
                             if length(v_fone) >= 10 then
                                 select cl.id into v_cli from public.clientes cl
@@ -175,9 +186,9 @@ begin
     exception when sqlstate 'P0001' then
         if sqlerrm <> '__simulacao__' then raise; end if;
     end;
-    return jsonb_build_object('simulacao', p_simular, 'total', jsonb_array_length(rel), 'linhas', rel);
+    return jsonb_build_object('simulacao', p_simular, 'total', jsonb_array_length(rel), 'gravadas', v_feitas, 'linhas', rel);
 end;
 $$;
 
-revoke all on function public.planilha_sync(uuid, jsonb, boolean) from public, anon, authenticated;
-grant execute on function public.planilha_sync(uuid, jsonb, boolean) to service_role;
+revoke all on function public.planilha_sync(uuid, jsonb, boolean, integer) from public, anon, authenticated;
+grant execute on function public.planilha_sync(uuid, jsonb, boolean, integer) to service_role;

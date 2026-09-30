@@ -110,9 +110,21 @@ function organizar(linhas, agora = new Date()) {
   return saida;
 }
 
+// Resposta do Composio (GOOGLESHEETS_BATCH_GET): linhas em listas; a 1ª é o cabeçalho
+function paraObjetos(json) {
+  const vr = json?.data?.valueRanges?.[0] || json?.data?.response_data?.valueRanges?.[0];
+  const valores = vr?.values;
+  if (!Array.isArray(valores)) return null;
+  const cab = valores[0].map(c => String(c ?? ''));
+  return valores.slice(1).map(l => Object.fromEntries(cab.map((c, i) => [c, l[i] ?? ''])));
+}
+
 // ---- n8n (Code node, "Run Once for All Items") ----
 if (typeof $input !== 'undefined') {
-  const linhas = organizar($input.all().map(i => i.json));
+  const entradas = $input.all().map(i => i.json);
+  const doComposio = entradas.length === 1 ? paraObjetos(entradas[0]) : null;
+  if (entradas.length === 1 && entradas[0]?.successful === false) throw new Error('Composio não leu a planilha: ' + (entradas[0].error || 'erro desconhecido'));
+  const linhas = organizar(doComposio || entradas);
   return linhas.length ? [{ json: { linhas } }] : [];
 }
-if (typeof module !== 'undefined') module.exports = { organizar, fone, endereco, itens, dinheiro };
+if (typeof module !== 'undefined') module.exports = { organizar, fone, endereco, itens, dinheiro, paraObjetos };
