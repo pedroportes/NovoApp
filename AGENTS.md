@@ -486,3 +486,30 @@ Todos configurados com **50% de comissão padrão** em `usuarios` e cadastrados 
 - **Função `public.planilha_sync(empresa, linhas, simular, limite)`** (migração `20260930_planilha_sync.sql`, só service_role): mesmo Id da planilha (`origem_id`) → atualiza se mudou (`origem_atualizado_em`; OS com NFS-e autorizada não muda valor/serviços); OS criada à mão no app com mesma data+valor+telefone/nome → só liga; senão cria (cliente pelo telefone ou novo). Comissão/receita pelo gatilho. `p_limite = 1` = uma OS por rodada. `p_simular = true` = testa sem gravar.
 - 30/09: importadas as 4 OS de 28/09 que faltavam (Thiago, Seiti ligada à 75ff80f2, Denise, Vinicius).
 - **30/09 (fim da tarde):** fluxo roda **a cada 1 hora**, até **10 OS por rodada** (`p_limite: 10`). NFS-e: Contora corrigiu o DANFSe (chamado #96, 12:08) — município do tomador certo mesmo com local da prestação; conferido no PDF da nota nº 6. Cards de OS: data do serviço ("Seg, 28 set 2026" + hora) e ícones sempre abaixo do valor.
+
+### 4O. 30/09/2026 — RESUMO PARA QUEM CONTINUAR (troca de conta) — LER PRIMEIRO
+> Tudo abaixo está PUBLICADO (GitHub master + Vercel app.gerenciaservicos.com.br), salvo onde diz "pendente".
+
+**1. NFS-e (Fiscal Contora) — CONCLUÍDO**
+- Configurações → Nota fiscal (`src/components/nfse/ConfiguracaoNotaFiscal.tsx`):
+  - Chave **"Local da prestação = cidade do cliente"** (`empresa_nfse_config.local_prestacao_cliente`, salva ao tocar). **LIGADA** na empresa do Pedro (quase todas as notas são de Curitiba e São José dos Pinhais). Contador precisa saber (ISS vai para a prefeitura da cidade do serviço; no Simples a alíquota NÃO muda).
+  - **Informações complementares**: `info_complementar` (toda nota; hoje "garantia de 30 dias exceto vaso e caixas de gordura") e `info_complementar_retencao` (só com ISS retido; botão com o texto padrão "RETENÇÃO ISS {aliquota} CFE. RESOLUÇÕES DO CGSN Nº 94/2011 E 135/2017. INSS NÃO RETIDO CFE ARTIGO 120 DA IN RFB 971/2009."; `{aliquota}` vira "2,00%").
+- Cadastro do cliente: chave **"Este cliente retém o ISS"** (`clientes.iss_retido`) abaixo do CPF/CNPJ; selo "ISS retido" no card da OS. Nota sai com `iss_withheld` e valor líquido sem o ISS; exige CPF/CNPJ.
+- CEP em branco no cadastro do cliente é achado sozinho pela rua+número+bairro+cidade (`src/services/cepService.ts → descobrirCep`, ViaCEP; não chuta).
+- Edge Function **`nfse-contora` (versão 4, publicada)**: cidade do cliente via `municipioDoCliente` (CEP → ViaCEP/BrasilAPI → código gravado → nome+UF na API do IBGE; bloqueia antes de criar a nota se a chave estiver ligada e não achar a cidade); `service.incidence_city_code` (→ `<cLocPrestacao>`/`<cLocIncid>`); `taker.address.city`; descrição da nota montada dos itens da OS (data, serviços com m/L/qtd x valor, desconto, local com empresa/condomínio, observações limpas; SEM nº da OS e SEM técnico; máx. 1.000); `service.additional_info`.
+- **Deploy da Edge Function: o agente é bloqueado; o Pedro roda DENTRO de `C:\Users\pedro\NovoApp`:** `npx supabase functions deploy nfse-contora --project-ref dltqxfyrltgbudtzxzot`.
+- Contora: chamado **#88** (E999/E0120, resolvido) e **#96** (local da prestação por nota; DANFSe mostrava Mandirituba no município do tomador → Contora corrigiu 30/09 12:08). Notas de teste nº 5 e 6 CANCELADAS; nº 4 (Luiz Seiti) cancelada 29/09 — se ele precisar de nota, "Emitir nova" na OS 75ff80f2.
+- Livro Fiscal (Relatórios → Fiscal, `src/pages/Reports.tsx`): botões **PDF** e **Enviar** (WhatsApp, só nota autorizada). Card da OS já tinha WhatsApp na faixa verde da nota autorizada.
+- Pendente (sugerido, sem OK): trocar o status técnico ("processando_autorizacao") por palavras simples no Livro Fiscal e tirar o "cancelada" repetido da coluna dos botões. Focus (`focusNFeService.getCodigoMunicipio`) ainda usa lista fixa de cidades (ruim p/ SaaS; Pedro usa Contora).
+
+**2. Planilha AppSheet → app (n8n) — FUNCIONANDO**
+- Fluxo n8n VPS `cnEP6SAUmsQDhmx8` "Planilha AppSheet -> FlowDrain (OS e clientes)", PUBLICADO: **1x por hora**, lê a aba Novos pelo Composio (credencial "Composio API Key", só leitura), Code `scripts/n8n/organizar_linhas.js` (linhas alteradas nos últimos 3 dias), POST `rpc/planilha_sync` com credencial "Supabase account" (service_role colada pelo Pedro), **até 10 OS por rodada**.
+- Função `public.planilha_sync(empresa, linhas, simular, limite)` (migração `20260930_planilha_sync.sql`): cria / atualiza (origem_id + origem_atualizado_em) / liga OS feita à mão (data+valor+telefone ou nome); nunca duplica; comissão e receita pelo gatilho. Importadas 30/09: Thiago, Denise, Vinicius; Seiti ligada à 75ff80f2. Banco: 1.933 OS.
+- MCP do n8n: o app desktop não reconecta (não existe /mcp); o agente usa o script `n8n_mcp.py` (lê a config do `.claude.json`, nunca imprime o token). Fluxo tem `availableInMCP`.
+- Pendente: fotos/assinaturas novas da planilha (2ª etapa); data da virada (planilha → só app).
+
+**3. Tela das OS (card)** — data do serviço "Seg, 28 set 2026" + hora (data sem hora = meia-noite UTC, usa o dia do texto); ícones do rodapé sempre abaixo do valor, à esquerda. Alertas de cliente (lista negra etc.) publicados.
+
+**4. Cópia de design (NovoApp-design, ramo design-novo, porta 5174) — NÃO publicada**, ver 4L. Falta revisar com o Pedro e juntar no master.
+
+**5. Regras que continuam:** pt-BR SEMPRE (inclusive frases curtas entre ferramentas); nunca colar/digitar tokens; push/deploy só com OK; não usar `supabase db push`; não mexer na planilha; não pôr botões novos nos cards de OS; celular primeiro; mostrar amostra antes de redesenhar.
