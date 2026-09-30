@@ -192,6 +192,21 @@ export function categorizarServico(descricao?: string, itens?: any[]): ServiceCa
     }
 }
 
+// Livro Fiscal: manda a NFS-e pelo WhatsApp (mesma mensagem do card da OS)
+const WHATSAPP_PATH = 'M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z'
+
+function enviarNfseWhatsApp(o: any) {
+    let fone = String(o.clientes?.whatsapp || '').replace(/\D/g, '').replace(/^0+/, '')
+    if (fone.length === 8 || fone.length === 9) fone = '41' + fone
+    if (fone.length === 10 || fone.length === 11) fone = '55' + fone
+    const nome = String(o.cliente_nome || 'Cliente').split(' ')[0]
+    const empresa = o.marcas?.nome || 'Desentupidora Hidro Curitiba'
+    const valor = Number(o.valor_total || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+    const msg = `Olá, *${nome}*! Tudo bem?\n\nSegue a sua *Nota Fiscal de Serviço Eletrônica (NFS-e nº ${o.nfe_numero || ''})* referente ao atendimento da *${empresa}*:\n\n📄 *Acesse e baixe o seu DANFSe em PDF:*\n${o.nfe_pdf_url || o.nfe_url_pdf || ''}\n\n💰 *Valor:* ${valor}\n\nAgradecemos pela preferência e confiança! Qualquer dúvida, estamos sempre à disposição.`
+    if (!fone) toast.info('Cliente sem telefone cadastrado. Escolha o contato no WhatsApp.')
+    window.open(`https://wa.me/${fone}?text=${encodeURIComponent(msg)}`, '_blank')
+}
+
 export function Reports() {
     const navigate = useNavigate()
     const { userData } = useAuth()
@@ -1355,7 +1370,7 @@ Gostaria de agendar uma revisão preventiva com nossa equipe com uma condição 
                                                 <th className="p-4">CPF / CNPJ</th>
                                                 <th className="p-4 text-right">Valor Total</th>
                                                 <th className="p-4 text-center">Status</th>
-                                                <th className="p-4 text-center print:hidden">DANFSe</th>
+                                                <th className="p-4 text-center print:hidden">Nota (PDF / enviar)</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100 font-medium">
@@ -1380,19 +1395,35 @@ Gostaria de agendar uma revisão preventiva com nossa equipe com uma condição 
                                                             {o.nfe_status || 'Pendente'}
                                                         </span>
                                                     </td>
-                                                    <td className="p-4 text-center print:hidden">
+                                                    <td className="p-4 print:hidden">
                                                         {(o.nfe_pdf_url || o.nfe_url_pdf) ? (
-                                                            <a 
-                                                                href={o.nfe_pdf_url || o.nfe_url_pdf} 
-                                                                target="_blank" 
-                                                                rel="noopener noreferrer"
-                                                                className="inline-flex items-center gap-1 text-[11px] font-bold text-purple-700 hover:text-purple-900 bg-purple-50 hover:bg-purple-100 px-2 py-1 rounded-lg transition-colors"
-                                                            >
-                                                                <FileText className="h-3 w-3" />
-                                                                PDF
-                                                            </a>
+                                                            <div className="flex items-center justify-center gap-2">
+                                                                <a
+                                                                    href={o.nfe_pdf_url || o.nfe_url_pdf}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    title="Abrir o PDF da nota (DANFSe)"
+                                                                    className="inline-flex h-9 min-w-[76px] items-center justify-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3 text-xs font-bold text-purple-700 transition-colors hover:bg-purple-100"
+                                                                >
+                                                                    <FileText className="h-4 w-4" />
+                                                                    PDF
+                                                                </a>
+                                                                {['autorizado', 'autorizada'].includes(o.nfe_status?.toLowerCase() || '') ? (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => enviarNfseWhatsApp(o)}
+                                                                        title={o.clientes?.whatsapp ? `Enviar a nota para ${o.clientes.whatsapp}` : 'Enviar a nota pelo WhatsApp'}
+                                                                        className="inline-flex h-9 min-w-[76px] items-center justify-center gap-1.5 rounded-lg bg-[#25D366] px-3 text-xs font-bold text-white transition-colors hover:bg-[#1EBE5D]"
+                                                                    >
+                                                                        <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true"><path d={WHATSAPP_PATH} /></svg>
+                                                                        Enviar
+                                                                    </button>
+                                                                ) : (
+                                                                    <span className="inline-flex h-9 min-w-[76px] items-center justify-center text-[11px] text-slate-400" title="Só nota autorizada é enviada ao cliente">{o.nfe_status === 'cancelado' ? 'cancelada' : 'aguardando'}</span>
+                                                                )}
+                                                            </div>
                                                         ) : (
-                                                            <span className="text-slate-300">-</span>
+                                                            <div className="text-center text-slate-300">-</div>
                                                         )}
                                                     </td>
                                                 </tr>
