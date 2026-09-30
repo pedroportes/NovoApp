@@ -24,6 +24,77 @@ function corsHeaders(origin: string | null) {
 
 const soDigitos = (s: unknown) => String(s ?? '').replace(/\D/g, '')
 
+// ---------- Município do cliente (código IBGE) — vale para qualquer cidade do Brasil ----------
+// Ordem: 1) CEP (ViaCEP; se cair, BrasilAPI + nome); 2) código IBGE já gravado no cadastro;
+// 3) nome da cidade + UF na lista oficial do IBGE. Sem resultado seguro = null (nunca chuta).
+const UF_IBGE: Record<string, string> = {
+    RO: '11', AC: '12', AM: '13', RR: '14', PA: '15', AP: '16', TO: '17', MA: '21', PI: '22', CE: '23',
+    RN: '24', PB: '25', PE: '26', AL: '27', SE: '28', BA: '29', MG: '31', ES: '32', RJ: '33', SP: '35',
+    PR: '41', SC: '42', RS: '43', MS: '50', MT: '51', GO: '52', DF: '53',
+}
+const normalizar = (t: unknown) => String(t ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
+const comTempo = (ms: number) => AbortSignal.timeout(ms)
+
+// Lista de municípios de cada UF (guardada enquanto a função estiver ativa)
+const municipiosPorUf = new Map<string, { codigo: string; nome: string; chave: string }[]>()
+async function municipiosDaUf(uf: string) {
+    if (municipiosPorUf.has(uf)) return municipiosPorUf.get(uf)!
+    const r = await fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${uf}/municipios`, { signal: comTempo(6000) })
+        .then(x => x.ok ? x.json() : null).catch(() => null)
+    if (!Array.isArray(r) || r.length === 0) return []
+    const lista = r.map((m: any) => ({ codigo: String(m.id), nome: String(m.nome), chave: normalizar(m.nome) }))
+    municipiosPorUf.set(uf, lista)
+    return lista
+}
+
+// Acha o município pelo nome escrito no cadastro (aceita "Curitiba – PR", "Hauer Curitiba",
+// "Sao Jose dos Pinhais"). Só devolve quando não há dúvida.
+async function municipioPorNome(cidade: string, uf: string) {
+    if (!UF_IBGE[uf]) return null
+    const alvo = normalizar(cidade)
+    if (!alvo) return null
+    const lista = await municipiosDaUf(uf)
+    const exato = lista.find(m => m.chave === alvo)
+    if (exato) return exato
+    // Nome do município dentro do texto (palavra inteira); fica com o nome mais longo
+    // ("sao jose dos pinhais" contém "pinhais": vale o mais longo, que inclui o outro)
+    const dentro = lista.filter(m => ` ${alvo} `.includes(` ${m.chave} `)).sort((a, b) => b.chave.length - a.chave.length)
+    if (dentro.length === 0) return null
+    if (dentro.length > 1 && !dentro.slice(1).every(m => dentro[0].chave.includes(m.chave))) return null
+    return dentro[0]
+}
+
+async function municipioDoCliente(cli: any): Promise<{ ibge: string; cidade: string; uf: string; fonte: string } | null> {
+    if (!cli) return null
+    const cep = soDigitos(cli.cep)
+    const ufCadastro = String(cli.uf || '').trim().toUpperCase()
+    if (cep.length === 8 && !/^(\d)\1{7}$/.test(cep)) {
+        const via = await fetch(`https://viacep.com.br/ws/${cep}/json/`, { signal: comTempo(5000) })
+            .then(r => r.ok ? r.json() : null).catch(() => null)
+        const ibgeVia = soDigitos(via?.ibge)
+        if (!via?.erro && ibgeVia.length === 7) {
+            return { ibge: ibgeVia, cidade: String(via.localidade || ''), uf: String(via.uf || '').toUpperCase(), fonte: 'cep' }
+        }
+        // ViaCEP fora do ar: BrasilAPI devolve cidade/UF do CEP, e o código vem da lista do IBGE
+        const bra = await fetch(`https://brasilapi.com.br/api/cep/v1/${cep}`, { signal: comTempo(5000) })
+            .then(r => r.ok ? r.json() : null).catch(() => null)
+        if (bra?.city && bra?.state) {
+            const m = await municipioPorNome(String(bra.city), String(bra.state).toUpperCase())
+            if (m) return { ibge: m.codigo, cidade: m.nome, uf: String(bra.state).toUpperCase(), fonte: 'cep' }
+        }
+    }
+    const gravado = soDigitos(cli.codigo_municipio)
+    const ufDoCodigo = Object.keys(UF_IBGE).find(u => UF_IBGE[u] === gravado.slice(0, 2))
+    if (gravado.length === 7 && ufDoCodigo) {
+        const m = (await municipiosDaUf(ufDoCodigo)).find(x => x.codigo === gravado)
+        if (m) return { ibge: gravado, cidade: m.nome, uf: ufDoCodigo, fonte: 'cadastro' }
+    }
+    const m = await municipioPorNome(String(cli.cidade || ''), ufCadastro)
+    if (m) return { ibge: m.codigo, cidade: m.nome, uf: ufCadastro, fonte: 'cidade' }
+    return null
+}
+
 async function contora(token: string, path: string, init: RequestInit = {}) {
     const res = await fetch(`${CONTORA_API}${path}`, {
         ...init,
@@ -129,22 +200,29 @@ serve(async (req) => {
 
                 // Tomador (opcional no padrão nacional)
                 const { data: cli } = os.cliente_id
-                    ? await admin.from('clientes').select('nome_razao, nome, cpf_cnpj, documento, email, whatsapp, telefone, logradouro, endereco, numero, bairro, cidade, uf, cep, codigo_municipio').eq('id', os.cliente_id).maybeSingle()
+                    ? await admin.from('clientes').select('nome_razao, nome, cpf_cnpj, documento, email, whatsapp, telefone, logradouro, endereco, numero, bairro, cidade, uf, cep, codigo_municipio, iss_retido').eq('id', os.cliente_id).maybeSingle()
                     : { data: null }
-                // Cidade do cliente (código IBGE): do cadastro ou pelo CEP (ViaCEP)
+                // Cidade do cliente (código IBGE oficial), achada pelo CEP ou pelo nome da cidade
                 const cep = soDigitos(cli?.cep)
-                let ibge = soDigitos(cli?.codigo_municipio)
-                let cidade = String(cli?.cidade || '').trim()
-                let uf = String(cli?.uf || '').toUpperCase()
-                if (cli && ibge.length !== 7 && cep.length === 8) {
-                    const via = await fetch(`https://viacep.com.br/ws/${cep}/json/`).then(r => r.json()).catch(() => null)
-                    ibge = soDigitos(via?.ibge)
-                    if (via?.localidade) cidade = String(via.localidade)
-                    if (via?.uf) uf = String(via.uf).toUpperCase()
+                const mun = await municipioDoCliente(cli)
+                const ibge = mun?.ibge || ''
+                const cidade = mun?.cidade || ''
+                const uf = mun?.uf || ''
+
+                // Chave ligada: sem a cidade do cliente a nota sairia com a cidade da sede (errado).
+                // Para ANTES de criar a nota (sem efeito fiscal).
+                if (cfg.local_prestacao_cliente && !mun) {
+                    return json({ ok: false, erro: `Não achei a cidade do cliente para o "Local da prestação". Confira o CEP ou a cidade/UF no cadastro do cliente (hoje: CEP ${cli?.cep || '-'}, cidade ${cli?.cidade || '-'}/${cli?.uf || '-'}).` })
+                }
+
+                // ISS retido pelo cliente (chave no cadastro): exige CPF/CNPJ do tomador
+                const issRetido = !!cli?.iss_retido
+                const doc = soDigitos(cli?.cpf_cnpj || cli?.documento)
+                if (issRetido && !(doc.length === 11 || doc.length === 14)) {
+                    return json({ ok: false, erro: 'Este cliente está marcado como "retém o ISS", mas o cadastro está sem CPF/CNPJ válido. Complete o CPF/CNPJ antes de emitir.' })
                 }
 
                 let taker: Record<string, unknown> | undefined
-                const doc = soDigitos(cli?.cpf_cnpj || cli?.documento)
                 if (cli && (doc.length === 11 || doc.length === 14)) {
                     taker = { name: String(cli.nome_razao || cli.nome || 'Cliente').trim().slice(0, 150), document: doc }
                     if (cli.email?.trim()) taker.email = cli.email.trim()
@@ -163,7 +241,7 @@ serve(async (req) => {
 
                 const servico: Record<string, unknown> = {
                     description: `Servicos ref. a OS #${String(os.id).slice(0, 8)}: ${os.descricao_servico || os.descricao || 'Desentupimento e Limpeza de Esgotos'}`.slice(0, 1000),
-                    iss_withheld: false,
+                    iss_withheld: issRetido,
                     iss_tax_situation: 'tributavel',
                 }
                 if (/^\d{6}$/.test(soDigitos(s.nfse_service_code_default))) servico.national_tax_code = soDigitos(s.nfse_service_code_default)
@@ -175,6 +253,13 @@ serve(async (req) => {
                 // Sem o campo, a Contora usa a cidade da sede. Vai para <cLocPrestacao> da DPS nacional.
                 if (cfg.local_prestacao_cliente && ibge.length === 7) servico.incidence_city_code = ibge
 
+                // Com ISS retido o cliente paga o valor menos o ISS (alíquota da faixa do Simples, a mesma da nota)
+                const aliquota = Number(servico.iss_rate ?? 0)
+                if (issRetido && !(aliquota > 0)) {
+                    return json({ ok: false, erro: 'ISS retido precisa da alíquota do ISS no cadastro da empresa no painel da Contora.' })
+                }
+                const liquido = issRetido ? Math.round((valor - valor * aliquota / 100) * 100) / 100 : valor
+
                 const falhar = async (msg: string) => {
                     await atualizarOS({ nfe_status: 'erro_autorizacao', nfe_mensagem_erro: msg, nfe_tipo: 'contora' })
                     return json({ ok: false, erro: msg, os: { nfe_status: 'erro_autorizacao', nfe_mensagem_erro: msg } })
@@ -185,7 +270,7 @@ serve(async (req) => {
                     headers: { ...hdr, 'Content-Type': 'application/json', 'Idempotency-Key': `os_${os.id}_${Date.now()}` },
                     body: JSON.stringify({
                         environment: cfg.contora_ambiente,
-                        payload: { service: servico, ...(taker ? { taker } : {}), amounts: { service_amount: valor, net_amount: valor } },
+                        payload: { service: servico, ...(taker ? { taker } : {}), amounts: { service_amount: valor, net_amount: liquido } },
                     }),
                 })
                 const novoId = rascunho.data?.data?.id

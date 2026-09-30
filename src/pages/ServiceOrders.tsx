@@ -820,6 +820,11 @@ export function ServiceOrders() {
                                                     {os.cliente_nome || 'Cliente Desconhecido'}
                                                 </span>
                                                 <SeloAlerta nivel={os.clientes?.alerta_nivel} compacto />
+                                                {os.clientes?.iss_retido && (
+                                                    <span className="shrink-0 rounded border border-sky-300 bg-sky-50 px-1.5 py-0.5 text-[11px] font-bold leading-none text-sky-800" title="Este cliente retém o ISS: a nota sai com ISS retido e ele paga o valor menos o ISS">
+                                                        ISS retido
+                                                    </span>
+                                                )}
                                                 <Pencil className="h-3.5 w-3.5 text-slate-400 group-hover/client:text-emerald-600 opacity-60 group-hover/client:opacity-100 transition-all shrink-0" />
                                             </div>
                                             {os.clientes?.empresa_condominio && (

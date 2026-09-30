@@ -7,6 +7,7 @@ export interface LocalClient {
     empresa_id: string;
     nome_razao: string;
     cpf_cnpj?: string;
+    iss_retido?: boolean; // NFS-e: o cliente retém o ISS na fonte
     whatsapp?: string;
     email?: string;
     endereco?: string;

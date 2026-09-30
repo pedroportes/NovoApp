@@ -27,6 +27,7 @@ import {
     DialogTrigger,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { SignaturePad } from '@/components/ui/signature-pad'
 import { useOfflineClients } from '@/hooks/useOfflineData'
 import { SyncService } from '@/services/syncService'
@@ -106,6 +107,7 @@ export function Clients() {
         alerta_nivel: '' as string,
         alerta_motivo: '',
         cpf_cnpj: '',
+        iss_retido: false,
         whatsapp: '',
         email: '',
         cep: '',
@@ -494,6 +496,7 @@ export function Clients() {
             alerta_nivel: client.alerta_nivel || '',
             alerta_motivo: client.alerta_motivo || '',
             cpf_cnpj: client.cpf_cnpj || '',
+            iss_retido: !!client.iss_retido,
             whatsapp: client.whatsapp || '',
             email: client.email || '',
             cep: client.cep || '',
@@ -1072,6 +1075,21 @@ export function Clients() {
                                         </Button>
                                     </div>
                                     <p className="text-xs text-slate-400">Para CNPJ, clique em "Buscar" para preencher automaticamente</p>
+                                    <label className="flex items-start justify-between gap-3 rounded-lg border border-slate-200 p-3 cursor-pointer">
+                                        <span>
+                                            <span className="block text-sm font-semibold text-slate-700">Este cliente retém o ISS</span>
+                                            <span className="block text-xs text-slate-500">
+                                                {formData.iss_retido
+                                                    ? 'Toda nota dele sai com ISS retido: ele paga o ISS à prefeitura e desconta do valor.'
+                                                    : 'Normal: o ISS vai no seu DAS. Ligue só se a empresa avisar que retém.'}
+                                            </span>
+                                        </span>
+                                        <Switch
+                                            checked={formData.iss_retido}
+                                            onCheckedChange={v => setFormData(prev => ({ ...prev, iss_retido: v }))}
+                                            aria-label="Este cliente retém o ISS"
+                                        />
+                                    </label>
                                 </div>
                                 <div className="space-y-2">
                                     <div className="flex items-center justify-between">

@@ -46,6 +46,7 @@ export const SyncService = {
                     alerta_motivo: c.alerta_motivo || null,
                     alerta_em: c.alerta_em || null,
                     cpf_cnpj: c.cpf_cnpj || undefined,
+                    iss_retido: !!c.iss_retido,
                     whatsapp: c.whatsapp || undefined,
                     email: c.email || undefined,
                     endereco: c.endereco || undefined,
@@ -245,7 +246,8 @@ export const SyncService = {
             'avatar_url', 'observacoes',
             'marca_id', // empresa (filial) dona do cliente: sem isto o cliente criado pelo app chegava ao banco sem empresa
             'empresa_condominio', // o banco liga à tabela empresas_condominios da mesma empresa (gatilho)
-            'alerta_nivel', 'alerta_motivo' // o banco só aceita se quem salvou for dono/administrador
+            'alerta_nivel', 'alerta_motivo', // o banco só aceita se quem salvou for dono/administrador
+            'iss_retido' // NFS-e: cliente retém o ISS
         ];
 
         const finalPayload: any = {};
