@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Loader2, Save, CheckCircle2, AlertTriangle, Wifi, KeyRound, ExternalLink, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { ConfigurarFocusNFe } from '@/components/ConfigurarFocusNFe';
+import { Switch } from '@/components/ui/switch';
 
 type Provedor = 'focus' | 'contora';
 
@@ -15,6 +16,7 @@ interface ConfigNfse {
     contora_cnpj: string | null;
     contora_empresa_id: string | null;
     contora_total_tax_rate_sn: number | null;
+    local_prestacao_cliente: boolean;
 }
 
 interface EmpresaContora {
@@ -42,6 +44,7 @@ const PADRAO: ConfigNfse = {
     contora_cnpj: null,
     contora_empresa_id: null,
     contora_total_tax_rate_sn: null,
+    local_prestacao_cliente: false,
 };
 
 const NOMES: Record<Provedor, string> = { focus: 'Focus NFe', contora: 'Fiscal Contora' };
@@ -84,7 +87,7 @@ export function ConfiguracaoNotaFiscal({ empresaId }: { empresaId: string }) {
         try {
             const { data, error } = await (supabase as any)
                 .from('empresa_nfse_config')
-                .select('provedor, contora_ambiente, contora_cnpj, contora_empresa_id, contora_total_tax_rate_sn')
+                .select('provedor, contora_ambiente, contora_cnpj, contora_empresa_id, contora_total_tax_rate_sn, local_prestacao_cliente')
                 .eq('empresa_id', empresaId)
                 .maybeSingle();
             if (error) throw error;
@@ -169,7 +172,7 @@ export function ConfiguracaoNotaFiscal({ empresaId }: { empresaId: string }) {
         }
         setSalvando(true);
         try {
-            await gravar({ contora_ambiente: config.contora_ambiente, contora_total_tax_rate_sn: p });
+            await gravar({ contora_ambiente: config.contora_ambiente, contora_total_tax_rate_sn: p, local_prestacao_cliente: config.local_prestacao_cliente });
             toast.success('Configuração da Contora salva');
         } catch (e: any) {
             toast.error(`Não foi possível salvar: ${e.message}`);
@@ -320,6 +323,25 @@ export function ConfiguracaoNotaFiscal({ empresaId }: { empresaId: string }) {
                             className="h-11"
                         />
                         <p className="text-xs text-muted-foreground">Obrigatório para empresa do Simples (ME/EPP). Deixe em branco se não for do Simples.</p>
+                    </div>
+
+                    {/* Local da prestação */}
+                    <div className="rounded-lg border border-border p-3 space-y-1.5">
+                        <label className="flex items-center justify-between gap-3 cursor-pointer">
+                            <span className="text-sm font-semibold">Local da prestação = cidade do cliente</span>
+                            <Switch
+                                checked={config.local_prestacao_cliente}
+                                onCheckedChange={v => setConfig(c => ({ ...c, local_prestacao_cliente: v }))}
+                            />
+                        </label>
+                        <p className="text-xs text-muted-foreground">
+                            {config.local_prestacao_cliente
+                                ? 'Ligado: a nota sai com a cidade do endereço do cliente (pelo CEP). Serviço em Curitiba sai "Curitiba". Cliente sem CEP sai com a cidade da sede.'
+                                : 'Desligado: toda nota sai com a cidade da sede da empresa.'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                            Para desentupimento e limpeza (item 7.10) o ISS é devido na cidade do serviço. No Simples a alíquota não muda, só a prefeitura que recebe: avise o contador antes de ligar.
+                        </p>
                     </div>
 
                     {/* Resultado do teste */}

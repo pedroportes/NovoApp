@@ -94,7 +94,7 @@ serve(async (req) => {
             if (!t) return json({ ok: false, erro: 'A Contora não está conectada. Vá em Configurações → Nota fiscal e salve o token.' })
 
             const { data: cfg } = await admin.from('empresa_nfse_config')
-                .select('provedor, contora_ambiente, contora_cnpj, contora_empresa_id, contora_total_tax_rate_sn')
+                .select('provedor, contora_ambiente, contora_cnpj, contora_empresa_id, contora_total_tax_rate_sn, local_prestacao_cliente')
                 .eq('empresa_id', empresaId).maybeSingle()
             if (!cfg?.contora_cnpj || !cfg?.contora_empresa_id) {
                 return json({ ok: false, erro: 'Escolha a empresa emissora: Configurações → Nota fiscal → Testar conexão.' })
@@ -131,6 +131,18 @@ serve(async (req) => {
                 const { data: cli } = os.cliente_id
                     ? await admin.from('clientes').select('nome_razao, nome, cpf_cnpj, documento, email, whatsapp, telefone, logradouro, endereco, numero, bairro, cidade, uf, cep, codigo_municipio').eq('id', os.cliente_id).maybeSingle()
                     : { data: null }
+                // Cidade do cliente (código IBGE): do cadastro ou pelo CEP (ViaCEP)
+                const cep = soDigitos(cli?.cep)
+                let ibge = soDigitos(cli?.codigo_municipio)
+                let cidade = String(cli?.cidade || '').trim()
+                let uf = String(cli?.uf || '').toUpperCase()
+                if (cli && ibge.length !== 7 && cep.length === 8) {
+                    const via = await fetch(`https://viacep.com.br/ws/${cep}/json/`).then(r => r.json()).catch(() => null)
+                    ibge = soDigitos(via?.ibge)
+                    if (via?.localidade) cidade = String(via.localidade)
+                    if (via?.uf) uf = String(via.uf).toUpperCase()
+                }
+
                 let taker: Record<string, unknown> | undefined
                 const doc = soDigitos(cli?.cpf_cnpj || cli?.documento)
                 if (cli && (doc.length === 11 || doc.length === 14)) {
@@ -138,18 +150,13 @@ serve(async (req) => {
                     if (cli.email?.trim()) taker.email = cli.email.trim()
                     const fone = soDigitos(cli.whatsapp || cli.telefone)
                     if (fone.length >= 10) taker.phone = fone
-                    const cep = soDigitos(cli.cep)
-                    let ibge = soDigitos(cli.codigo_municipio)
-                    if (ibge.length !== 7 && cep.length === 8) {
-                        const via = await fetch(`https://viacep.com.br/ws/${cep}/json/`).then(r => r.json()).catch(() => null)
-                        ibge = soDigitos(via?.ibge)
-                    }
                     const rua = String(cli.logradouro || cli.endereco || '').trim()
                     if (ibge.length === 7 && cep.length === 8 && rua) {
                         taker.address = {
                             street: rua.slice(0, 125), number: String(cli.numero || 'S/N').slice(0, 10),
                             district: String(cli.bairro || 'Centro').slice(0, 60),
-                            city_code: ibge, state_code: String(cli.uf || '').toUpperCase() || undefined, postal_code: cep,
+                            city_code: ibge, ...(cidade ? { city: cidade.slice(0, 60) } : {}),
+                            state_code: uf || undefined, postal_code: cep,
                         }
                     }
                 }
@@ -164,6 +171,9 @@ serve(async (req) => {
                 if (s.nfse_iss_rate_default != null) servico.iss_rate = Number(s.nfse_iss_rate_default)
                 if (/^\d{9}$/.test(soDigitos(s.nfse_nbs_default))) servico.nbs_code = soDigitos(s.nfse_nbs_default)
                 if (pctSimples! > 0) servico.total_tax_rate_sn = pctSimples
+                // Local da prestação = cidade do cliente (chave em Configurações → Nota fiscal).
+                // Sem o campo, a Contora usa a cidade da sede. Vai para <cLocPrestacao> da DPS nacional.
+                if (cfg.local_prestacao_cliente && ibge.length === 7) servico.incidence_city_code = ibge
 
                 const falhar = async (msg: string) => {
                     await atualizarOS({ nfe_status: 'erro_autorizacao', nfe_mensagem_erro: msg, nfe_tipo: 'contora' })
