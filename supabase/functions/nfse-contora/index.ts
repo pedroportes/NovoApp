@@ -261,7 +261,7 @@ serve(async (req) => {
             if (!t) return json({ ok: false, erro: 'A Contora não está conectada. Vá em Configurações → Nota fiscal e salve o token.' })
 
             const { data: cfg } = await admin.from('empresa_nfse_config')
-                .select('provedor, contora_ambiente, contora_cnpj, contora_empresa_id, contora_total_tax_rate_sn, local_prestacao_cliente')
+                .select('provedor, contora_ambiente, contora_cnpj, contora_empresa_id, contora_total_tax_rate_sn, local_prestacao_cliente, info_complementar, info_complementar_retencao')
                 .eq('empresa_id', empresaId).maybeSingle()
             if (!cfg?.contora_cnpj || !cfg?.contora_empresa_id) {
                 return json({ ok: false, erro: 'Escolha a empresa emissora: Configurações → Nota fiscal → Testar conexão.' })
@@ -355,6 +355,13 @@ serve(async (req) => {
                     return json({ ok: false, erro: 'ISS retido precisa da alíquota do ISS no cadastro da empresa no painel da Contora.' })
                 }
                 const liquido = issRetido ? Math.round((valor - valor * aliquota / 100) * 100) / 100 : valor
+
+                // Informações complementares (quadro no fim do DANFSe): texto de toda nota + texto da retenção.
+                // {aliquota} vira a alíquota do ISS desta nota (ex.: "2,00%").
+                const comAliquota = (t: unknown) => limpaTexto(t).replace(/\{\s*aliquota\s*\}/gi, `${aliquota.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`)
+                const infoCompl = [comAliquota(cfg.info_complementar), issRetido ? comAliquota(cfg.info_complementar_retencao) : '']
+                    .filter(Boolean).join(' ').slice(0, 2000)
+                if (infoCompl) servico.additional_info = infoCompl
 
                 const falhar = async (msg: string) => {
                     await atualizarOS({ nfe_status: 'erro_autorizacao', nfe_mensagem_erro: msg, nfe_tipo: 'contora' })

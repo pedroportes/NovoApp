@@ -17,6 +17,8 @@ interface ConfigNfse {
     contora_empresa_id: string | null;
     contora_total_tax_rate_sn: number | null;
     local_prestacao_cliente: boolean;
+    info_complementar: string | null;
+    info_complementar_retencao: string | null;
 }
 
 interface EmpresaContora {
@@ -45,7 +47,12 @@ const PADRAO: ConfigNfse = {
     contora_empresa_id: null,
     contora_total_tax_rate_sn: null,
     local_prestacao_cliente: false,
+    info_complementar: null,
+    info_complementar_retencao: null,
 };
+
+// Texto usual de quem é do Simples quando o cliente retém o ISS ({aliquota} vira "2,00%")
+const TEXTO_RETENCAO_PADRAO = 'RETENÇÃO ISS {aliquota} CFE. RESOLUÇÕES DO CGSN Nº 94/2011 E 135/2017. INSS NÃO RETIDO CFE ARTIGO 120 DA IN RFB 971/2009.';
 
 const NOMES: Record<Provedor, string> = { focus: 'Focus NFe', contora: 'Fiscal Contora' };
 
@@ -87,7 +94,7 @@ export function ConfiguracaoNotaFiscal({ empresaId }: { empresaId: string }) {
         try {
             const { data, error } = await (supabase as any)
                 .from('empresa_nfse_config')
-                .select('provedor, contora_ambiente, contora_cnpj, contora_empresa_id, contora_total_tax_rate_sn, local_prestacao_cliente')
+                .select('provedor, contora_ambiente, contora_cnpj, contora_empresa_id, contora_total_tax_rate_sn, local_prestacao_cliente, info_complementar, info_complementar_retencao')
                 .eq('empresa_id', empresaId)
                 .maybeSingle();
             if (error) throw error;
@@ -172,7 +179,11 @@ export function ConfiguracaoNotaFiscal({ empresaId }: { empresaId: string }) {
         }
         setSalvando(true);
         try {
-            await gravar({ contora_ambiente: config.contora_ambiente, contora_total_tax_rate_sn: p, local_prestacao_cliente: config.local_prestacao_cliente });
+            await gravar({
+                contora_ambiente: config.contora_ambiente, contora_total_tax_rate_sn: p, local_prestacao_cliente: config.local_prestacao_cliente,
+                info_complementar: config.info_complementar?.trim() || null,
+                info_complementar_retencao: config.info_complementar_retencao?.trim() || null,
+            });
             toast.success('Configuração da Contora salva');
         } catch (e: any) {
             toast.error(`Não foi possível salvar: ${e.message}`);
@@ -331,7 +342,14 @@ export function ConfiguracaoNotaFiscal({ empresaId }: { empresaId: string }) {
                             <span className="text-sm font-semibold">Local da prestação = cidade do cliente</span>
                             <Switch
                                 checked={config.local_prestacao_cliente}
-                                onCheckedChange={v => setConfig(c => ({ ...c, local_prestacao_cliente: v }))}
+                                onCheckedChange={async v => {
+                                    try {
+                                        await gravar({ local_prestacao_cliente: v });
+                                        toast.success(v ? 'Local da prestação: cidade do cliente (salvo)' : 'Local da prestação: cidade da sede (salvo)');
+                                    } catch (e: any) {
+                                        toast.error(`Não foi possível salvar: ${e.message}`);
+                                    }
+                                }}
                             />
                         </label>
                         <p className="text-xs text-muted-foreground">
@@ -342,6 +360,49 @@ export function ConfiguracaoNotaFiscal({ empresaId }: { empresaId: string }) {
                         <p className="text-xs text-muted-foreground">
                             Para desentupimento e limpeza (item 7.10) o ISS é devido na cidade do serviço. No Simples a alíquota não muda, só a prefeitura que recebe: avise o contador antes de ligar.
                         </p>
+                        <p className="text-xs text-muted-foreground">Salva na hora ao tocar.</p>
+                    </div>
+
+                    {/* Informações complementares (quadro no fim do DANFSe) */}
+                    <div className="rounded-lg border border-border p-3 space-y-3">
+                        <div>
+                            <p className="text-sm font-semibold">Informações complementares da nota</p>
+                            <p className="text-xs text-muted-foreground">Aparecem no quadro "Informações complementares", no fim da nota.</p>
+                        </div>
+                        <div className="space-y-1">
+                            <Label htmlFor="nf-info-sempre" className="text-xs font-semibold">Em toda nota (opcional)</Label>
+                            <textarea
+                                id="nf-info-sempre"
+                                maxLength={1000}
+                                value={config.info_complementar || ''}
+                                onChange={e => setConfig(c => ({ ...c, info_complementar: e.target.value }))}
+                                placeholder="Ex.: Garantia de 90 dias para o serviço executado."
+                                className="w-full min-h-[64px] rounded-lg border border-input bg-background p-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                            />
+                        </div>
+                        <div className="space-y-1">
+                            <Label htmlFor="nf-info-retencao" className="text-xs font-semibold">Só quando o cliente retém o ISS</Label>
+                            <textarea
+                                id="nf-info-retencao"
+                                maxLength={1000}
+                                value={config.info_complementar_retencao ?? ''}
+                                onChange={e => setConfig(c => ({ ...c, info_complementar_retencao: e.target.value }))}
+                                placeholder={TEXTO_RETENCAO_PADRAO}
+                                className="w-full min-h-[80px] rounded-lg border border-input bg-background p-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                            />
+                            <div className="flex flex-wrap items-center gap-2">
+                                {!config.info_complementar_retencao?.trim() && (
+                                    <Button type="button" variant="outline" className="h-9 text-xs"
+                                        onClick={() => setConfig(c => ({ ...c, info_complementar_retencao: TEXTO_RETENCAO_PADRAO }))}>
+                                        Usar o texto padrão do Simples
+                                    </Button>
+                                )}
+                                <p className="text-xs text-muted-foreground">
+                                    Escreva <code className="rounded bg-muted px-1">{'{aliquota}'}</code> onde deve sair a alíquota do ISS da nota (ex.: 2,00%). Cliente que retém: chave no cadastro do cliente.
+                                </p>
+                            </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground">Salve no botão "Salvar" abaixo.</p>
                     </div>
 
                     {/* Resultado do teste */}
