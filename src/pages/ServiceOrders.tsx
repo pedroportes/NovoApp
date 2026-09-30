@@ -1062,12 +1062,12 @@ export function ServiceOrders() {
                                 </div>
                             )}
 
-                            <div className="pt-4 border-t border-slate-100 flex items-center justify-between relative z-10">
+                            <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-y-2 relative z-10">
                                 <div className="flex flex-col">
                                     <span className="text-xs text-slate-400 font-bold uppercase">Valor Total</span>
                                     <span className="text-2xl font-black text-slate-800 tracking-tight">{formatCurrency(os.valor_total)}</span>
                                 </div>
-                                <div className="flex items-center gap-1.5 ml-2">
+                                <div className="flex items-center gap-1 ml-auto">
                                     {/* Grupo: Controle */}
                                     <div className="flex items-center bg-slate-100/50 p-0.5 rounded-lg border border-slate-200/50">
                                         <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md text-slate-400 hover:text-red-500 hover:bg-white transition-all cursor-pointer" onClick={(e) => {
@@ -1087,12 +1087,12 @@ export function ServiceOrders() {
                                     </div>
 
                                     {/* Grupo: Documentos */}
-                                    <div className="flex items-center gap-1">
+                                    <div className="flex items-center gap-0">
                                         <Button
                                             variant="ghost"
                                             size="icon"
                                             title="Orçamento"
-                                            className={`h-7 w-7 md:h-8 md:w-8 rounded-lg transition-all hover:scale-105 cursor-pointer ${os.orcamento_gerado ? 'text-blue-600 bg-blue-50 shadow-sm border border-blue-100' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}
+                                            className={`h-7 w-7 md:h-8 md:w-7 rounded-lg transition-all hover:scale-105 cursor-pointer ${os.orcamento_gerado ? 'text-blue-600 bg-blue-50 shadow-sm border border-blue-100' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}
                                             onClick={(e) => {
                                                 e.stopPropagation()
                                                 handleGenerateDoc(os, 'ORCAMENTO')
@@ -1105,7 +1105,7 @@ export function ServiceOrders() {
                                             variant="ghost"
                                             size="icon"
                                             title="Recibo"
-                                            className={`h-7 w-7 md:h-8 md:w-8 rounded-lg transition-all hover:scale-105 cursor-pointer ${os.recibo_gerado ? 'text-emerald-600 bg-emerald-50 shadow-sm border border-emerald-100' : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'}`}
+                                            className={`h-7 w-7 md:h-8 md:w-7 rounded-lg transition-all hover:scale-105 cursor-pointer ${os.recibo_gerado ? 'text-emerald-600 bg-emerald-50 shadow-sm border border-emerald-100' : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'}`}
                                             onClick={(e) => {
                                                 e.stopPropagation()
                                                 handleGenerateDoc(os, 'RECIBO')
@@ -1118,7 +1118,7 @@ export function ServiceOrders() {
                                             variant="ghost"
                                             size="icon"
                                             title="Contrato"
-                                            className={`h-7 w-7 md:h-8 md:w-8 rounded-lg transition-all hover:scale-105 cursor-pointer ${os.contrato_gerado ? 'text-indigo-600 bg-indigo-50 shadow-sm border border-indigo-100' : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50'}`}
+                                            className={`h-7 w-7 md:h-8 md:w-7 rounded-lg transition-all hover:scale-105 cursor-pointer ${os.contrato_gerado ? 'text-indigo-600 bg-indigo-50 shadow-sm border border-indigo-100' : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50'}`}
                                             onClick={(e) => {
                                                 e.stopPropagation()
                                                 handleGenerateDoc(os, 'CONTRATO')
@@ -1142,7 +1142,7 @@ export function ServiceOrders() {
                                                 : 'Emitir NFS-e'
                                         }
                                         disabled={emittingIds.has(os.id)}
-                                        className={`h-7 w-7 md:h-8 md:w-8 rounded-lg transition-all hover:scale-105 cursor-pointer ${
+                                        className={`h-7 w-7 md:h-8 md:w-7 rounded-lg transition-all hover:scale-105 cursor-pointer ${
                                             os.nfe_status === 'autorizado' || os.nfe_status === 'autorizada'
                                                 ? 'text-emerald-600 bg-emerald-50 shadow-sm border border-emerald-200 hover:bg-emerald-100'
                                                 : os.nfe_status === 'processando_autorizacao'
