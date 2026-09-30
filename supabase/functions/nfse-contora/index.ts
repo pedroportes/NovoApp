@@ -95,6 +95,102 @@ async function municipioDoCliente(cli: any): Promise<{ ibge: string; cidade: str
     return null
 }
 
+// ---------- Descrição do serviço na nota (texto que o cliente e a prefeitura leem) ----------
+// Data do serviço + serviços feitos (itens da OS) + desconto + local + observações.
+// Sem número da OS e sem técnico (pedido do Pedro). Uma linha só, no máximo 1.000 caracteres.
+const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+const numBR = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })
+const limpaTexto = (t: unknown) => String(t ?? '').replace(/\s+/g, ' ').trim()
+
+// Data do serviço: data "sem hora" fica gravada como meia-noite UTC (usa o dia do texto);
+// data com hora é convertida para o horário de Brasília.
+function dataDoServico(os: any): string {
+    const bruto = String(os.data_agendamento || os.created_at || '')
+    if (!bruto) return ''
+    const semHora = /^\d{4}-\d{2}-\d{2}([T ]00:00:00(\.0+)?(Z|[+-]00(:?00)?)?)?$/.test(bruto)
+    if (semHora) return bruto.slice(0, 10).split('-').reverse().join('/')
+    // Aceita "2026-09-28T12:00:00+00:00" e "2026-09-28 12:00:00+00"
+    const d = new Date(bruto.replace(' ', 'T').replace(/([+-]\d{2})$/, '$1:00'))
+    return isNaN(d.getTime()) ? bruto.slice(0, 10).split('-').reverse().join('/') : d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+}
+
+// Nome do item sem as sobras da planilha antiga ("... | 1,00m | a R$ R$ 780,00/m")
+const nomeDoItem = (t: unknown) => limpaTexto(t).replace(/\s*\|\s*[\d.,]+\s*(m|l)\b.*$/i, '').replace(/[.;\s]+$/, '')
+
+function linhaDoItem(it: any): string {
+    const nome = nomeDoItem(it?.descricao)
+    if (!nome) return ''
+    const qtd = Number(it?.qtd) || 1
+    const unit = Number(it?.valor_unitario) || 0
+    const total = Number(it?.total) || qtd * unit
+    if (it?.unidade === 'metro' || it?.unidade === 'litro') {
+        const u = it.unidade === 'metro' ? 'm' : 'L'
+        return `${nome} (${numBR(qtd)} ${u} x ${brl(unit)} = ${brl(total)})`
+    }
+    if (qtd !== 1 && unit > 0) return `${nome} (${numBR(qtd)} x ${brl(unit)} = ${brl(total)})`
+    return total > 0 ? `${nome} (${brl(total)})` : nome
+}
+
+// Observações sem anotações internas da migração (tipo do documento, "registro inativo", e-mails)
+function observacoesLimpas(t: unknown): string {
+    return limpaTexto(t)
+        .replace(/-?\s*Tipo:\s*(Recibo|Or[çc]amento|Contrato|Servi[çc]o)\b/gi, '')
+        .replace(/-?\s*Registro Inativo\/Cancelado na Planilha/gi, '')
+        .replace(/[\w.+-]+@[\w-]+\.[\w.]+/g, '')
+        .replace(/^[\s\-–|;,.]+|[\s\-–|;,]+$/g, '')
+        .trim()
+}
+
+function enderecoDoServico(cli: any, cidade: string, uf: string): string {
+    if (!cli) return ''
+    const rua = limpaTexto(cli.logradouro || cli.endereco)
+    if (!rua) return ''
+    let e = rua
+    if (cli.numero && !rua.includes(String(cli.numero))) e += `, ${limpaTexto(cli.numero)}`
+    if (cli.complemento) e += ` (${limpaTexto(cli.complemento)})`
+    if (cli.bairro) e += ` - ${limpaTexto(cli.bairro)}`
+    const cid = cidade || limpaTexto(cli.cidade)
+    const est = uf || limpaTexto(cli.uf)
+    // Só não repete a cidade quando a própria rua já termina com ela (bairro "Cidade Industrial de Curitiba" não conta)
+    if (cid && !rua.toLowerCase().endsWith(cid.toLowerCase())) e += `, ${cid}${est ? `/${est}` : ''}`
+    return e
+}
+
+function descricaoDaNota(os: any, cli: any, cidade: string, uf: string): string {
+    const itens = (Array.isArray(os.itens) ? os.itens : []).map(linhaDoItem).filter(Boolean)
+    if (itens.length === 0) {
+        const antigo = nomeDoItem(os.descricao_servico || os.descricao)
+        if (antigo) itens.push(antigo)
+    }
+    const servicos = itens.length ? itens : ['Desentupimento e limpeza']
+    const data = dataDoServico(os)
+    const cabeca = `${servicos.length > 1 ? 'Serviços realizados' : 'Serviço realizado'}${data ? ` em ${data}` : ''}: `
+
+    const extras: string[] = []
+    const soma = (Array.isArray(os.itens) ? os.itens : []).reduce((t: number, it: any) => t + (Number(it?.total) || (Number(it?.qtd) || 1) * (Number(it?.valor_unitario) || 0)), 0)
+    const desconto = Math.round((soma - Number(os.valor_total || 0)) * 100) / 100
+    if (desconto >= 0.01) extras.push(`Desconto: ${brl(desconto)}`)
+    const cond = limpaTexto(cli?.empresa_condominio)
+    const end = enderecoDoServico(cli, cidade, uf)
+    if (end || cond) extras.push(`Local: ${[cond, end].filter(Boolean).join(' - ')}`)
+    const obs = observacoesLimpas(os.observacoes)
+    if (obs) extras.push(`Obs.: ${obs}`)
+
+    const LIMITE = 1000
+    const montar = (lista: string[], resto: number, ext: string[]) =>
+        `${cabeca}${lista.join('; ')}${resto > 0 ? `; e mais ${resto} ${resto > 1 ? 'serviços' : 'serviço'}` : ''}.${ext.length ? ' ' + ext.map(x => x.replace(/\.+$/, '')).join('. ') + '.' : ''}`
+    // Se passar de 1.000: corta as observações, depois tira serviços do fim (avisando quantos faltaram)
+    let texto = montar(servicos, 0, extras)
+    if (texto.length > LIMITE && obs) {
+        const semObs = extras.filter(x => !x.startsWith('Obs.:'))
+        const espaco = LIMITE - montar(servicos, 0, semObs).length - 10
+        texto = espaco > 20 ? montar(servicos, 0, [...semObs, `Obs.: ${obs.slice(0, espaco).trim()}…`]) : montar(servicos, 0, semObs)
+    }
+    let n = servicos.length
+    while (texto.length > LIMITE && n > 1) { n--; texto = montar(servicos.slice(0, n), servicos.length - n, extras.filter(x => !x.startsWith('Obs.:'))) }
+    return texto.slice(0, LIMITE)
+}
+
 async function contora(token: string, path: string, init: RequestInit = {}) {
     const res = await fetch(`${CONTORA_API}${path}`, {
         ...init,
@@ -174,7 +270,7 @@ serve(async (req) => {
             const hdr = { 'X-Company-Document': cnpjEmissor }
 
             const { data: os } = await admin.from('ordens_servico')
-                .select('id, empresa_id, cliente_id, valor_total, descricao, descricao_servico, nfe_status, nfe_ref, nfe_tipo')
+                .select('id, empresa_id, cliente_id, valor_total, descricao, descricao_servico, itens, observacoes, data_agendamento, created_at, nfe_status, nfe_ref, nfe_tipo')
                 .eq('id', os_id).eq('empresa_id', empresaId).maybeSingle()
             if (!os) return json({ ok: false, erro: 'Ordem de serviço não encontrada.' }, 404)
 
@@ -200,7 +296,7 @@ serve(async (req) => {
 
                 // Tomador (opcional no padrão nacional)
                 const { data: cli } = os.cliente_id
-                    ? await admin.from('clientes').select('nome_razao, nome, cpf_cnpj, documento, email, whatsapp, telefone, logradouro, endereco, numero, bairro, cidade, uf, cep, codigo_municipio, iss_retido').eq('id', os.cliente_id).maybeSingle()
+                    ? await admin.from('clientes').select('nome_razao, nome, cpf_cnpj, documento, email, whatsapp, telefone, logradouro, endereco, numero, complemento, bairro, cidade, uf, cep, codigo_municipio, iss_retido, empresa_condominio').eq('id', os.cliente_id).maybeSingle()
                     : { data: null }
                 // Cidade do cliente (código IBGE oficial), achada pelo CEP ou pelo nome da cidade
                 const cep = soDigitos(cli?.cep)
@@ -240,7 +336,7 @@ serve(async (req) => {
                 }
 
                 const servico: Record<string, unknown> = {
-                    description: `Servicos ref. a OS #${String(os.id).slice(0, 8)}: ${os.descricao_servico || os.descricao || 'Desentupimento e Limpeza de Esgotos'}`.slice(0, 1000),
+                    description: descricaoDaNota(os, cli, cidade, uf),
                     iss_withheld: issRetido,
                     iss_tax_situation: 'tributavel',
                 }

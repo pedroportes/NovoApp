@@ -11,7 +11,7 @@ import { compressImage } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useBrand } from '@/contexts/BrandContext'
-import { searchCep } from '@/services/cepService'
+import { searchCep, descobrirCep } from '@/services/cepService'
 import { searchAddress, AddressSuggestion } from '@/services/addressService'
 import { searchCnpj, formatPhone, formatLogradouro } from '@/services/cnpjService'
 import { Input } from '@/components/ui/input'
@@ -141,6 +141,20 @@ export function Clients() {
         return [...vistos.values()].sort((a, b) => a.localeCompare(b, 'pt-BR'))
     }, [clients])
     const [searchingCep, setSearchingCep] = useState(false)
+    // CEP descoberto pela rua + número + cidade (quando o CEP ficou em branco)
+    const [cepPeloEndereco, setCepPeloEndereco] = useState('') // CEP que o app achou (o aviso some se o CEP mudar)
+    useEffect(() => {
+        if (formData.cep.replace(/\D/g, '').length > 0) return
+        if (!formData.logradouro?.trim() || !formData.cidade?.trim() || !formData.uf?.trim()) return
+        let cancelado = false
+        const t = setTimeout(async () => {
+            const achado = await descobrirCep(formData.uf, formData.cidade, formData.logradouro, formData.numero, formData.bairro)
+            if (cancelado || !achado) return
+            setFormData(prev => (prev.cep.replace(/\D/g, '') ? prev : { ...prev, cep: achado.cep }))
+            setCepPeloEndereco(achado.cep)
+        }, 800)
+        return () => { cancelado = true; clearTimeout(t) }
+    }, [formData.cep, formData.logradouro, formData.numero, formData.bairro, formData.cidade, formData.uf])
 
     // Autocomplete de endereço
     const [addressQuery, setAddressQuery] = useState('')
@@ -1175,7 +1189,9 @@ export function Clients() {
                                             </div>
                                         )}
                                     </div>
-                                    <p className="text-xs text-slate-400">Digite o CEP ou preencha o endereço manualmente</p>
+                                    {cepPeloEndereco && formData.cep === cepPeloEndereco
+                                        ? <p className="text-xs text-emerald-700">CEP achado pela rua, número e cidade. Confira.</p>
+                                        : <p className="text-xs text-slate-400">Digite o CEP ou preencha o endereço: o CEP é achado sozinho</p>}
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="numero">Número</Label>
