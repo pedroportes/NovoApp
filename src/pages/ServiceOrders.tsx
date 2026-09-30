@@ -1062,12 +1062,12 @@ export function ServiceOrders() {
                                 </div>
                             )}
 
-                            <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-y-2 relative z-10">
+                            <div className="pt-4 border-t border-slate-100 flex flex-col items-start gap-2 relative z-10">
                                 <div className="flex flex-col">
                                     <span className="text-xs text-slate-400 font-bold uppercase">Valor Total</span>
                                     <span className="text-2xl font-black text-slate-800 tracking-tight">{formatCurrency(os.valor_total)}</span>
                                 </div>
-                                <div className="flex items-center gap-1 ml-auto">
+                                <div className="flex items-center gap-1">
                                     {/* Grupo: Controle */}
                                     <div className="flex items-center bg-slate-100/50 p-0.5 rounded-lg border border-slate-200/50">
                                         <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md text-slate-400 hover:text-red-500 hover:bg-white transition-all cursor-pointer" onClick={(e) => {
