@@ -36,6 +36,22 @@ import { SeloAlerta } from '@/components/clients/AlertaCliente'
 
 type ServiceOrder = any
 
+// Data do card: "Seg, 28 set 2026" + hora ("09:00") quando a OS tem horário.
+// Data "sem hora" fica gravada como meia-noite UTC: usa o dia do texto (senão voltaria um dia).
+function dataDoCard(os: any): { dia: string; hora: string } | null {
+    const bruto = String(os?.data_agendamento || os?.created_at || '')
+    const m = bruto.match(/^(\d{4})-(\d{2})-(\d{2})/)
+    if (!m) return null
+    const semHora = /^\d{4}-\d{2}-\d{2}([T ]00:00:00(\.0+)?(Z|[+-]00(:?00)?)?)?$/.test(bruto)
+    const d = semHora ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12) : new Date(bruto.replace(' ', 'T').replace(/([+-]\d{2})$/, '$1:00'))
+    if (isNaN(d.getTime())) return null
+    const tz = semHora ? undefined : 'America/Sao_Paulo'
+    const parte = (o: Intl.DateTimeFormatOptions) => d.toLocaleString('pt-BR', { ...o, timeZone: tz }).replace('.', '')
+    const semana = parte({ weekday: 'short' })
+    const dia = `${semana.charAt(0).toUpperCase()}${semana.slice(1)}, ${parte({ day: '2-digit' })} ${parte({ month: 'short' })} ${parte({ year: 'numeric' })}`
+    return { dia, hora: semHora ? '' : parte({ hour: '2-digit', minute: '2-digit' }) }
+}
+
 export function ServiceOrders() {
     const navigate = useNavigate()
     const { userData } = useAuth()
@@ -909,6 +925,15 @@ export function ServiceOrders() {
                                             >
                                                 <MapPin className="h-4 w-4" />
                                             </Button>
+                                        )}
+                                        {dataDoCard(os) && (
+                                            <div className="ml-auto flex items-center gap-1.5 text-right" title="Data do serviço">
+                                                <Calendar className="h-4 w-4 text-slate-400 shrink-0" />
+                                                <div className="leading-tight">
+                                                    <p className="text-xs font-bold text-slate-700 whitespace-nowrap">{dataDoCard(os)!.dia}</p>
+                                                    {dataDoCard(os)!.hora && <p className="text-xs text-slate-500">{dataDoCard(os)!.hora}</p>}
+                                                </div>
+                                            </div>
                                         )}
                                     </div>
                                 </div>
