@@ -2,6 +2,22 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db, LocalClient, LocalServiceOrder } from '@/lib/db';
 import { useAuth } from '@/contexts/AuthContext';
 
+// Ordenação por data (mais recente primeiro). A data é convertida UMA vez por registro; antes
+// o comparador chamava `new Date(...)` várias vezes por comparação (milhares de conversões a
+// cada atualização da lista). A ordem resultante é a mesma de antes.
+const paraTempo = (val: any): number => {
+    if (!val) return 0;
+    const d = new Date(val).getTime();
+    return isNaN(d) ? 0 : d;
+};
+const colador = new Intl.Collator(); // equivale a a.localeCompare(b) com o idioma padrão
+
+function ordenarPorTempo<T>(lista: T[], chave: (x: T) => number, desempate: (a: T, b: T) => number): T[] {
+    const pares = lista.map(x => ({ x, t: chave(x) }));
+    pares.sort((a, b) => (b.t !== a.t ? b.t - a.t : desempate(a.x, b.x)));
+    return pares.map(p => p.x);
+}
+
 export function useOfflineClients() {
     const { userData } = useAuth();
 
@@ -14,18 +30,12 @@ export function useOfflineClients() {
                 .equals(userData.empresa_id)
                 .toArray();
 
-            return list.sort((a, b) => {
-                const getTime = (val: any) => {
-                    if (!val) return 0;
-                    const d = new Date(val).getTime();
-                    return isNaN(d) ? 0 : d;
-                };
-                // Mais recentemente criado sempre no topo
-                const tA = getTime(a.created_at) || getTime((a as any).criado_em) || getTime(a.updated_at);
-                const tB = getTime(b.created_at) || getTime((b as any).criado_em) || getTime(b.updated_at);
-                if (tB !== tA) return tB - tA;
-                return (a.nome_razao || '').localeCompare(b.nome_razao || '');
-            });
+            // Mais recentemente criado sempre no topo
+            return ordenarPorTempo(
+                list,
+                c => paraTempo(c.created_at) || paraTempo((c as any).criado_em) || paraTempo(c.updated_at),
+                (a, b) => colador.compare(a.nome_razao || '', b.nome_razao || '')
+            );
         },
         [userData?.empresa_id]
     );
@@ -47,18 +57,12 @@ export function useOfflineServiceOrders() {
                 .equals(userData.empresa_id)
                 .toArray();
 
-            return list.sort((a: LocalServiceOrder, b: LocalServiceOrder) => {
-                const getTime = (val: any) => {
-                    if (!val) return 0;
-                    const d = new Date(val).getTime();
-                    return isNaN(d) ? 0 : d;
-                };
-                // Prioriza created_at (data de abertura da OS) no topo, depois updated_at e agendamento
-                const tA = getTime(a.created_at) || getTime(a.updated_at) || getTime(a.data_agendamento);
-                const tB = getTime(b.created_at) || getTime(b.updated_at) || getTime(b.data_agendamento);
-                if (tB !== tA) return tB - tA;
-                return b.id.localeCompare(a.id);
-            });
+            // Prioriza created_at (data de abertura da OS) no topo, depois updated_at e agendamento
+            return ordenarPorTempo(
+                list,
+                (o: LocalServiceOrder) => paraTempo(o.created_at) || paraTempo(o.updated_at) || paraTempo(o.data_agendamento),
+                (a: LocalServiceOrder, b: LocalServiceOrder) => colador.compare(b.id, a.id)
+            );
         },
         [userData?.empresa_id]
     );

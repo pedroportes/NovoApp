@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase'
 import { db, LocalClient, LocalServiceOrder, LocalService, SyncQueueItem } from '@/lib/db'
 import { formatPhoneBR } from '@/lib/clientSpreadsheet'
-import { planejarPull } from '@/services/pullPlan'
+import { planejarPull, linhaMudou } from '@/services/pullPlan'
 
 /** Resultado do pull: quem chama mostra a verdade (antes o erro era engolido e a tela dizia "sincronizado"). */
 export interface ResultadoPull {
@@ -83,9 +83,12 @@ export const SyncService = {
                     const excluidosPendentes = new Set<string>(
                         fila.filter(i => i.table === 'clientes' && i.action === 'delete' && i.data?.id).map(i => i.data.id)
                     );
-                    const plano = planejarPull(locais, localClients, excluidosPendentes, () => true);
+                    // updated_at é preenchido com "agora" no mapeamento acima: ignora na comparação
+                    const plano = planejarPull(locais, localClients, excluidosPendentes, () => true, (l, s) => linhaMudou(l, s));
                     if (plano.remover.length > 0) await db.clientes.bulkDelete(plano.remover);
-                    await db.clientes.bulkPut(plano.gravar);
+                    // Só grava o que mudou: regravar tudo fazia as telas reordenarem e redesenharem tudo
+                    if (plano.gravar.length > 0) await db.clientes.bulkPut(plano.gravar);
+                    console.log(`[SyncService] clientes: ${plano.gravar.length} gravados, ${plano.semMudanca} sem mudança, ${plano.remover.length} removidos`);
                 });
             }
 
@@ -179,12 +182,13 @@ export const SyncService = {
                     const excluidosPendentes = new Set<string>(
                         fila.filter(i => i.table === 'ordens_servico' && i.action === 'delete' && i.data?.id).map(i => i.data.id)
                     );
-                    const plano = planejarPull(locais, localOss, excluidosPendentes, l => l.synced === 1);
+                    const plano = planejarPull(locais, localOss, excluidosPendentes, l => l.synced === 1, (l, s) => linhaMudou(l, s));
                     if (plano.remover.length > 0) {
                         console.log(`[SyncService] 🧹 Removendo ${plano.remover.length} ordens de serviço locais que foram excluídas do servidor...`);
                         await db.ordens_servico.bulkDelete(plano.remover);
                     }
-                    await db.ordens_servico.bulkPut(plano.gravar);
+                    if (plano.gravar.length > 0) await db.ordens_servico.bulkPut(plano.gravar);
+                    console.log(`[SyncService] OS: ${plano.gravar.length} gravadas, ${plano.semMudanca} sem mudança, ${plano.remover.length} removidas`);
                 });
             }
 

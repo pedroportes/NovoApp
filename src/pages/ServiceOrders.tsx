@@ -38,8 +38,30 @@ type ServiceOrder = any
 
 // Data do card: "Seg, 28 set 2026" + hora ("09:00") quando a OS tem horário.
 // Data "sem hora" fica gravada como meia-noite UTC: usa o dia do texto (senão voltaria um dia).
+// Ordenação do mais recém-criado (topo) para o mais antigo (final). A data é convertida uma vez
+// por OS (antes, o comparador convertia várias vezes por comparação). Empates mantêm a ordem de entrada.
+function ordenarOS<T extends { created_at?: any; updated_at?: any; data_agendamento?: any }>(lista: T[]): T[] {
+    const tempo = (val: any) => {
+        if (!val) return 0
+        const d = new Date(val).getTime()
+        return isNaN(d) ? 0 : d
+    }
+    const pares = lista.map(o => ({ o, t: tempo(o.created_at) || tempo(o.updated_at) || tempo(o.data_agendamento) }))
+    pares.sort((a, b) => b.t - a.t)
+    return pares.map(p => p.o)
+}
+
+// O resultado depende só do texto da data, então fica em cache: antes cada cartão recalculava 3x por
+// renderização, e cada cálculo cria vários formatadores de data (toLocaleString), que são lentos.
+const cacheDataDoCard = new Map<string, { dia: string; hora: string } | null>()
 function dataDoCard(os: any): { dia: string; hora: string } | null {
     const bruto = String(os?.data_agendamento || os?.created_at || '')
+    if (cacheDataDoCard.has(bruto)) return cacheDataDoCard.get(bruto)!
+    const r = calcularDataDoCard(bruto)
+    cacheDataDoCard.set(bruto, r)
+    return r
+}
+function calcularDataDoCard(bruto: string): { dia: string; hora: string } | null {
     const m = bruto.match(/^(\d{4})-(\d{2})-(\d{2})/)
     if (!m) return null
     const semHora = /^\d{4}-\d{2}-\d{2}([T ]00:00:00(\.0+)?(Z|[+-]00(:?00)?)?)?$/.test(bruto)
@@ -77,24 +99,37 @@ export function ServiceOrders() {
             .select('id, nfe_status, nfe_ref, nfe_numero, nfe_pdf_url, nfe_mensagem_erro')
             .eq('empresa_id', userData.empresa_id)
             .not('nfe_status', 'is', null)
-            .then(async ({ data }) => {
-                if (data && data.length > 0) {
-                    for (const item of data) {
-                        try {
-                            const pdfLink = item.nfe_pdf_url || (item as any).nfe_url_pdf || null
-                            await db.ordens_servico.update(item.id, {
-                                nfe_status: item.nfe_status,
-                                nfe_ref: item.nfe_ref,
-                                nfe_numero: item.nfe_numero,
+            .then(async ({ data: dadosBrutos }) => {
+                // (a tipagem gerada do banco não conhece as colunas nfe_*: ver plano, etapa 12)
+                const data = dadosBrutos as any[] | null
+                if (!data || data.length === 0) return
+                try {
+                    // UMA transação, só o que mudou e sem tocar em OS com edição pendente.
+                    // Antes eram ~500 gravações separadas a cada abertura da tela (cada uma fazia as
+                    // listas se redesenharem) e marcava synced=1 até em OS com alteração não enviada.
+                    await db.transaction('rw', db.ordens_servico, async () => {
+                        const locais = await db.ordens_servico.bulkGet(data.map(i => i.id))
+                        const mudancas: { key: string; changes: any }[] = []
+                        data.forEach((item, i) => {
+                            const local: any = locais[i]
+                            if (!local || local.synced === 0) return
+                            const pdfLink = item.nfe_pdf_url || (item as any).nfe_url_pdf || undefined
+                            const novos: Record<string, any> = {
+                                nfe_status: item.nfe_status || undefined,
+                                nfe_ref: item.nfe_ref || undefined,
+                                nfe_numero: item.nfe_numero || undefined,
                                 nfe_url_pdf: pdfLink,
                                 nfe_pdf_url: pdfLink,
-                                nfe_mensagem_erro: item.nfe_mensagem_erro,
-                                synced: 1
-                            })
-                        } catch (e) {
-                            console.warn('Erro ao sincronizar OS local:', e)
-                        }
-                    }
+                                nfe_mensagem_erro: item.nfe_mensagem_erro || undefined,
+                            }
+                            // vazio (null/undefined) conta como igual
+                            const mudou = Object.keys(novos).some(k => (local[k] ?? undefined) !== novos[k])
+                            if (mudou) mudancas.push({ key: item.id, changes: novos })
+                        })
+                        if (mudancas.length > 0) await db.ordens_servico.bulkUpdate(mudancas)
+                    })
+                } catch (e) {
+                    console.warn('Erro ao sincronizar OS local:', e)
                 }
             })
     }, [userData?.empresa_id])
@@ -246,6 +281,9 @@ export function ServiceOrders() {
         return () => setFabAction(null)
     }, [setFabAction, handleNewOSClick])
 
+    // Filtro + ordenação em useMemo: antes rodavam a CADA renderização sobre todas as OS
+    // (1.900+), inclusive enquanto a sincronização atualizava as listas.
+    const { filteredOrders, sortedOrders } = useMemo(() => {
     const filteredOrders = orders.filter(os => {
         const term = searchTerm.toLowerCase()
 
@@ -287,6 +325,9 @@ export function ServiceOrders() {
 
         return false
     })
+    const sortedOrders = ordenarOS(filteredOrders)
+    return { filteredOrders, sortedOrders }
+    }, [orders, searchTerm, selectedBrandId, smartFilter])
 
     const formatCurrency = (value: number | null) => {
         if (!value) return 'R$ 0,00'
@@ -296,18 +337,6 @@ export function ServiceOrders() {
     const formatDate = (dateString: string) => {
         return new Date(dateString).toLocaleDateString('pt-BR')
     }
-
-    // Ordenação do mais recém-criado (topo) para o mais antigo (final)
-    const sortedOrders = [...filteredOrders].sort((a, b) => {
-        const getTime = (val: any) => {
-            if (!val) return 0;
-            const d = new Date(val).getTime();
-            return isNaN(d) ? 0 : d;
-        };
-        const tA = getTime(a.created_at) || getTime(a.updated_at) || getTime(a.data_agendamento);
-        const tB = getTime(b.created_at) || getTime(b.updated_at) || getTime(b.data_agendamento);
-        return tB - tA;
-    });
 
     const confirmDelete = async () => {
         if (!osToDelete) return
