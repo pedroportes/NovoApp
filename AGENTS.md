@@ -567,3 +567,42 @@ Todos configurados com **50% de comissão padrão** em `usuarios` e cadastrados 
 **6. Ambiente usado**
 - Cópia isolada: `C:\Users\pedro\NovoApp-rapido` (ramo `otimizacao-velocidade`, já juntado ao `master`). **Cuidado:** o `node_modules` dela é um atalho (*junction*) para o do `NovoApp`; **nunca** rodar `git worktree remove` nem `Remove-Item -Recurse` nela sem antes remover o atalho, ou o `node_modules` do app principal pode ser apagado.
 - Servidor de teste `novoapp-rapido` (porta 5175, `vite preview` da pasta `dist-t3`), configurado em `.claude/launch.json` do `meu-app`. Para ver build novo ali é preciso limpar o service worker da origem 5175.
+
+
+---
+
+### 4Q. 01/10/2026 (noite) — Tela não trava mais na abertura, PDFs 97% menores, "Por empresa" estável (PUBLICADO) — LER ANTES DE MEXER EM SYNC, LISTA DE OS, HOOKS OU PDF
+
+> Continuação da seção 4P (mesma autorização do Pedro: "pode fazer do 1 ao 3, abra o navegador e teste... veja se teve ganho e não quebrou nada" e depois "pode aplicar"). Três commits: `b02123f1` (Painel), `e7501998` (PDF), `2e914fd0` (sync e telas). Nada mudou no banco.
+
+**1. A descoberta que mudou o plano**
+- A "sincronização incremental" planejada (etapa 9) **não era o gargalo**: baixar tudo leva ~0,5 a 0,7 s (4 páginas de clientes em 715 ms em sequência, 626 ms em paralelo). O que travava a tela era **CPU no navegador**: o `pullAllData` regravava os ~5.000 registros a cada abertura e cada regravação fazia as listas refazerem filtro, ordenação e desenho.
+- `clientes` **não tem coluna `updated_at`** (só `ordens_servico` tem; `servicos` e `usuarios` também não). Sync incremental de verdade exigiria alterar o banco (coluna + gatilho). **Não foi feito e não é necessário** agora; só reavaliar se o volume crescer muito.
+- Perfil de CPU (antes): `g` da tela de OS 2,5 s, ordenações em `useOfflineData` 2,4 s, `put` do IndexedDB 1,4 s, dentro de uma sincronização de 5,8 s com 3,8 s de tela travada.
+
+**2. O que mudou (arquivo → efeito)**
+- `src/services/pullPlan.ts`: `planejarPull` ganhou o 5º parâmetro `mudou` e devolve `semMudanca`; novo `linhaMudou(local, servidor, ignorar=['updated_at'])`. **`null` e `undefined` contam como iguais** (vazio); `0` e `false` são valores. Só é gravado o que é novo ou mudou.
+- `src/services/syncService.ts` (`pullAllData`): usa `linhaMudou` para clientes e OS, e só chama `bulkPut` se há o que gravar; loga `[SyncService] clientes: N gravados, M sem mudança...` e o mesmo para OS. Esperado no console, sem mudança real: **0 gravados**.
+- `src/hooks/useOfflineData.ts`: `ordenarPorTempo` converte a data **uma vez por registro** (antes o comparador criava `new Date` várias vezes por comparação) e usa `Intl.Collator` no desempate. Mesma ordem de antes (provado com 3.084 clientes e 1.936 OS cheios de empates, datas vazias e inválidas); 5 a 6 vezes mais rápido.
+- `src/pages/ServiceOrders.tsx`: (a) filtro + ordenação de OS em `useMemo` (`ordenarOS` converte a data uma vez); (b) `dataDoCard` com cache por texto da data (antes 3 chamadas por cartão, cada uma criando formatadores de data); (c) o trecho que sincroniza NFS-e ao abrir a tela agora usa **uma transação**, `bulkGet` + `bulkUpdate` só do que mudou, e **pula OS com `synced === 0`**. Antes eram ~500 `update` separados a cada abertura e ele gravava `synced: 1` até em OS com edição pendente (isso deixava o pull sobrescrevê-la).
+- `src/pages/Dashboard.tsx`: `brands.length` nas dependências do efeito que busca os dados. O bloco "Por empresa" só é calculado quando já há filiais; se elas chegavam depois da primeira busca, ele sumia (intermitente).
+- `src/pages/Reports.tsx` e `src/pages/TechnicianFinancialPrint.tsx`: a captura da tela vai para o PDF como **JPEG 0,92** (era PNG). Fundo branco, sem perda visível.
+
+**3. Medidas (Chrome do Pedro, mesmos dados, produção anterior contra build novo)**
+- Abrir a lista de OS e esperar 16 s: tela travada **11.184 ms (93 tarefas longas) → 2.328 ms (16)**.
+- "Atualizar Dados": 5.807 ms → 1.976 ms; tela travada 3.835 ms → 184 ms (25 tarefas → 3).
+- PDF de Relatórios 10,13 MB → 0,27 MB; Extrato de comissões 11,78 MB → 0,32 MB (e 3,4 s → 1,9 s para gerar).
+- `tsc`: **129 erros** (a base de 136 já existia; os 7 a menos são das colunas `nfe_*` do trecho reescrito, nenhum novo). Lint: os mesmos 2 erros.
+
+**4. Regras — NÃO QUEBRAR**
+1. **O pull só grava o que mudou.** Não voltar a `bulkPut` de tudo: cada regravação invalida as consultas ao vivo (`useLiveQuery`) e redesenha as listas.
+2. **Ao adicionar um campo ao mapeamento do pull** (clientes ou OS em `pullAllData`), conferir que ele **não varia a cada sincronização** (ex.: `|| new Date().toISOString()` em campo que pode vir nulo faria a linha ser regravada sempre). `updated_at` de cliente é ignorado de propósito.
+3. **Nunca marcar `synced: 1` em registro com edição pendente** nem gravar por cima de `synced === 0` (vale para qualquer código novo que atualize `db.ordens_servico`/`db.clientes`).
+4. Ordenação e filtro de listas grandes: converter datas uma vez, usar `useMemo`, e não criar `Intl`/`toLocaleString` em loop (usar cache).
+5. Ferramenta de medição: `PerformanceObserver({type:'longtask'})` (soma da tela travada) + `performance_start_trace` do chrome-devtools com `reload:false`, gravando em arquivo (o arquivo tem ~90 MB; ler com Python somando o `ProfileChunk` por função). Comparar sempre produção contra build novo, mesma tela, mesmo tempo de espera.
+
+**5. Pendente depois desta rodada**
+- **O3** (fila sem dono/empresa, exige Dexie v3), **segurança** (seção 4B), etapas 4 a 7, 10, 11, 13 e 14 do plano de 14 etapas.
+- Startup repete `usuarios?id=eq.` 3x e `empresas?select=nome` 3x.
+- A imagem do PDF de Relatórios inclui o botão "Gerando..." e o seletor de relatório cortado (o app fotografa a tela inteira; já era assim). Melhor seria gerar o PDF a partir de um bloco só do conteúdo.
+- Se um dia houver sync incremental de verdade: precisa de `updated_at` + gatilho em `clientes` (alteração de banco, pedir OK ao Pedro).
