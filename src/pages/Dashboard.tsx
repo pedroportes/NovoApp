@@ -447,7 +447,9 @@ export function Dashboard() {
         } else if (userData) {
             setLoading(false)
         }
-    }, [userData?.empresa_id, dateRange, selectedBrandId])
+    // brands.length: as filiais carregam de forma assíncrona; se chegarem depois da primeira busca,
+    // o bloco "Por empresa" ficava vazio (só é calculado quando já há filiais).
+    }, [userData?.empresa_id, dateRange, selectedBrandId, brands.length])
 
     const fetchDashboardDataRef = useRef(fetchDashboardData)
     useEffect(() => {
