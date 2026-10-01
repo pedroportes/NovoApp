@@ -236,7 +236,9 @@ export function TechnicianFinancialPrint() {
                 backgroundColor: '#ffffff'
             })
 
-            const imgData = canvas.toDataURL('image/png')
+            // JPEG (qualidade 0,92) em vez de PNG: o fundo é branco, então não perde nada visível
+            // e o PDF cai de ~10 MB para poucos MB
+            const imgData = canvas.toDataURL('image/jpeg', 0.92)
             
             // Criação do PDF A4
             const pdf = new jsPDF('p', 'mm', 'a4')
@@ -250,14 +252,14 @@ export function TechnicianFinancialPrint() {
             let position = 0
 
             // Primeira página
-            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+            pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight)
             heightLeft -= pdfHeight
 
             // Páginas adicionais se o relatório for longo
             while (heightLeft > 0) {
                 position = heightLeft - imgHeight
                 pdf.addPage()
-                pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+                pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight)
                 heightLeft -= pdfHeight
             }
 

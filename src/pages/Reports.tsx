@@ -908,7 +908,9 @@ export function Reports() {
                 backgroundColor: '#ffffff'
             })
 
-            const imgData = canvas.toDataURL('image/png')
+            // JPEG (qualidade 0,92) em vez de PNG: o fundo é branco, então não perde nada visível
+            // e o PDF cai de ~10 MB para poucos MB
+            const imgData = canvas.toDataURL('image/jpeg', 0.92)
             const pdf = new jsPDF('p', 'mm', 'a4')
             const pdfWidth = pdf.internal.pageSize.getWidth()
             const pdfHeight = pdf.internal.pageSize.getHeight()
@@ -918,13 +920,13 @@ export function Reports() {
             let heightLeft = imgHeight
             let position = 0
 
-            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+            pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight)
             heightLeft -= pdfHeight
 
             while (heightLeft > 0) {
                 position = heightLeft - imgHeight
                 pdf.addPage()
-                pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+                pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight)
                 heightLeft -= pdfHeight
             }
 
