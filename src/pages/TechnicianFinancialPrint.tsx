@@ -24,8 +24,6 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import jsPDF from 'jspdf'
-import html2canvas from 'html2canvas'
 
 type PeriodPreset = 'tudo' | '15d_1' | '15d_2' | 'mes_atual' | 'mes_anterior' | 'custom'
 
@@ -225,6 +223,11 @@ export function TechnicianFinancialPrint() {
         const toastId = toast.loading('Gerando arquivo PDF para download no seu computador...')
 
         try {
+            // Bibliotecas de PDF/captura são pesadas: só carregam ao baixar o PDF
+            const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
+                import('jspdf'),
+                import('html2canvas'),
+            ])
             // Renderizar elemento da folha em alta resolução
             const canvas = await html2canvas(reportElement, {
                 scale: 2,

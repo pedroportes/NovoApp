@@ -1,5 +1,3 @@
-import jsPDF from 'jspdf'
-import html2canvas from 'html2canvas'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -898,6 +896,11 @@ export function Reports() {
         const toastId = toast.loading('Gerando arquivo PDF dos relatórios...')
 
         try {
+            // Bibliotecas de PDF/captura são pesadas: só carregam ao baixar o PDF
+            const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
+                import('jspdf'),
+                import('html2canvas'),
+            ])
             const canvas = await html2canvas(reportElement, {
                 scale: 2,
                 useCORS: true,

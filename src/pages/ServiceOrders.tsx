@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import { Plus, Search, FileText, Calendar, User, Trash2, Phone, MapPin, Receipt, FileSignature, Pencil, FileBadge, Loader2, Mic, MicOff, Building2, RefreshCw, AlertCircle } from 'lucide-react'
 import { useVoiceRecognition } from '@/hooks/useVoiceRecognition'
@@ -163,8 +163,9 @@ export function ServiceOrders() {
         setSyncing(true)
         toast.info('Sincronizando todas as ordens de serviço da nuvem...')
         try {
-            await SyncService.pullAllData(userData.empresa_id)
-            toast.success('Todas as ordens de serviço foram sincronizadas!')
+            const resultado = await SyncService.pullAllData(userData.empresa_id)
+            if (resultado.ok) toast.success('Todas as ordens de serviço foram sincronizadas!')
+            else toast.error('Não foi possível sincronizar: ' + (resultado.mensagem || 'tente novamente'))
         } catch (error: any) {
             console.error('Erro na sincronização manual:', error)
             toast.error('Erro ao sincronizar: ' + error.message)
@@ -173,24 +174,34 @@ export function ServiceOrders() {
         }
     }
 
-    // Combina técnicos locais e remotos
-    const allTechnicians = dbTechnicians.length > 0 ? dbTechnicians : (offlineTechs || [])
+    // Enriquecimento com técnicos reais e dados da marca.
+    // useMemo + Map por id: antes cada OS percorria a lista inteira de clientes (.find)
+    // a cada renderização (~1.900 OS x ~3.000 clientes). O primeiro item com o mesmo id
+    // continua vencendo, igual ao .find original.
+    const orders = useMemo(() => {
+        // Combina técnicos locais e remotos
+        const allTechnicians = dbTechnicians.length > 0 ? dbTechnicians : (offlineTechs || [])
 
-    // Enriquecimento com técnicos reais e dados da marca
-    const orders = (rawOrders || [])
-        .map(order => {
-            const client = clients?.find(c => c.id === order.cliente_id)
-            const tech = allTechnicians.find((t: any) => t.id === order.tecnico_id)
+        const clientById = new Map<string, NonNullable<typeof clients>[number]>()
+        for (const c of clients || []) if (!clientById.has(c.id)) clientById.set(c.id, c)
+        const techById = new Map<string, any>()
+        for (const t of allTechnicians) if (!techById.has(t.id)) techById.set(t.id, t)
+        const brandById = new Map<string, NonNullable<typeof brands>[number]>()
+        for (const b of brands || []) if (!brandById.has(b.id)) brandById.set(b.id, b)
+        const fallbackBrand = brands?.find(b => b.matriz) || (brands && brands.length > 0 ? brands[0] : null)
+
+        return (rawOrders || []).map(order => {
+            const client = order.cliente_id ? clientById.get(order.cliente_id) : undefined
+            const tech = order.tecnico_id ? techById.get(order.tecnico_id) : undefined
             const techName = tech?.nome_completo || tech?.nome || (order.tecnico_id ? 'Técnico Parceiro' : null)
-            
+
             // Prioridade de identificação da marca:
             // 1. Marca expressa na OS (order.marca_id)
             // 2. Marca cadastrada no cliente (client?.marca_id)
             // 3. Fallback para Matriz Hidro Curitiba / primeira marca do grupo
             const brandId = order.marca_id || client?.marca_id
-            const fallbackBrand = brands?.find(b => b.matriz) || (brands && brands.length > 0 ? brands[0] : null)
             const marca = (brands && brands.length > 0)
-                ? (brands.find(b => b.id === brandId) || fallbackBrand)
+                ? ((brandId ? brandById.get(brandId) : undefined) || fallbackBrand)
                 : null
 
             return {
@@ -202,6 +213,7 @@ export function ServiceOrders() {
                 tecnicos: techName ? { nome_completo: techName } : null
             }
         })
+    }, [rawOrders, clients, dbTechnicians, offlineTechs, brands])
 
     const loading = loadingOrders
     const [isNavDialogOpen, setIsNavDialogOpen] = useState(false)

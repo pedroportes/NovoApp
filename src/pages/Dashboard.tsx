@@ -14,7 +14,6 @@ import { RevenueChart } from '@/components/dashboard/RevenueChart'
 import { ServiceDistributionChart } from '@/components/dashboard/ServiceDistributionChart'
 import { TechnicianRanking } from '@/components/dashboard/TechnicianRanking'
 import { ClientGrowthChart } from '@/components/dashboard/ClientGrowthChart'
-import { generateDashboardReport } from '@/utils/reportGenerator'
 
 // Audio for notifications
 const playNotificationSound = () => {
@@ -459,6 +458,17 @@ export function Dashboard() {
     useEffect(() => {
         if (!userData?.empresa_id) return
 
+        // Vários eventos seguidos (ex.: n8n atualizando 10 OS, importações) viram UMA recarga.
+        // Antes, cada evento disparava uma recarga completa do painel, em paralelo.
+        let timerRecarga: ReturnType<typeof setTimeout> | null = null
+        const agendarRecarga = () => {
+            if (timerRecarga) clearTimeout(timerRecarga)
+            timerRecarga = setTimeout(() => {
+                timerRecarga = null
+                fetchDashboardDataRef.current()
+            }, 1200)
+        }
+
         const osChannel = supabase
             .channel('dashboard-os')
             .on(
@@ -470,7 +480,7 @@ export function Dashboard() {
                     filter: `empresa_id=eq.${userData.empresa_id}`
                 },
                 (payload) => {
-                    fetchDashboardDataRef.current()
+                    agendarRecarga()
                     const newStatus = payload.new.status
                     const oldStatus = payload.old.status
 
@@ -501,7 +511,7 @@ export function Dashboard() {
                     filter: `empresa_id=eq.${userData.empresa_id}`
                 },
                 (payload) => {
-                    fetchDashboardDataRef.current()
+                    agendarRecarga()
                     playNotificationSound()
                     toast.warning(`Nova despesa lançada: R$ ${payload.new.valor}`, {
                         description: payload.new.descricao,
@@ -515,6 +525,7 @@ export function Dashboard() {
             .subscribe()
 
         return () => {
+            if (timerRecarga) clearTimeout(timerRecarga)
             supabase.removeChannel(osChannel)
             supabase.removeChannel(expenseChannel)
         }
@@ -523,10 +534,12 @@ export function Dashboard() {
     const formatCurrency = (val: number) =>
         new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val)
 
-    const handleExportPDF = () => {
+    const handleExportPDF = async () => {
         const toastId = toast.loading('Gerando relatório...')
 
         try {
+            // jsPDF é pesado: só carrega quando o usuário pede o PDF
+            const { generateDashboardReport } = await import('@/utils/reportGenerator')
             generateDashboardReport({
                 companyName: selectedBrand ? selectedBrand.nome : ((userData as any)?.nome_fantasia || 'Minha Empresa'),
                 dateRange: dateRange,

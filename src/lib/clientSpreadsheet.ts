@@ -1,4 +1,7 @@
-import XLSX from 'xlsx-js-style'
+// A biblioteca de Excel (xlsx-js-style, ~1 MB) só é carregada na hora de baixar o modelo.
+// Este arquivo também é importado na abertura do app (formatPhoneBR no syncService),
+// então NUNCA importar o XLSX de forma estática aqui.
+type XLSXLib = typeof import('xlsx-js-style')
 
 // Planilha modelo de clientes + regras de leitura/normalização usadas na importação.
 // A mesma lista de colunas gera o modelo e reconhece a planilha na volta.
@@ -211,7 +214,7 @@ export function duplicateKeys(c: Partial<ClientRow> & { nome?: string }): string
     return keys
 }
 
-function styleHeader(ws: XLSX.WorkSheet, ncols: number, cor = '0F766E') {
+function styleHeader(XLSX: XLSXLib, ws: Record<string, any>, ncols: number, cor = '0F766E') {
     for (let i = 0; i < ncols; i++) {
         const cell = ws[XLSX.utils.encode_cell({ r: 0, c: i })]
         if (cell) cell.s = {
@@ -223,7 +226,8 @@ function styleHeader(ws: XLSX.WorkSheet, ncols: number, cor = '0F766E') {
 }
 
 /** Gera e baixa o arquivo modelo_clientes_flowdrain.xlsx */
-export function downloadClientTemplate() {
+export async function downloadClientTemplate() {
+    const XLSX = (await import('xlsx-js-style')).default
     const headers = TEMPLATE_COLUMNS.map(c => c.header)
 
     // Aba 1: Clientes (vazia, com 500 linhas já formatadas como TEXTO para não perder zeros)
@@ -236,7 +240,7 @@ export function downloadClientTemplate() {
     ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: 500, c: headers.length - 1 } })
     ws['!cols'] = TEMPLATE_COLUMNS.map(c => ({ wch: c.width }))
     ws['!rows'] = [{ hpt: 30 }]
-    styleHeader(ws, headers.length)
+    styleHeader(XLSX, ws, headers.length)
 
     // Aba 2: Como preencher
     const instr: (string)[][] = [
@@ -277,7 +281,7 @@ export function downloadClientTemplate() {
     ]
     const wsE = XLSX.utils.aoa_to_sheet(exemplos)
     wsE['!cols'] = TEMPLATE_COLUMNS.map(c => ({ wch: c.width }))
-    styleHeader(wsE, headers.length, '64748B')
+    styleHeader(XLSX, wsE, headers.length, '64748B')
 
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Clientes')

@@ -45,9 +45,10 @@ export function OfflineSyncProvider({ children }: { children: React.ReactNode })
         }
         try {
             await SyncService.pushQueue(); // Push local changes first
-            await SyncService.pullAllData(userData.empresa_id); // Then get latest updates
+            const resultado = await SyncService.pullAllData(userData.empresa_id); // Then get latest updates
             if (userInitiated) {
-                toast.success("Dados atualizados com sucesso!");
+                if (resultado.ok) toast.success("Dados atualizados com sucesso!");
+                else toast.error("Não foi possível atualizar: " + (resultado.mensagem || 'tente novamente'));
             }
         } catch (error: any) {
             console.error("Sync failed", error);

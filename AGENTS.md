@@ -513,3 +513,57 @@ Todos configurados com **50% de comissão padrão** em `usuarios` e cadastrados 
 **4. Cópia de design (NovoApp-design, ramo design-novo, porta 5174) — NÃO publicada**, ver 4L. Falta revisar com o Pedro e juntar no master.
 
 **5. Regras que continuam:** pt-BR SEMPRE (inclusive frases curtas entre ferramentas); nunca colar/digitar tokens; push/deploy só com OK; não usar `supabase db push`; não mexer na planilha; não pôr botões novos nos cards de OS; celular primeiro; mostrar amostra antes de redesenhar.
+
+
+---
+
+### 4P. 01/10/2026 — Velocidade do app e proteção da sincronização (PUBLICADO) — LER ANTES DE MEXER EM SYNC, PDF/EXCEL OU PAINEL
+
+> Origem: plano de 14 etapas do Codex em `G:\Meu Drive\Minhas memorias Claude\Minhas Memorias\Automacoes\FlowDrain-Plano-Seguranca-Desempenho-Offline-2026-10-01.md` (estado em `...\FlowDrain-Estado-e-Continuidade.md`). O Codex só analisou; **quem implementou foi o Claude Code em 01/10**, em cópia isolada, conferido no Chrome real do Pedro, e publicado com o OK dele. Foram feitas partes das etapas 2, 3 e 8 do plano. O resto do plano continua pendente (ver item 5).
+
+**1. O que mudou (arquivo → efeito)**
+- `vite.config.ts`: o chunk `utils` agora tem **só** `date-fns`. **Não listar `xlsx-js-style`, `jspdf`, `jspdf-autotable` nem `html2canvas` no `manualChunks`**: o helper de preload do Vite cai dentro desse chunk e ele volta a ser baixado na abertura do app.
+- `src/lib/clientSpreadsheet.ts`: o Excel é importado dentro de `downloadClientTemplate()` (agora `async`). Este arquivo é carregado na abertura (o `syncService` importa `formatPhoneBR` dele): **nunca importar `xlsx-js-style` de forma estática aqui**.
+- `Dashboard.tsx` (gerador de PDF), `Reports.tsx` e `TechnicianFinancialPrint.tsx` (jsPDF e html2canvas): `import()` dentro da função do botão, só no clique.
+- `ServiceOrders.tsx`: `orders` em `useMemo` com `Map` por id (antes cada OS fazia `.find` em ~3.000 clientes a cada renderização). O primeiro item com o mesmo id continua vencendo.
+- `Dashboard.tsx`: eventos em tempo real (UPDATE de OS, INSERT de despesa) são agrupados: **uma** recarga depois de 1,2 s de silêncio (som e aviso na tela continuam imediatos). O n8n atualiza até 10 OS por rodada.
+- `src/components/clients/AlertaCliente.tsx`: `carregarAlertasConfig` reaproveita a consulta em andamento. Antes, 24 cartões montando juntos (sem cópia no `localStorage`, ex.: primeira visita) faziam **24 consultas idênticas** a `empresa_alertas_config`.
+- `src/services/pullPlan.ts` (novo) + `syncService.pullAllData`: regra do pull em função pura (`planejarPull`) aplicada dentro de **transações Dexie**. Ver regras abaixo.
+- `syncService.pullAllData`: a paginação de clientes e de OS agora ordena por `created_at` **e `id`** (desempate).
+- `syncService`: `saveClient`, `createClient`, `deleteClient`, `saveServiceOrder` e `deleteServiceOrder` gravam o dado local **e** o item da fila numa transação só.
+- `syncService.pullAllData` devolve `ResultadoPull { ok, motivo?, mensagem? }` (`motivo`: `offline` ou `erro`); `OfflineSyncProvider.tsx` e o botão "Atualizar Dados" de `ServiceOrders.tsx` mostram o erro de verdade.
+
+**2. Medidas (antes → depois)**
+- JS baixado na abertura (comprimido, medido no navegador): **~746 KB → ~228 KB** (chunk `utils`: 518 KB → 7,6 KB; Excel 323 KB e PDF/captura 185 KB saíram da abertura).
+- Cálculo da lista de OS: 13,7 ms → 0,48 ms (1.900 OS x 3.000 clientes, **0 divergências** contra a lógica antiga).
+- Consultas de alertas por tela: 24 → 1.
+- Pull no IndexedDB real: ~300 ms → ~200 ms. "Atualizar Dados" ponta a ponta: 13,2 s → 9,4 s (a maior parte é rede).
+- Dez eventos seguidos do banco → 1 recarga do Painel.
+
+**3. Regras — NÃO QUEBRAR**
+1. **O pull nunca sobrescreve nem apaga registro com `synced === 0`** (edição/criação ainda não enviada) **e não ressuscita exclusão que está na fila** (`sync_queue` com `action = 'delete'`). Só remove do aparelho o que já estava sincronizado e sumiu do servidor. Tudo restrito à empresa (`where('empresa_id')`); antes lia o banco local inteiro e podia apagar OS de outra empresa.
+2. **Paginar sempre com desempate:** `.order('created_at', ...).order('id', ...)`. `created_at` repete (841 valores repetidos entre os clientes, por causa das cargas em lote). Sem o `id`, a paginação repetia 1 cliente e **deixava 1 de fora do aparelho** (servidor 3.084, local 3.083). Isso já existia antes de 01/10.
+3. **Dado local e fila de envio na MESMA transação Dexie** (`db.transaction('rw', db.<tabela>, db.sync_queue, ...)`). Chamadas de rede ficam fora da transação.
+4. **Nunca mostrar "sincronizado" sem checar `resultado.ok`.**
+5. **Cadeia da abertura enxuta:** depois de qualquer mudança em imports, rodar `vite build` e conferir `dist/index.html`: só `vendor`, `ui` e `db` devem aparecer em `modulepreload`. Se `xlsx`, `pdf`, `jspdf` ou `html2canvas` aparecerem, alguém criou um import estático na cadeia da abertura.
+6. `public/sw.js` (manual) **não vale em produção**: o plugin PWA gera outro `sw.js` com o mesmo nome e sobrescreve no build (Workbox, `autoUpdate`, 73 arquivos em precache). O manual só aparece no `vite dev` (cache-first, pode causar tela branca: limpar service worker + cache da porta).
+
+**4. Como conferir (receita)**
+- `vite build --outDir <pasta>`; olhar `modulepreload` (regra 5); `tsc --noEmit -p tsconfig.app.json` tem **136 erros que já existiam** (comparar o TEXTO dos erros com a base, não só a contagem); `eslint` nos arquivos alterados tem 2 erros que já existiam.
+- Sync de verdade: no navegador, plantar no IndexedDB `FlowDrainDB` um registro `synced: 0` e outro `synced: 1` que não existe no servidor (sem item na fila), clicar em **Atualizar Dados** e ver que o pendente fica e o fantasma sai. Depois apagar os testes.
+- Contagem: `HEAD` de `clientes`/`ordens_servico` com `Prefer: count=exact` (cabeçalho `Content-Range`) deve bater com o `count()` do IndexedDB (hoje 3.084 clientes e 1.936 OS, fila 0).
+- Downloads de PDF/Excel podem ser conferidos sem salvar arquivo: interceptar `HTMLAnchorElement.prototype.click` e `EventTarget.prototype.dispatchEvent` para âncoras com `download`.
+- Atenção: a ferramenta de rede do navegador mostra o `Authorization` (token da sessão) nos cabeçalhos; não copiar nem repetir.
+
+**5. O que NÃO foi feito (pendente) — plano de 14 etapas**
+- **Etapa 9 (sincronização incremental):** o app ainda baixa tudo a cada abertura (~9 s). É o maior ganho que falta e o mais arriscado (exclusões no servidor, timestamps iguais, relógio errado, longo tempo sem abrir, n8n atualizando em paralelo). Só depois de medir; manter o plano B de baixar tudo.
+- **O3 (fila sem dono/empresa):** exige migração do Dexie para v3. App antigo v2 não lê banco v3: planejar reversão antes.
+- **O6/O7 (anexos offline, perfil offline) e etapas 4 a 7, 10, 11, 13, 14** do plano: não iniciadas.
+- **Segurança (etapa 12 / seção 4B):** nada corrigido (tokens expostos, RLS de `usuarios`, RPC de impressão, `jsPDF` crítico no `npm audit`).
+- No app, o bloco "Por empresa" do Painel some de forma intermitente (corrida: o efeito que busca os dados não refaz a busca quando as filiais chegam depois; a cópia `design-novo` já corrigiu com `brands.length` nas dependências).
+- O startup repete `usuarios?id=eq.` 3x e `empresas?select=nome` 3x.
+- O PDF de Relatórios pesa ~10,6 MB (captura em PNG; JPEG reduziria). Já era assim.
+
+**6. Ambiente usado**
+- Cópia isolada: `C:\Users\pedro\NovoApp-rapido` (ramo `otimizacao-velocidade`, já juntado ao `master`). **Cuidado:** o `node_modules` dela é um atalho (*junction*) para o do `NovoApp`; **nunca** rodar `git worktree remove` nem `Remove-Item -Recurse` nela sem antes remover o atalho, ou o `node_modules` do app principal pode ser apagado.
+- Servidor de teste `novoapp-rapido` (porta 5175, `vite preview` da pasta `dist-t3`), configurado em `.claude/launch.json` do `meu-app`. Para ver build novo ali é preciso limpar o service worker da origem 5175.

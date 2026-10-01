@@ -1,12 +1,20 @@
 import { supabase } from '@/lib/supabase'
 import { db, LocalClient, LocalServiceOrder, LocalService, SyncQueueItem } from '@/lib/db'
 import { formatPhoneBR } from '@/lib/clientSpreadsheet'
+import { planejarPull } from '@/services/pullPlan'
+
+/** Resultado do pull: quem chama mostra a verdade (antes o erro era engolido e a tela dizia "sincronizado"). */
+export interface ResultadoPull {
+    ok: boolean
+    motivo?: 'offline' | 'erro'
+    mensagem?: string
+}
 
 export const SyncService = {
     // --- PULL: Get data from Cloud to Local ---
 
-    async pullAllData(empresaId: string) {
-        if (!navigator.onLine) return; // Can't pull if offline
+    async pullAllData(empresaId: string): Promise<ResultadoPull> {
+        if (!navigator.onLine) return { ok: false, motivo: 'offline', mensagem: 'Sem internet.' }; // Can't pull if offline
 
         try {
 
@@ -21,6 +29,9 @@ export const SyncService = {
                     .select('*')
                     .eq('empresa_id', empresaId)
                     .order('created_at', { ascending: false })
+                    // desempate: created_at repete (cargas em lote); sem o id a paginação repetia
+                    // uma linha e deixava outra de fora do aparelho
+                    .order('id', { ascending: false })
                     .range(page * pageSize, (page + 1) * pageSize - 1);
 
                 if (errClients) throw errClients;
@@ -31,10 +42,6 @@ export const SyncService = {
             }
 
             if (allClients.length > 0) {
-                // Clear local clients for this company first to purge any deleted test clients
-                await db.clientes.where('empresa_id').equals(empresaId).delete();
-
-                // Bulk put all synced clients
                 const localClients: LocalClient[] = allClients.map(c => ({
                     id: c.id,
                     empresa_id: c.empresa_id || '',
@@ -66,7 +73,20 @@ export const SyncService = {
                     synced: 1,
                     updated_at: new Date().toISOString()
                 }));
-                await db.clientes.bulkPut(localClients);
+
+                // Uma transação só: lê o estado local ATUAL, decide e grava sem brecha para
+                // um salvamento feito durante o pull ser perdido. Antes, todos os clientes da
+                // empresa eram apagados e regravados, perdendo cadastro/edição ainda não enviados.
+                await db.transaction('rw', db.clientes, db.sync_queue, async () => {
+                    const locais = await db.clientes.where('empresa_id').equals(empresaId).toArray();
+                    const fila = await db.sync_queue.toArray();
+                    const excluidosPendentes = new Set<string>(
+                        fila.filter(i => i.table === 'clientes' && i.action === 'delete' && i.data?.id).map(i => i.data.id)
+                    );
+                    const plano = planejarPull(locais, localClients, excluidosPendentes, () => true);
+                    if (plano.remover.length > 0) await db.clientes.bulkDelete(plano.remover);
+                    await db.clientes.bulkPut(plano.gravar);
+                });
             }
 
             // 2. Services (Catalog)
@@ -100,6 +120,7 @@ export const SyncService = {
                     .select('*')
                     .eq('empresa_id', empresaId)
                     .order('created_at', { ascending: false })
+                    .order('id', { ascending: false }) // desempate (ver nota nos clientes)
                     .range(osPage * osPageSize, (osPage + 1) * osPageSize - 1);
 
                 if (errOss) throw errOss;
@@ -149,17 +170,22 @@ export const SyncService = {
                     updated_at: o.updated_at || new Date().toISOString()
                 }));
 
-                // Gravação atômica em lote no IndexedDB
-                await db.ordens_servico.bulkPut(localOss);
-
-                // Limpeza automática de ordens deletadas no servidor (remove ordens fantasmas locais)
-                const serverOsIds = new Set(allOss.map(o => o.id));
-                const localOsList = await db.ordens_servico.toArray();
-                const osToDelete = localOsList.filter(lo => !serverOsIds.has(lo.id) && lo.synced === 1).map(lo => lo.id);
-                if (osToDelete.length > 0) {
-                    console.log(`[SyncService] 🧹 Removendo ${osToDelete.length} ordens de serviço locais que foram excluídas do servidor...`);
-                    await db.ordens_servico.bulkDelete(osToDelete);
-                }
+                // Gravação atômica no IndexedDB, protegendo OS com alteração/exclusão pendente
+                // e limpando OS fantasmas (excluídas no servidor). Só mexe nas OS DESTA empresa
+                // (antes lia o banco local inteiro).
+                await db.transaction('rw', db.ordens_servico, db.sync_queue, async () => {
+                    const locais = await db.ordens_servico.where('empresa_id').equals(empresaId).toArray();
+                    const fila = await db.sync_queue.toArray();
+                    const excluidosPendentes = new Set<string>(
+                        fila.filter(i => i.table === 'ordens_servico' && i.action === 'delete' && i.data?.id).map(i => i.data.id)
+                    );
+                    const plano = planejarPull(locais, localOss, excluidosPendentes, l => l.synced === 1);
+                    if (plano.remover.length > 0) {
+                        console.log(`[SyncService] 🧹 Removendo ${plano.remover.length} ordens de serviço locais que foram excluídas do servidor...`);
+                        await db.ordens_servico.bulkDelete(plano.remover);
+                    }
+                    await db.ordens_servico.bulkPut(plano.gravar);
+                });
             }
 
             // 4. Technicians (Usuarios)
@@ -178,10 +204,10 @@ export const SyncService = {
                 await db.usuarios.bulkPut(localUsers)
             }
 
-
-
-        } catch (error) {
+            return { ok: true }
+        } catch (error: any) {
             console.error('❌ Sync Pull Error:', error)
+            return { ok: false, motivo: 'erro', mensagem: error?.message || 'Erro desconhecido ao buscar os dados.' }
         }
     },
 
@@ -395,16 +421,18 @@ export const SyncService = {
             updated_at: now
         } as LocalClient;
 
-        // 2. Save to Local DB (UI updates immediately via useLiveQuery)
-        await db.clientes.put(clientToSave);
-
-        // 3. Add to Sync Queue
+        // 2+3. Dado local e item da fila de envio na MESMA transação: ou grava os dois ou nenhum
+        // (antes, uma interrupção entre as duas escritas deixava o registro "salvo" sem ir à fila).
+        // A tela atualiza na hora via useLiveQuery.
         const action = isNew ? 'create' : 'update';
-        await db.sync_queue.add({
-            table: 'clientes',
-            action,
-            data: clientToSave,
-            created_at: Date.now()
+        await db.transaction('rw', db.clientes, db.sync_queue, async () => {
+            await db.clientes.put(clientToSave);
+            await db.sync_queue.add({
+                table: 'clientes',
+                action,
+                data: clientToSave,
+                created_at: Date.now()
+            });
         });
 
         // 4. Try to Sync immediately (background)
@@ -414,18 +442,18 @@ export const SyncService = {
     },
 
     async createClient(client: LocalClient) {
-        // 1. Save to Local DB
-        await db.clientes.put({
-            ...client,
-            synced: 0
-        });
-
-        // 2. Add to Sync Queue
-        await db.sync_queue.add({
-            table: 'clientes',
-            action: 'create',
-            data: client,
-            created_at: Date.now()
+        // 1+2. Dado local e fila de envio na mesma transação (ou os dois ou nenhum)
+        await db.transaction('rw', db.clientes, db.sync_queue, async () => {
+            await db.clientes.put({
+                ...client,
+                synced: 0
+            });
+            await db.sync_queue.add({
+                table: 'clientes',
+                action: 'create',
+                data: client,
+                created_at: Date.now()
+            });
         });
 
         // 3. Try to Sync
@@ -433,16 +461,16 @@ export const SyncService = {
     },
 
     async deleteClient(id: string) {
-        // 1. Mark as deleted or remove locally? 
-        // If we remove locally, UI updates. 
-        await db.clientes.delete(id);
-
-        // 2. Add to Sync Queue
-        await db.sync_queue.add({
-            table: 'clientes',
-            action: 'delete',
-            data: { id },
-            created_at: Date.now()
+        // 1+2. Remove localmente (a tela atualiza) e enfileira a exclusão, na mesma transação.
+        // Sem a fila, o pull traria o cliente de volta; sem a remoção local, ele continuaria na tela.
+        await db.transaction('rw', db.clientes, db.sync_queue, async () => {
+            await db.clientes.delete(id);
+            await db.sync_queue.add({
+                table: 'clientes',
+                action: 'delete',
+                data: { id },
+                created_at: Date.now()
+            });
         });
 
         // 3. Try to Sync
@@ -466,13 +494,15 @@ export const SyncService = {
             updated_at: now
         } as LocalServiceOrder;
 
-        await db.ordens_servico.put(osToSave);
-
-        await db.sync_queue.add({
-            table: 'ordens_servico',
-            action: isNew ? 'create' : 'update',
-            data: osToSave,
-            created_at: Date.now()
+        // Dado local e fila de envio na mesma transação (ou os dois ou nenhum)
+        await db.transaction('rw', db.ordens_servico, db.sync_queue, async () => {
+            await db.ordens_servico.put(osToSave);
+            await db.sync_queue.add({
+                table: 'ordens_servico',
+                action: isNew ? 'create' : 'update',
+                data: osToSave,
+                created_at: Date.now()
+            });
         });
 
         this.pushQueue();
@@ -480,13 +510,14 @@ export const SyncService = {
     },
 
     async deleteServiceOrder(id: string) {
-        await db.ordens_servico.delete(id);
-
-        await db.sync_queue.add({
-            table: 'ordens_servico',
-            action: 'delete',
-            data: { id },
-            created_at: Date.now()
+        await db.transaction('rw', db.ordens_servico, db.sync_queue, async () => {
+            await db.ordens_servico.delete(id);
+            await db.sync_queue.add({
+                table: 'ordens_servico',
+                action: 'delete',
+                data: { id },
+                created_at: Date.now()
+            });
         });
 
         this.pushQueue();

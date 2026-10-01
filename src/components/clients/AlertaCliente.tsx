@@ -53,6 +53,10 @@ const mesclar = (linhas: any[] | null | undefined): AlertasConfig => {
 
 const avisar = () => ouvintes.forEach(f => f())
 
+// Consulta em andamento: cada cartão da lista usa este carregamento ao montar; sem isto, numa
+// primeira visita (sem cópia no localStorage) os 24 cartões disparavam 24 consultas idênticas.
+let emVoo: { empresaId: string; promessa: Promise<AlertasConfig> } | null = null
+
 export async function carregarAlertasConfig(empresaId: string, forcar = false): Promise<AlertasConfig> {
     if (!forcar && cache?.empresaId === empresaId) return cache.cfg
     try {
@@ -60,13 +64,22 @@ export async function carregarAlertasConfig(empresaId: string, forcar = false): 
         if (salvo && !cache) { cache = { empresaId, cfg: mesclar(JSON.parse(salvo)) }; avisar() }
     } catch { /* sem localStorage */ }
     if (typeof navigator !== 'undefined' && !navigator.onLine) return cache?.cfg || ALERTAS_PADRAO
-    const { data, error } = await (supabase as any).from('empresa_alertas_config').select('*').eq('empresa_id', empresaId)
-    if (!error) {
-        cache = { empresaId, cfg: mesclar(data) }
-        try { localStorage.setItem(chaveLocal(empresaId), JSON.stringify(data || [])) } catch { /* ignore */ }
-        avisar()
-    }
-    return cache?.cfg || ALERTAS_PADRAO
+    if (!forcar && emVoo?.empresaId === empresaId) return emVoo.promessa
+
+    const promessa = (async () => {
+        const { data, error } = await (supabase as any).from('empresa_alertas_config').select('*').eq('empresa_id', empresaId)
+        if (!error) {
+            cache = { empresaId, cfg: mesclar(data) }
+            try { localStorage.setItem(chaveLocal(empresaId), JSON.stringify(data || [])) } catch { /* ignore */ }
+            avisar()
+        }
+        return cache?.cfg || ALERTAS_PADRAO
+    })()
+    const registro = { empresaId, promessa }
+    emVoo = registro
+    const limpar = () => { if (emVoo === registro) emVoo = null }
+    promessa.then(limpar, limpar)
+    return promessa
 }
 
 export async function salvarAlertasConfig(empresaId: string, cfg: AlertasConfig) {

@@ -85,7 +85,12 @@ export default defineConfig({
                     ui: ['@radix-ui/react-checkbox', '@radix-ui/react-scroll-area', '@radix-ui/react-select', '@radix-ui/react-slot', '@radix-ui/react-switch', 'class-variance-authority', 'clsx', 'tailwind-merge', 'lucide-react', 'sonner'],
                     charts: ['recharts'],
                     maps: ['leaflet', 'react-leaflet'],
-                    utils: ['date-fns', 'xlsx-js-style', 'html2canvas', 'jspdf', 'jspdf-autotable'],
+                    // 'utils' = só date-fns (usado na abertura). Excel (xlsx-js-style) e PDF
+                    // (jspdf/html2canvas) NÃO entram aqui de propósito: são pesados e só são
+                    // importados dinamicamente, então o Rollup os separa sozinho. Listá-los
+                    // aqui fazia o helper de preload do Vite cair no chunk de PDF e ele
+                    // voltava a ser baixado na abertura.
+                    utils: ['date-fns'],
                     db: ['dexie', 'dexie-react-hooks', '@supabase/supabase-js']
                 }
             }
