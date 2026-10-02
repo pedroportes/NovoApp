@@ -606,3 +606,55 @@ Todos configurados com **50% de comissão padrão** em `usuarios` e cadastrados 
 - Startup repete `usuarios?id=eq.` 3x e `empresas?select=nome` 3x.
 - A imagem do PDF de Relatórios inclui o botão "Gerando..." e o seletor de relatório cortado (o app fotografa a tela inteira; já era assim). Melhor seria gerar o PDF a partir de um bloco só do conteúdo.
 - Se um dia houver sync incremental de verdade: precisa de `updated_at` + gatilho em `clientes` (alteração de banco, pedir OK ao Pedro).
+
+
+---
+
+### 4R. 02/10/2026 — Painel abre em "Este mês" e regra do "DIA DA OS" em todas as telas — PRONTO, AGUARDANDO PUBLICAÇÃO — LER ANTES DE MEXER EM PERÍODO, MÊS OU DATA DE OS
+
+> **Estado (02/10/2026, fim do dia): NADA disto foi publicado.** Está em commits locais, em dois ramos:
+> - `periodo-mes-atual` (worktree `C:\Users\pedro\NovoApp-rapido`), em cima do `master` `a69b48c8`: `0b44374c` (filtro do Painel), `dddacb16` (dia da OS no Painel), `82cc9e71` (módulo `diaDaOS.ts`), `9a2c903b` (Relatórios), `6038e282` (Extrato e Fechamento), `5a687af9` (datas exibidas em recibo, contrato, Financeiro, Não Feitos e PDF do Painel) e o commit de documentação desta seção.
+> - `seguranca-dependencias` (worktree `C:\Users\pedro\NovoApp-seguranca`, com `node_modules` PRÓPRIO), commit `6ecbd9fc`: só o `package-lock.json` (auditoria de produção 6 → 0).
+> - **Para publicar (só com OK do Pedro):** no `C:\Users\pedro\NovoApp`, `git merge periodo-mes-atual` (avanço direto) e `git merge seguranca-dependencias` (arquivos diferentes, sem conflito), `git push origin master`, esperar a Vercel, conferir em produção (ver "Conferir" abaixo) e trocar este aviso por "PUBLICADO". **Publicar o pacote inteiro junto**: Painel, Relatórios, Extrato e Financeiro passam a concordar entre si; publicar só um deixaria números diferentes entre telas.
+> - Há uma cópia de segurança dos commits em `G:\Meu Drive\Minhas memorias Claude\Minhas Memorias\Automacoes\flowdrain-2026-10-02.bundle` (`git bundle`; restaura com `git clone` ou `git fetch` a partir do arquivo).
+
+**1. Pedido do Pedro e o que descobrimos**
+- Pedido: em 02/10 o Painel mostrava os "últimos 30 dias" (R$ 9.390,08) embora outubro não tivesse faturamento; ele quis **"Este mês" como padrão**. Depois pediu para conferir a última OS e as pontas do mês ("o mês começa no primeiro minuto e termina no último").
+- **A armadilha:** as OS vindas da planilha só têm o DIA e ficam gravadas como **meia-noite UTC** (`2026-10-01T00:00:00+00:00` = 30/09 às 21:00 em Brasília). Filtrar pelo instante local jogava toda OS do dia 1º no mês ANTERIOR: Mariana (R$ 960) e Paula (R$ 580), ambas de 01/10, ficavam em setembro e "Este mês" mostrava R$ 0,00 errado. E mostrar com `new Date(x).toLocaleDateString()` exibia o dia anterior (14 dos 21 lançamentos do Financeiro; recibo/contrato em alguns casos). Isso já existia antes de 02/10, em todas as telas.
+
+**2. A regra (NÃO QUEBRAR) — `src/lib/diaDaOS.ts`**
+- Data **sem hora** (`AAAA-MM-DD`, ou meia-noite UTC em `Z`, `+00:00`, `+00`) vale o **DIA ESCRITO**; data **com hora** vale o **instante, no fuso local do aparelho**. É a mesma regra que o cartão da OS (`dataDoCard` em `ServiceOrders.tsx`) já usava.
+- Funções: `dataEfetivaDaOS` (meio-dia local do dia escrito, ou o instante), `dentroDoPeriodoDaOS(iso, {start?, end?})` (período aberto de um lado vale), `janelaDeBusca(periodo)` (período com 1 dia de folga de cada lado, para BUSCAR no banco), `fimExclusivoISO` (para `.lt` em datas com hora), `formatarDiaDaOS(iso, vazio='')` (dd/mm/aaaa para MOSTRAR), `ehDataSemHora`.
+- **Como filtrar período em tela nova:** buscar com `janelaDeBusca` (`gte` início, `lte` fim) e depois filtrar em JS com `dentroDoPeriodoDaOS`. Nunca filtrar OS só por `.gte/.lte('created_at', início/fim local)`.
+- **Como mostrar data de OS/lançamento:** `formatarDiaDaOS(...)`, nunca `new Date(x).toLocaleDateString()`.
+- Todo período termina em **23:59:59.999** (com os milissegundos) e começa em **00:00:00.000**; "últimos N dias" começa à **00:00** do dia inicial (antes: "agora menos N dias" com a hora, e uma OS só com o dia entrava ou não conforme a hora em que se abria a tela). Tabelas com data com hora real (despesas, clientes) usam fim exclusivo (`.lt(fimExclusivoISO)`).
+- `src/lib/periodoPainel.ts`: períodos do Painel (`calcularPeriodo`, `PERIODOS`, `PERIODO_PADRAO = 'mes_atual'`, `descreverPeriodo`) e reexporta as funções acima. Os testes de Node precisam de uma cópia com `./diaDaOS.ts` no import e `package.json` com `"type":"module"` (o Vite do app não exige a extensão).
+
+**3. O que mudou por tela**
+- **Painel (`Dashboard.tsx`):** seletor com Este mês (PADRÃO), Mês passado, 7/15/30/90 dias; datas do período ao lado do seletor (computador); busca com folga e filtro pelo dia da OS; gráfico de 6 meses e CSV pela mesma regra; "Crescimento da Base" busca os 6 meses (antes só o período, e ficaria quase vazio em "Este mês"); "novos clientes" contado só no período; fim do período = fim de hoje (antes a hora em que a página abriu, e OS criada depois não entrava na atualização em tempo real).
+- **Relatórios (`Reports.tsx`):** os 8 períodos e o período anterior (comparativos ▲▼) pelo dia da OS; despesas com fim exclusivo; datas das tabelas e da reativação.
+- **Extrato e Fechamento (`financialService.getTechnicianBalance`, `TechnicianFinancialPrint.tsx`, `FinancialClosing.tsx`):** OS e adiantamentos (`financeiro_fluxo.data_lancamento`, que pode ficar à meia-noite UTC) pelo dia; despesas com fim exclusivo; datas das OS exibidas pela regra.
+- **Impressos para o cliente (`ServiceOrderPrint.tsx`):** recibo, orçamento e contrato usam `formatarDiaDaOS` (o contrato ainda mostrava o dia anterior; o recibo usava o dia em UTC, errado perto da meia-noite).
+- **Financeiro, Não Feitos, PDF do Painel (`Financial.tsx`, `UnfinishedServices.tsx`, `reportGenerator.ts`):** datas exibidas pela regra. O Financeiro (master) não filtra por mês; só mostra os 5 mais recentes na tela.
+
+**4. Conferido (Chrome do Pedro, contra cálculo independente no banco)**
+- Painel: Este mês R$ 1.540,00 (2 OS), Mês passado R$ 10.800,08 (19), 7d R$ 6.150,18, 15d R$ 7.290,08, 30d R$ 10.750,08, 90d R$ 81.058,08; a pagar = 50%. Relatórios: os 8 períodos batem (inclui ano R$ 208.241,58 / 251 OS e tudo R$ 1.205.635,20 / 1.367 OS) e **concordam com o Painel**. Extrato Pedro e Graça: outubro R$ 770,00 (datas 01/10), setembro R$ 3.255,04 (13 OS) sem a Mariana e a Paula. Recibo e contrato da OS de 01/10 mostram 01/10/2026.
+- Testes de Node (funções puras): datas sem hora em vários formatos, bordas de meia-noite, virada de mês/ano, fevereiro bissexto, dia 1º, horário UTC enviado ao banco, varredura de 15 em 15 min de setembro e outubro (**0 buracos e 0 dobras entre meses**).
+- `tsc`: **128 erros** (a base de 136 já existia; o master está em 129), nenhum novo. Lint: 0 erros nos arquivos novos; os erros restantes já existiam.
+- Painel "Últimos 30 dias" passou de R$ 9.390,08 para R$ 10.750,08 por causa do início à 00:00 (inclui o dia 02/09 inteiro): esperado; as datas aparecem ao lado do seletor.
+
+**5. Segurança das dependências (ramo `seguranca-dependencias`, commit `6ecbd9fc`)**
+- `npm audit --omit=dev`: 6 falhas (1 crítica, 3 altas, 2 moderadas) → **0**. Atualização CIRÚRGICA: `npm update jspdf react-router react-router-dom dompurify fflate ws`; só `package-lock.json` (24 linhas): jspdf 4.0.0→4.2.1, react-router(-dom) 7.13.0→7.18.4, dompurify 3.3.1→3.4.16, fflate aninhado 0.8.2→0.8.3, ws 8.18.3→8.22.0. **Não usar `npm audit fix`** (mexe em 115 pacotes, inclusive as ferramentas do PWA/Workbox, com trocas de versão principal).
+- Testado: 11 telas pelo menu, volta/avança, link direto, 3 PDFs com os mesmos bytes de antes, sync sem regravar nada, tsc igual, service worker com os mesmos 73 arquivos. As falhas só de ferramentas de desenvolvimento (ex.: brace-expansion) ficaram de propósito.
+
+**6. Pendente (mesma armadilha do dia da OS, NÃO tratado)**
+- `aiService.ts`: a IA responde "hoje"/"este mês" com `data_agendamento` e `data_lancamento` por instante (linhas ~506-553 e ~752).
+- `financialService` (~linha 385): gráfico de comissões de 6 meses usa o `created_at` da comissão (e não o dia da OS).
+- Agenda e Equipe: conferir se decidem mês/dia por instante (Agenda já tem tratamento próprio para "sem hora").
+- Segurança que não é código (seção 4B), O3 (fila sem dono/empresa, exige Dexie v3) e as demais etapas do plano de 14 etapas continuam pendentes.
+
+**7. Ambiente e cuidados**
+- `chrome-devtools` conecta ao Chrome REAL do Pedro (ou à aba do navegador embutido). **Depois de usar `emulate` (viewport/celular), chamar `emulate` só com `pageId` para limpar**, e conferir `innerWidth === outerWidth`; senão a aba dele fica presa em tamanho errado (aconteceu em 02/10: barra de rolagem longe da borda).
+- Servidores de teste: `novoapp-rapido` (porta 5175, `vite preview` de `dist-t3` do `NovoApp-rapido`) e `novoapp-seguranca` (mesma porta, do `NovoApp-seguranca`); só um por vez. Para ver build novo ali, limpar service worker e cache da origem 5175.
+- `NovoApp-rapido` tem `node_modules` = atalho (*junction*) para o do `NovoApp`: **nunca** `git worktree remove` nem `Remove-Item -Recurse` nela sem antes remover o atalho. `NovoApp-seguranca` tem `node_modules` próprio.
+- A ferramenta de rede do `chrome-devtools` (`get_network_request`) mostra o `Authorization` (token da sessão); não copiar nem repetir.
