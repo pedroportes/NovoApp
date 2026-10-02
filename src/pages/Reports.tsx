@@ -47,6 +47,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { dentroDoPeriodoDaOS, dataEfetivaDaOS, janelaDeBusca, fimExclusivoISO, formatarDiaDaOS } from '@/lib/diaDaOS'
 
 type ReportTab = 'dre' | 'fiscal' | 'comissoes' | 'nao_feitos' | 'servicos' | 'geografico' | 'reativacao'
 type PeriodFilter = '15d_1' | '15d_2' | '30d' | 'mes_atual' | 'mes_anterior' | '90d' | 'ano' | 'tudo' | 'custom'
@@ -258,30 +259,34 @@ export function Reports() {
     }, [allPrevOrders, selectedBrandId])
 
     // Date range calculation based on period filter
+    // Todo período começa à 00:00:00.000 do primeiro dia e termina às 23:59:59.999 do último (fuso local).
+    // Antes alguns terminavam em 23:59:59 (sem os milissegundos) e os móveis (30d/90d) começavam na hora
+    // em que a tela foi aberta. Quem decide se uma OS cai no período é o DIA da OS (ver @/lib/diaDaOS).
     const dateRange = useMemo(() => {
         const now = new Date()
-        let start = new Date()
-        let end = new Date()
+        const fimDoDia = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999)
+        let start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
+        let end = fimDoDia(now)
 
         if (period === '30d') {
-            start.setDate(now.getDate() - 30)
+            start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30)
         } else if (period === 'mes_atual') {
             start = new Date(now.getFullYear(), now.getMonth(), 1)
         } else if (period === 'mes_anterior') {
             start = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-            end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59)
+            end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999)
         } else if (period === '90d') {
-            start.setDate(now.getDate() - 90)
+            start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 90)
         } else if (period === 'ano') {
             start = new Date(now.getFullYear(), 0, 1)
         } else if (period === 'tudo') {
             start = new Date(2020, 0, 1)
         } else if (period === '15d_1') {
             start = new Date(now.getFullYear(), now.getMonth(), 1)
-            end = new Date(now.getFullYear(), now.getMonth(), 15, 23, 59, 59)
+            end = new Date(now.getFullYear(), now.getMonth(), 15, 23, 59, 59, 999)
         } else if (period === '15d_2') {
             start = new Date(now.getFullYear(), now.getMonth(), 16)
-            end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59)
+            end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
         } else if (period === 'custom') {
             const parseLocal = (s: string) => {
                 const [y, m, d] = s.split('-').map(Number)
@@ -289,8 +294,7 @@ export function Reports() {
             }
             start = customStartDate ? parseLocal(customStartDate) : new Date(now.getFullYear(), now.getMonth(), 1)
             if (customEndDate) {
-                end = parseLocal(customEndDate)
-                end.setHours(23, 59, 59)
+                end = fimDoDia(parseLocal(customEndDate))
             }
         }
 
@@ -305,25 +309,26 @@ export function Reports() {
 
         if (period === 'mes_atual') {
             prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-            prevEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59)
+            prevEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999)
         } else if (period === 'mes_anterior') {
             prevStart = new Date(now.getFullYear(), now.getMonth() - 2, 1)
-            prevEnd = new Date(now.getFullYear(), now.getMonth() - 1, 0, 23, 59, 59)
+            prevEnd = new Date(now.getFullYear(), now.getMonth() - 1, 0, 23, 59, 59, 999)
         } else if (period === '15d_1') {
             prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 16)
-            prevEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59)
+            prevEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999)
         } else if (period === '15d_2') {
             prevStart = new Date(now.getFullYear(), now.getMonth(), 1)
-            prevEnd = new Date(now.getFullYear(), now.getMonth(), 15, 23, 59, 59)
+            prevEnd = new Date(now.getFullYear(), now.getMonth(), 15, 23, 59, 59, 999)
         } else if (period === 'ano') {
             prevStart = new Date(now.getFullYear() - 1, 0, 1)
-            prevEnd = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59)
+            prevEnd = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999)
         } else if (period === 'tudo') {
             return null
         } else {
-            const diffMs = dateRange.end.getTime() - dateRange.start.getTime()
-            prevEnd = new Date(dateRange.start.getTime() - 1000)
-            prevStart = new Date(prevEnd.getTime() - diffMs)
+            // período imediatamente anterior, com a mesma duração (começa 1 ms depois do fim do anterior)
+            const duracaoMs = dateRange.end.getTime() - dateRange.start.getTime() + 1
+            prevEnd = new Date(dateRange.start.getTime() - 1)
+            prevStart = new Date(dateRange.start.getTime() - duracaoMs)
         }
 
         return { start: prevStart, end: prevEnd }
@@ -383,8 +388,9 @@ export function Reports() {
                     clientes:cliente_id (bairro, cidade, endereco, cpf_cnpj, whatsapp)
                 `)
                 .eq('empresa_id', userData!.empresa_id!)
-                .gte('created_at', dateRange.start.toISOString())
-                .lte('created_at', dateRange.end.toISOString())
+                // busca com 1 dia de folga; o período vale pelo DIA da OS (filtrado depois da busca)
+                .gte('created_at', janelaDeBusca(dateRange).inicioISO)
+                .lte('created_at', janelaDeBusca(dateRange).fimISO)
                 .order('created_at', { ascending: false })
                 .order('id', { ascending: true })
                 .range(de, ate)
@@ -394,9 +400,10 @@ export function Reports() {
                 .from('ordens_servico')
                 .select('id, created_at, status, valor_total, marca_id')
                 .eq('empresa_id', userData!.empresa_id!)
-                .gte('created_at', prevDateRange.start.toISOString())
-                .lte('created_at', prevDateRange.end.toISOString())
+                .gte('created_at', janelaDeBusca(prevDateRange).inicioISO)
+                .lte('created_at', janelaDeBusca(prevDateRange).fimISO)
                 .order('created_at', { ascending: false })
+                .order('id', { ascending: true })
                 .range(de, ate) : null
 
             // 3. Despesas operacionais do período atual
@@ -406,7 +413,7 @@ export function Reports() {
                 .eq('empresa_id', userData!.empresa_id!)
                 .eq('status_aprovacao', 'aprovado')
                 .gte('created_at', dateRange.start.toISOString())
-                .lte('created_at', dateRange.end.toISOString())
+                .lt('created_at', fimExclusivoISO(dateRange)) // fim exclusivo: sem buraco de 1 ms entre períodos
                 .order('id', { ascending: true })
                 .range(de, ate)
 
@@ -426,8 +433,11 @@ export function Reports() {
 
             if (buscaId !== ultimaBuscaRef.current) return
 
-            setAllOrders(osData)
-            setAllPrevOrders(prevOsData || [])
+            // A busca trouxe 1 dia de folga nas pontas: fica só quem tem o DIA dentro do período
+            setAllOrders(osData.filter((o: any) => dentroDoPeriodoDaOS(o.created_at, dateRange)))
+            setAllPrevOrders(prevDateRange
+                ? (prevOsData || []).filter((o: any) => dentroDoPeriodoDaOS(o.created_at, prevDateRange))
+                : (prevOsData || []))
             setExpenses(expData)
             setTechnicians(techRes.data || [])
         } catch (error) {
@@ -498,7 +508,7 @@ export function Reports() {
 
                 if (clientesAgrupados.has(clienteKey)) return
 
-                const dataServico = new Date(o.created_at)
+                const dataServico = dataEfetivaDaOS((o as any).created_at) || new Date((o as any).created_at)
                 const diffDias = Math.floor((agora.getTime() - dataServico.getTime()) / (1000 * 60 * 60 * 24))
                 const mesesAtras = Math.max(1, Math.round(diffDias / 30))
 
@@ -541,14 +551,8 @@ export function Reports() {
         return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0)
     }
 
-    const formatDate = (dateStr: string) => {
-        if (!dateStr) return '-'
-        return new Date(dateStr).toLocaleDateString('pt-BR', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric'
-        })
-    }
+    // Dia da OS (data sem hora mostra o dia escrito, não o dia anterior)
+    const formatDate = (dateStr: string) => formatarDiaDaOS(dateStr, '-')
 
     // Helper para exibir o indicador de tendência comparativo com período anterior
     const renderTrend = (current: number, previous: number, format: 'currency' | 'count' | 'percent' = 'currency', invertColors: boolean = false) => {
