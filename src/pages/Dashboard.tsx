@@ -15,6 +15,8 @@ import { ServiceDistributionChart } from '@/components/dashboard/ServiceDistribu
 import { TechnicianRanking } from '@/components/dashboard/TechnicianRanking'
 import { ClientGrowthChart } from '@/components/dashboard/ClientGrowthChart'
 
+import { PERIODOS, PERIODO_PADRAO, calcularPeriodo, descreverPeriodo, type PeriodoKey } from '@/lib/periodoPainel'
+
 // Audio for notifications
 const playNotificationSound = () => {
     try {
@@ -63,12 +65,9 @@ export function Dashboard() {
     const [clientGrowthData, setClientGrowthData] = useState<any[]>([])
     const [recentActivities, setRecentActivities] = useState<any[]>([])
     const [pendingExpenses, setPendingExpenses] = useState<any[]>([])
-    const [dateRange, setDateRange] = useState<{ start: Date; end: Date }>(() => {
-        const end = new Date()
-        const start = new Date()
-        start.setDate(end.getDate() - 30)
-        return { start, end }
-    })
+    // Padrão: mês atual (antes eram os últimos 30 dias, que no começo do mês mostravam o mês anterior)
+    const [periodo, setPeriodo] = useState<PeriodoKey>(PERIODO_PADRAO)
+    const [dateRange, setDateRange] = useState<{ start: Date; end: Date }>(() => calcularPeriodo(PERIODO_PADRAO))
     const [loading, setLoading] = useState(true)
     const [technicianStats, setTechnicianStats] = useState<any[]>([])
 
@@ -620,19 +619,10 @@ export function Dashboard() {
         }
     }
 
-    const handlePeriodChange = (days: number) => {
-        const end = new Date()
-        const start = new Date()
-        start.setDate(end.getDate() - days)
-        setDateRange({ start, end })
+    const handlePeriodChange = (key: PeriodoKey) => {
+        setPeriodo(key)
+        setDateRange(calcularPeriodo(key))
     }
-
-    const periods = [
-        { label: 'Últimos 7 dias', days: 7 },
-        { label: 'Últimos 15 dias', days: 15 },
-        { label: 'Últimos 30 dias', days: 30 },
-        { label: 'Últimos 90 dias', days: 90 },
-    ]
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500 mt-8 md:mt-0" ref={dashboardRef}>
@@ -700,13 +690,16 @@ export function Dashboard() {
                 </div>
 
                 <div className="flex gap-2 items-center">
+                    {/* Datas do período escolhido (no computador), para não ter dúvida do que está somado */}
+                    <span className="hidden md:inline text-xs text-slate-500 whitespace-nowrap">{descreverPeriodo(dateRange)}</span>
                     <select
                         className="bg-white border md:border-slate-200 text-slate-600 text-xs md:text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500/20 shadow-sm"
-                        onChange={(e) => handlePeriodChange(Number(e.target.value))}
-                        defaultValue={30}
+                        onChange={(e) => handlePeriodChange(e.target.value as PeriodoKey)}
+                        value={periodo}
+                        aria-label="Período do painel"
                     >
-                        {periods.map(p => (
-                            <option key={p.days} value={p.days}>{p.label}</option>
+                        {PERIODOS.map(p => (
+                            <option key={p.key} value={p.key}>{p.label}</option>
                         ))}
                     </select>
 
