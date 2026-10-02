@@ -610,13 +610,13 @@ Todos configurados com **50% de comissão padrão** em `usuarios` e cadastrados 
 
 ---
 
-### 4R. 02/10/2026 — Painel abre em "Este mês" e regra do "DIA DA OS" em todas as telas — PRONTO, AGUARDANDO PUBLICAÇÃO — LER ANTES DE MEXER EM PERÍODO, MÊS OU DATA DE OS
+### 4R. 02/10/2026 — Painel abre em "Este mês" e regra do "DIA DA OS" em todas as telas — PUBLICADO — LER ANTES DE MEXER EM PERÍODO, MÊS OU DATA DE OS
 
-> **Estado (02/10/2026, fim do dia): NADA disto foi publicado.** Está em commits locais, em dois ramos:
-> - `periodo-mes-atual` (worktree `C:\Users\pedro\NovoApp-rapido`), em cima do `master` `a69b48c8`: `0b44374c` (filtro do Painel), `dddacb16` (dia da OS no Painel), `82cc9e71` (módulo `diaDaOS.ts`), `9a2c903b` (Relatórios), `6038e282` (Extrato e Fechamento), `5a687af9` (datas exibidas em recibo, contrato, Financeiro, Não Feitos e PDF do Painel) e o commit de documentação desta seção.
-> - `seguranca-dependencias` (worktree `C:\Users\pedro\NovoApp-seguranca`, com `node_modules` PRÓPRIO), commit `6ecbd9fc`: só o `package-lock.json` (auditoria de produção 6 → 0).
-> - **Para publicar (só com OK do Pedro):** no `C:\Users\pedro\NovoApp`, `git merge periodo-mes-atual` (avanço direto) e `git merge seguranca-dependencias` (arquivos diferentes, sem conflito), `git push origin master`, esperar a Vercel, conferir em produção (ver "Conferir" abaixo) e trocar este aviso por "PUBLICADO". **Publicar o pacote inteiro junto**: Painel, Relatórios, Extrato e Financeiro passam a concordar entre si; publicar só um deixaria números diferentes entre telas.
-> - Há uma cópia de segurança dos commits em `G:\Meu Drive\Minhas memorias Claude\Minhas Memorias\Automacoes\flowdrain-2026-10-02.bundle` (`git bundle`; restaura com `git clone` ou `git fetch` a partir do arquivo).
+> **Estado (02/10/2026): PUBLICADO** no GitHub (`master` `ae46f9c1`, merge dos dois ramos) e na Vercel (app.gerenciaservicos.com.br), com o OK do Pedro ("pode publicar tudo"). Os ramos `periodo-mes-atual` e `seguranca-dependencias` já estão dentro do `master`; os worktrees `NovoApp-rapido` e `NovoApp-seguranca` podem ser aposentados (cuidado com o atalho `node_modules` do `NovoApp-rapido`, ver item 7).
+> - Commits: `0b44374c` (filtro do Painel), `dddacb16` (dia da OS no Painel), `82cc9e71` (módulo `diaDaOS.ts`), `9a2c903b` (Relatórios), `6038e282` (Extrato e Fechamento), `5a687af9` (datas exibidas em recibo, contrato, Financeiro, Não Feitos e PDF do Painel), `34a35bd6` (docs) e `6ecbd9fc` (só `package-lock.json`: auditoria de produção 6 → 0).
+> - **Conferido em produção (Chrome do Pedro, 02/10, bundle `index-qibGqNPB.js`):** Painel abre em "Este mês" (01/10 a 02/10) = R$ 1.540,00 (2 OS); Mês passado R$ 10.800,08; 7d R$ 6.150,18; 15d R$ 7.290,08; 30d R$ 10.750,08; 90d R$ 81.058,08. Relatórios iguais ao Painel (Este Mês 2 OS, Mês Anterior 19 OS, Ano R$ 208.241,58 / 251 OS, Todo o Histórico R$ 1.205.635,20 / 1.367 OS). Recibo da OS de 01/10 mostra 01/10/2026. PDF de Relatórios gerado (279 KB, 2,2 s). Sem erro no console. Antes de enviar, build da combinação (código novo + dependências novas) passou e a abertura continuou só com `vendor`, `ui` e `db` em `modulepreload`.
+> - Quem já tinha o app aberto vê a versão antiga uma vez (PWA): recarregar 1 a 2 vezes.
+> - Cópia de segurança dos commits (estado pré-publicação) em `G:\Meu Drive\Minhas memorias Claude\Minhas Memorias\Automacoes\flowdrain-2026-10-02.bundle`.
 
 **1. Pedido do Pedro e o que descobrimos**
 - Pedido: em 02/10 o Painel mostrava os "últimos 30 dias" (R$ 9.390,08) embora outubro não tivesse faturamento; ele quis **"Este mês" como padrão**. Depois pediu para conferir a última OS e as pontas do mês ("o mês começa no primeiro minuto e termina no último").
