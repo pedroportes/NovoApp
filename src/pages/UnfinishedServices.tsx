@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
+import { formatarDiaDaOS } from '@/lib/diaDaOS'
 import { Building2,  Plus, Search, FileText, Calendar, User, Trash2, Phone, MapPin, Receipt, FileSignature, Pencil, AlertCircle  } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -271,7 +272,7 @@ export function UnfinishedServices() {
 
                             <div className="pt-4 border-t border-slate-100 flex items-center justify-between relative z-10">
                                 <div className="text-xs text-slate-400 font-medium">
-                                    {new Date(os.created_at || os.data_agendamento).toLocaleDateString()}
+                                    {formatarDiaDaOS(os.created_at || os.data_agendamento)}
                                 </div>
                                 <div className="flex items-center gap-1">
                                     <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50" onClick={(e) => {

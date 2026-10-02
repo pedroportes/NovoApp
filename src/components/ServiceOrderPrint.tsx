@@ -1,4 +1,5 @@
 import React from 'react'
+import { formatarDiaDaOS } from '@/lib/diaDaOS'
 
 interface ServiceOrderPrintProps {
     os: any
@@ -15,18 +16,10 @@ const ReceiptLayout = ({ os, company, title }: { os: any, company: any, title: s
     }
 
     // Helper for formatting date
-    const formatDate = (dateString: string) => {
-        if (!dateString) return ''
-        // Evita atraso de fuso UTC (ex: 2026-09-01 virando 31/08)
-        if (typeof dateString === 'string' && dateString.includes('T')) {
-            const [datePart] = dateString.split('T')
-            const parts = datePart.split('-')
-            if (parts.length === 3) {
-                return `${parts[2]}/${parts[1]}/${parts[0]}`
-            }
-        }
-        return new Date(dateString).toLocaleDateString('pt-BR')
-    }
+    // Regra única do dia da OS (@/lib/diaDaOS): data sem hora mostra o dia escrito (2026-09-01 não vira
+    // 31/08); data com hora mostra o dia do instante no fuso local (antes usava o dia em UTC, errado
+    // para horários perto da meia-noite).
+    const formatDate = (dateString: string) => formatarDiaDaOS(dateString) || (dateString ? new Date(dateString).toLocaleDateString('pt-BR') : '')
 
     // Fallback inteligente para OSs com itens vazios mas com descricao e valor_total
     const effectiveItems = (os.itens && Array.isArray(os.itens) && os.itens.length > 0)
@@ -264,7 +257,7 @@ const ReceiptLayout = ({ os, company, title }: { os: any, company: any, title: s
 const ContractLayout = ({ os, company }: { os: any, company: any }) => {
     const formatDate = (dateString: string) => {
         if (!dateString) return '____/____/____'
-        return new Date(dateString).toLocaleDateString('pt-BR')
+        return formatarDiaDaOS(dateString) || new Date(dateString).toLocaleDateString('pt-BR')
     }
 
     const formatCurrency = (value: number) => {

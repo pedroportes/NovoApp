@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import { formatarDiaDaOS } from '@/lib/diaDaOS'
 
 interface ReportData {
     companyName?: string
@@ -151,7 +152,7 @@ export const generateDashboardReport = (data: ReportData) => {
     doc.text('Últimas Atividades', 14, currentY)
 
     const activitiesBody = data.recentActivities.map(os => [
-        new Date(os.created_at).toLocaleDateString(),
+        formatarDiaDaOS(os.created_at, '-'),
         os.cliente_nome || 'N/A',
         os.tecnico?.nome_completo?.split(' ')[0] || '-',
         os.status,

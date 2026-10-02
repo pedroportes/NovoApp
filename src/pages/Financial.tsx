@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Navigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
+import { formatarDiaDaOS } from '@/lib/diaDaOS'
 import { useAuth } from '@/contexts/AuthContext'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -485,7 +486,7 @@ export function Financial() {
                                                         <div className="min-w-0 flex-1">
                                                             <div className="font-medium text-slate-800 text-sm truncate">{item.descricao}</div>
                                                             <div className="text-[10px] text-slate-500 mt-0.5">
-                                                                {new Date(item.data_lancamento).toLocaleDateString()}
+                                                                {formatarDiaDaOS(item.data_lancamento, '-')}
                                                             </div>
                                                         </div>
                                                         <div className={cn("text-right font-bold text-sm shrink-0 whitespace-nowrap", item.tipo === 'ENTRADA' ? "text-emerald-700" : "text-red-700")}>
