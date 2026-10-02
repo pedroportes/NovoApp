@@ -15,7 +15,10 @@ import { ServiceDistributionChart } from '@/components/dashboard/ServiceDistribu
 import { TechnicianRanking } from '@/components/dashboard/TechnicianRanking'
 import { ClientGrowthChart } from '@/components/dashboard/ClientGrowthChart'
 
-import { PERIODOS, PERIODO_PADRAO, calcularPeriodo, descreverPeriodo, type PeriodoKey } from '@/lib/periodoPainel'
+import {
+    PERIODOS, PERIODO_PADRAO, calcularPeriodo, descreverPeriodo, dentroDoPeriodoDaOS, dataEfetivaDaOS,
+    janelaDeBusca, fimExclusivoISO, type PeriodoKey,
+} from '@/lib/periodoPainel'
 
 // Audio for notifications
 const playNotificationSound = () => {
@@ -89,6 +92,12 @@ export function Dashboard() {
             sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5)
             sixMonthsAgo.setHours(0, 0, 0, 0)
 
+            // As OS vindas da planilha só têm o DIA (gravado como meia-noite UTC = 21:00 do dia anterior em
+            // Brasília). Busca com 1 dia de folga e decide o período pelo DIA DA OS (dentroDoPeriodoDaOS);
+            // senão toda OS do dia 1º caía no mês anterior e o mês atual aparecia zerado.
+            const janela = janelaDeBusca(dateRange)
+            const janela6meses = new Date(sixMonthsAgo.getTime() - 24 * 60 * 60 * 1000).toISOString()
+
             // 1. Query base para Ordens de Serviço no período selecionado
             let allOSQuery = supabase
                 .from('ordens_servico')
@@ -105,8 +114,8 @@ export function Dashboard() {
                 `)
                 .eq('empresa_id', userData.empresa_id)
                 .not('status', 'in', '("NAO_FEITO_CANCELADO","CANCELADO","cancelado")')
-                .gte('created_at', dateRange.start.toISOString())
-                .lte('created_at', dateRange.end.toISOString())
+                .gte('created_at', janela.inicioISO)
+                .lte('created_at', janela.fimISO)
 
             if (selectedBrandId && selectedBrandId !== 'all') {
                 if (brands.length > 0 && selectedBrandId === brands[0].id) {
@@ -122,7 +131,7 @@ export function Dashboard() {
                 .select('valor_total, created_at, status, marca_id')
                 .eq('empresa_id', userData.empresa_id)
                 .in('status', ['CONCLUIDO', 'concluido', 'concluída', 'concluida'])
-                .gte('created_at', sixMonthsAgo.toISOString())
+                .gte('created_at', janela6meses)
 
             if (selectedBrandId && selectedBrandId !== 'all') {
                 if (brands.length > 0 && selectedBrandId === brands[0].id) {
@@ -181,14 +190,15 @@ export function Dashboard() {
                     .eq('empresa_id', userData.empresa_id)
                     .eq('status', 'aprovado')
                     .gte('created_at', dateRange.start.toISOString())
-                    .lte('created_at', dateRange.end.toISOString()),
-                // Novos clientes cadastrados no período
+                    .lt('created_at', fimExclusivoISO(dateRange)),
+                // Clientes cadastrados nos últimos 6 meses: o gráfico "Crescimento da Base" precisa dos 6 meses
+                // (antes só vinham os do período escolhido, e com "Este mês" o gráfico ficava quase vazio).
+                // "Novos clientes" do período é contado abaixo.
                 supabase
                     .from('clientes')
                     .select('id, created_at')
                     .eq('empresa_id', userData.empresa_id)
-                    .gte('created_at', dateRange.start.toISOString())
-                    .lte('created_at', dateRange.end.toISOString()),
+                    .gte('created_at', sixMonthsAgo.toISOString()),
                 // Despesas pendentes que requerem aprovação do administrador
                 userData.cargo === 'admin'
                     ? supabase
@@ -210,7 +220,8 @@ export function Dashboard() {
             ])
 
             // Dados recebidos
-            const allOS = allOSRes.data || []
+            // Só as OS cujo DIA cai dentro do período (a busca trouxe 1 dia de folga nas pontas)
+            const allOS = (allOSRes.data || []).filter((os: any) => dentroDoPeriodoDaOS(os.created_at, dateRange))
             const historicalOS = historicalOSRes.data || []
             const recentOS = recentOSRes.data || []
 
@@ -357,7 +368,11 @@ export function Dashboard() {
                 payables: totalPayables,
                 averageTicket: avgTicket,
                 activeServices: openOS.length,
-                newClients: clientData.length,
+                // clientData vem dos últimos 6 meses (para o gráfico); aqui conta só os do período escolhido
+                newClients: clientData.filter((c: any) => {
+                    const t = new Date(c.created_at)
+                    return t >= dateRange.start && t <= dateRange.end
+                }).length,
                 commissions: totalCommissionsPeriod
             })
 
@@ -369,7 +384,8 @@ export function Dashboard() {
             const monthlyTotals: { [key: string]: number } = {}
 
             historicalOS.forEach((os: any) => {
-                const d = new Date(os.created_at)
+                const d = dataEfetivaDaOS(os.created_at) // mês pelo DIA da OS (OS "sem hora" não escorrega para o mês anterior)
+                if (!d) return
                 const key = `${d.getFullYear()}-${d.getMonth()}`
                 monthlyTotals[key] = (monthlyTotals[key] || 0) + (Number(os.valor_total) || 0)
             })
@@ -577,14 +593,16 @@ export function Dashboard() {
                     tecnico:tecnico_id(nome, nome_completo)
                 `)
                 .eq('empresa_id', userData.empresa_id)
-                .gte('created_at', dateRange.start.toISOString())
-                .lte('created_at', dateRange.end.toISOString())
+                .gte('created_at', janelaDeBusca(dateRange).inicioISO)
+                .lte('created_at', janelaDeBusca(dateRange).fimISO)
 
             if (selectedBrandId && selectedBrandId !== 'all') {
                 query = query.eq('marca_id', selectedBrandId)
             }
 
-            const { data: osData } = await query
+            const { data: osBrutas } = await query
+            // mesmas OS que o Painel soma: o período vale pelo DIA da OS
+            const osData = (osBrutas || []).filter((o: any) => dentroDoPeriodoDaOS(o.created_at, dateRange))
 
             if (!osData || osData.length === 0) {
                 toast.dismiss(toastId)
