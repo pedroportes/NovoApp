@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { formatarDiaDaOS } from '@/lib/diaDaOS'
 
 type PeriodPreset = 'tudo' | '15d_1' | '15d_2' | 'mes_atual' | 'mes_anterior' | 'custom'
 
@@ -182,14 +183,8 @@ export function TechnicianFinancialPrint() {
         return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0)
     }
 
-    const formatDate = (dateStr?: string) => {
-        if (!dateStr) return '-'
-        return new Date(dateStr).toLocaleDateString('pt-BR', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric'
-        })
-    }
+    // Dia da OS (data sem hora mostra o dia escrito, não o dia anterior)
+    const formatDate = (dateStr?: string) => formatarDiaDaOS(dateStr, '-')
 
     const formatDisplayPeriod = () => {
         if (!startDate && !endDate) return 'Todo o Período Pendente'

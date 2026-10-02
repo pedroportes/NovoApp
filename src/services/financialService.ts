@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { dentroDoPeriodoDaOS } from '@/lib/diaDaOS'
 
 export interface TechnicianBalance {
     technicianId: string
@@ -58,11 +59,13 @@ export const financialService = {
             }
             const inicio = startDate ? paraData(startDate, false) : null
             const fim = endDate ? paraData(endDate, true) : null
+            // O período vale pelo DIA da OS: OS só com o dia ficam gravadas à meia-noite UTC (= 21:00 do dia
+            // anterior em Brasília) e, comparadas pelo instante, caíam no mês anterior (ver @/lib/diaDaOS).
             const dentroDoPeriodo = (dataIso?: string | null) => {
                 if (!dataIso) return !inicio && !fim
-                const d = new Date(dataIso)
-                return (!inicio || d >= inicio) && (!fim || d <= fim)
+                return dentroDoPeriodoDaOS(dataIso, { start: inicio, end: fim })
             }
+            const UM_DIA_MS = 24 * 60 * 60 * 1000
 
             // 2. Comissões a pagar, filtradas pela DATA DA OS (e não pela data em que a comissão foi gerada)
             let commissions: any[] = []
@@ -121,10 +124,13 @@ export const financialService = {
                     .eq('tecnico_id', technicianId)
                     .eq('status', 'PENDENTE')
 
-                if (inicio) flowQuery = flowQuery.gte('data_lancamento', inicio.toISOString())
-                if (fim) flowQuery = flowQuery.lte('data_lancamento', fim.toISOString())
+                // Busca com 1 dia de folga e decide pelo DIA do lançamento (adiantamento lançado só com a data
+                // fica gravado à meia-noite UTC, igual às OS).
+                if (inicio) flowQuery = flowQuery.gte('data_lancamento', new Date(inicio.getTime() - UM_DIA_MS).toISOString())
+                if (fim) flowQuery = flowQuery.lte('data_lancamento', new Date(fim.getTime() + UM_DIA_MS).toISOString())
 
-                const { data: flows, error: flowError } = await flowQuery
+                const { data: flowsBrutos, error: flowError } = await flowQuery
+                const flows = flowsBrutos ? flowsBrutos.filter((f: any) => dentroDoPeriodo(f.data_lancamento)) : flowsBrutos
 
                 if (!flowError && flows) {
                     flows.forEach((flow: any) => {
@@ -153,7 +159,7 @@ export const financialService = {
                     .eq('status', 'aprovado')
 
                 if (inicio) expQuery = expQuery.gte('created_at', inicio.toISOString())
-                if (fim) expQuery = expQuery.lte('created_at', fim.toISOString())
+                if (fim) expQuery = expQuery.lt('created_at', new Date(fim.getTime() + 1).toISOString()) // fim exclusivo
 
                 const { data: expData, error: expError } = await expQuery
 

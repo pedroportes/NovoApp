@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Calendar, ArrowLeft, CheckCircle2, DollarSign, TrendingUp, TrendingDown, Receipt, Banknote, ExternalLink, Printer } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { formatarDiaDaOS } from '@/lib/diaDaOS'
 import { toast } from 'sonner'
 
 interface FinancialClosingProps {
@@ -725,7 +726,7 @@ export function FinancialClosing({ initialTechId }: FinancialClosingProps = {}) 
                                                     {os.cliente_nome || 'Cliente não identificado'}
                                                     <ExternalLink className="h-3 w-3 text-slate-400 group-hover:text-emerald-600" />
                                                 </span>
-                                                <span className="text-xs text-slate-500 font-medium">{new Date(os.created_at || new Date()).toLocaleDateString('pt-BR')}</span>
+                                                <span className="text-xs text-slate-500 font-medium">{formatarDiaDaOS(os.created_at) || new Date().toLocaleDateString('pt-BR')}</span>
                                             </div>
                                             <div className="text-sm text-slate-700 border-l-2 border-emerald-300 pl-2 my-1 font-medium line-clamp-2">
                                                 {os.descricao_servico || 'Serviço padrão'}
@@ -767,7 +768,7 @@ export function FinancialClosing({ initialTechId }: FinancialClosingProps = {}) 
                                                         title="Clique para conferir esta OS completa, cliente e serviços executados"
                                                     >
                                                         <td className="p-4 text-slate-600 whitespace-nowrap">
-                                                            {new Date(os.created_at || new Date()).toLocaleDateString('pt-BR')}
+                                                            {formatarDiaDaOS(os.created_at) || new Date().toLocaleDateString('pt-BR')}
                                                         </td>
                                                         <td className="p-4">
                                                             <div className="flex items-center gap-1.5 font-bold text-emerald-950 group-hover:text-emerald-700 transition-colors">
