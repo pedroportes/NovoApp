@@ -658,3 +658,53 @@ Todos configurados com **50% de comissão padrão** em `usuarios` e cadastrados 
 - Servidores de teste: `novoapp-rapido` (porta 5175, `vite preview` de `dist-t3` do `NovoApp-rapido`) e `novoapp-seguranca` (mesma porta, do `NovoApp-seguranca`); só um por vez. Para ver build novo ali, limpar service worker e cache da origem 5175.
 - `NovoApp-rapido` tem `node_modules` = atalho (*junction*) para o do `NovoApp`: **nunca** `git worktree remove` nem `Remove-Item -Recurse` nela sem antes remover o atalho. `NovoApp-seguranca` tem `node_modules` próprio.
 - A ferramenta de rede do `chrome-devtools` (`get_network_request`) mostra o `Authorization` (token da sessão); não copiar nem repetir.
+
+
+---
+
+### 4S. 21/10/2026 — NFS-e (Contora): prévia antes de emitir, PDF de teste, descrição limpa e textos da nota — PUBLICADO — LER ANTES DE MEXER EM NOTA FISCAL
+
+> Pedido do Pedro depois da NFS-e nº 9 (Cristal Glass, OS `81a746a0`) sair errada: nome do serviço repetido, texto de retenção digitado nas Observações indo para a descrição e ISS não retido. Publicado no GitHub/Vercel com o OK dele ("pode publicar"). Edge Function `nfse-contora` publicada pelo próprio Pedro (versões 5 a 8 em 21/10).
+
+**1. O que estava errado na nota nº 9 (diagnóstico)**
+- **Nome repetido:** a Nova OS gravava o item como "nome - descrição" do catálogo mesmo quando os dois eram iguais ("Desentupimento de vaso sanitário - Desentupimento de vaso sanitário"). 4 serviços do catálogo têm descrição = nome (vaso, ralo, mictório, encanamento).
+- **Texto de retenção na descrição:** foi digitado à mão nas Observações da OS, e as observações iam para a discriminação.
+- **ISS não retido:** `clientes.iss_retido` estava `false` na hora da emissão (a chave funciona; testada). E o texto de retenção (`empresa_nfse_config.info_complementar_retencao`) estava vazio.
+- A nº 9 continua AUTORIZADA e errada: cancelar e emitir de novo (decisão do Pedro). A nº 10 (Keli, sem CPF) foi emitida num teste e já foi CANCELADA.
+
+**2. O que mudou**
+- **Descrição da nota** (`descricaoDaNota` na Edge): só "Serviço realizado em dd/mm/aaaa: serviços." (sem valores, sem local, sem observações, sem nº da OS, sem técnico). Metro/litro com quantidade ("(18 m)"), quantidade > 1 como "(2x)". `nomeDoItem` remove partes repetidas ("X - X" → "X"), vale para OS antigas.
+- **Texto "de toda nota"** (`info_complementar`, hoje a garantia) vai JUNTO da descrição do serviço (pedido do Pedro), não mais nas informações complementares.
+- **Informações complementares** (quadro no fim do DANFSe), uma linha cada:
+  1. texto da retenção, **só quando o cliente retém**. Sem texto salvo e empresa do Simples → usa o padrão `RETENÇÃO ISS {aliquota} CFE. RESOLUÇÕES DO CGSN Nº 94/2011 E 135/2017. INSS NÃO RETIDO CFE ARTIGO 120 DA IN RFB 971/2009.`
+  2. **Totais aproximados dos tributos (Lei 12.741/2012), em toda nota.** Coluna nova `empresa_nfse_config.info_tributos` (migração `supabase/migrations/20261021_nfse_info_tributos.sql`, APLICADA no banco): `NULL` = texto padrão "Totais Aproximados dos Tributos cfe. Lei nº 12.741/2012: Federais: 13,45%; Estaduais: 0,00%; Municipais: 4,76%"; texto vazio salvo = sem a linha. Percentuais a confirmar com o contador.
+- **Nova OS** (`NewServiceOrder.tsx`): item do catálogo não repete o nome quando a descrição é igual.
+- **Edge `nfse-contora`**: função única `montarNota()` usada pela **prévia** e pela **emissão** (o que aparece na prévia é o que é enviado). Ação nova `previa` (não cria nada na Contora; vale até para OS com nota já emitida). `emitir` aceita `descricao` revisada na prévia (só aquela nota; a OS não muda). A prévia devolve também prestador (cadastro da empresa na Contora; município pelo nome oficial do IBGE; e-mail só se a Contora informar) e tomador exatamente como vai na nota.
+- **Avisos da prévia** (amarelo, não impedem): observações falam em retenção mas o cliente não está marcado; ISS retido sem texto de retenção (fora do Simples); cliente sem CPF/CNPJ (nota sai sem tomador); endereço incompleto; ambiente de homologação.
+
+**3. Telas**
+- **Card da OS** (`ServiceOrders.tsx`), com a Contora ativa:
+  - botão da nota ("Emitir NFS-e") agora abre a janela **"Conferir a nota antes de emitir"**: tomador, descrição EDITÁVEL, local da prestação, ISS retido Sim/Não, valor/ISS/líquido, informações complementares, avisos. Botões: "Voltar e corrigir", "Ver PDF da prévia", "Emitir nota" (pede confirmação: "Enviar a nota para a prefeitura agora? … Depois de emitida não dá para desfazer, só cancelar.").
+  - **botão LARANJA (ícone documento com lupa)** logo depois do ícone da nota: **PDF de teste** direto, sem passar pela emissão. Pedido explícito do Pedro (exceção à regra de não pôr botões nos cards).
+- **PDF de teste** (`src/components/nfse/pdfPreviaNota.ts`): cópia do layout do **DANFSe v2.0 da Contora** (mesmas seções, rótulos e ordem; discriminação e informações complementares sem acento, como a Contora faz), com marca "PRÉVIA – SEM VALOR FISCAL". Chave, número e QR Code só existem na emissão. Gerado no aparelho (html2canvas + jsPDF, carregados só no clique; a aba abre antes da espera para o navegador não bloquear).
+- **Configurações → Nota fiscal** (`ConfiguracaoNotaFiscal.tsx`): rótulos novos ("Em toda nota, junto da descrição do serviço"; "Só quando o cliente retém o ISS (quadro Informações complementares)") e campo novo "Totais aproximados dos tributos – Lei 12.741/2012".
+
+**4. Comparação com notas antigas (sistema da prefeitura/Focus: 548 Esdel, 565 Pilar, 567 Gold Coast)**
+- Valores com ISS retido batem com a prévia (base, alíquota 2%, ISSQN, líquido).
+- A **565** saiu com o texto "RETENÇÃO ISS…" mas "Não Retido" (contradição): a regra nova só põe o texto quando retém.
+- A **567** saiu com local da prestação/incidência **Curitiba** para serviço no Iná, **São José dos Pinhais** (lista fixa de cidades da Focus): levar ao contador. Na Contora o local vem do cliente.
+- **Cadastro do prestador diverge:** prefeitura = R FRANCISCO PORTES, 520, LAGOINHA, CEP 83800-000; Contora = FRANCISCO PORTES, 520, VILA PORTES, CEP 83805-070. Conferir com o contador qual é o certo antes de mexer no painel da Contora (salvar o formulário da empresa lá já religou a IM uma vez).
+- IM 892830 aparece nas antigas; na Contora fica "-" de propósito (mandar IM dá E0120).
+
+**5. Regras para agentes (NÃO QUEBRAR)**
+1. Prévia e emissão usam a MESMA `montarNota()`. Qualquer campo novo da nota entra nela, nunca só numa das duas.
+2. A prévia nunca cria rascunho na Contora (o DANFSe oficial só existe depois de emitir).
+3. Descrição da nota: só data + serviços + texto "de toda nota". Não voltar a pôr valores, local ou observações sem pedido do Pedro.
+4. Deploy da Edge: o Pedro roda DENTRO de `C:\Users\pedro\NovoApp`: `npx supabase functions deploy nfse-contora --project-ref dltqxfyrltgbudtzxzot` (fora dessa pasta dá "Entrypoint path does not exist"). Publicar a Edge ANTES do app quando o app depender de ação nova.
+5. Toda nota de teste em produção vale de verdade: usar o botão laranja (PDF de teste) para conferir; emitir só para valer.
+
+**6. Pendências**
+- Cancelar a nº 9 (Cristal Glass) e emitir de novo com "retém o ISS" ligado e o texto de retenção apagado das Observações da OS.
+- Desligar "retém o ISS" da Kamila se foi só teste.
+- Endereço/CEP do prestador na Contora × prefeitura (contador). Percentuais da Lei 12.741 (contador).
+- Confirmar no próximo DANFSe real se a quebra de linha das informações complementares aparece (a Contora troca quebra de linha por ";" em outros documentos).

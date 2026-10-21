@@ -8,6 +8,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 const CONTORA_API = 'https://fiscal.contora.com.br/api/v1'
 
+// Mesmo texto do botão "usar texto padrão" em Configurações → Nota fiscal (ConfiguracaoNotaFiscal.tsx)
+const TEXTO_RETENCAO_PADRAO = 'RETENÇÃO ISS {aliquota} CFE. RESOLUÇÕES DO CGSN Nº 94/2011 E 135/2017. INSS NÃO RETIDO CFE ARTIGO 120 DA IN RFB 971/2009.'
+// Totais aproximados dos tributos (Lei 12.741/2012), como nas notas antigas do Pedro. Mesmo texto da tela Nota fiscal.
+const TEXTO_TRIBUTOS_PADRAO = 'Totais Aproximados dos Tributos cfe. Lei nº 12.741/2012: Federais: 13,45%; Estaduais: 0,00%; Municipais: 4,76%'
+
 const allowedOrigins = [
     'https://app.gerenciaservicos.com.br',
     'http://localhost:5173',
@@ -96,9 +101,8 @@ async function municipioDoCliente(cli: any): Promise<{ ibge: string; cidade: str
 }
 
 // ---------- Descrição do serviço na nota (texto que o cliente e a prefeitura leem) ----------
-// Data do serviço + serviços feitos (itens da OS) + desconto + local + observações.
-// Sem número da OS e sem técnico (pedido do Pedro). Uma linha só, no máximo 1.000 caracteres.
-const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+// Só a data do serviço e os serviços feitos (itens da OS), pedido do Pedro em 21/10/2026:
+// sem valores, sem local, sem observações, sem número da OS e sem técnico. Máximo 1.000 caracteres.
 const numBR = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })
 const limpaTexto = (t: unknown) => String(t ?? '').replace(/\s+/g, ' ').trim()
 
@@ -114,49 +118,27 @@ function dataDoServico(os: any): string {
     return isNaN(d.getTime()) ? bruto.slice(0, 10).split('-').reverse().join('/') : d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
 }
 
-// Nome do item sem as sobras da planilha antiga ("... | 1,00m | a R$ R$ 780,00/m")
-const nomeDoItem = (t: unknown) => limpaTexto(t).replace(/\s*\|\s*[\d.,]+\s*(m|l)\b.*$/i, '').replace(/[.;\s]+$/, '')
+// Nome do item sem as sobras da planilha antiga ("... | 1,00m | a R$ R$ 780,00/m") e sem nome
+// repetido: a Nova OS gravava "nome - descrição" do catálogo mesmo quando os dois eram iguais
+// ("Desentupimento de vaso sanitário - Desentupimento de vaso sanitário").
+function nomeDoItem(t: unknown): string {
+    const limpo = limpaTexto(t).replace(/\s*\|\s*[\d.,]+\s*(m|l)\b.*$/i, '').replace(/[.;\s]+$/, '')
+    const partes: string[] = []
+    for (const p of limpo.split(/\s+-\s+/)) {
+        if (p && !partes.some(x => normalizar(x) === normalizar(p))) partes.push(p)
+    }
+    return partes.join(' - ')
+}
 
 function linhaDoItem(it: any): string {
     const nome = nomeDoItem(it?.descricao)
     if (!nome) return ''
     const qtd = Number(it?.qtd) || 1
-    const unit = Number(it?.valor_unitario) || 0
-    const total = Number(it?.total) || qtd * unit
-    if (it?.unidade === 'metro' || it?.unidade === 'litro') {
-        const u = it.unidade === 'metro' ? 'm' : 'L'
-        return `${nome} (${numBR(qtd)} ${u} x ${brl(unit)} = ${brl(total)})`
-    }
-    if (qtd !== 1 && unit > 0) return `${nome} (${numBR(qtd)} x ${brl(unit)} = ${brl(total)})`
-    return total > 0 ? `${nome} (${brl(total)})` : nome
+    if (it?.unidade === 'metro' || it?.unidade === 'litro') return `${nome} (${numBR(qtd)} ${it.unidade === 'metro' ? 'm' : 'L'})`
+    return qtd !== 1 ? `${nome} (${numBR(qtd)}x)` : nome
 }
 
-// Observações sem anotações internas da migração (tipo do documento, "registro inativo", e-mails)
-function observacoesLimpas(t: unknown): string {
-    return limpaTexto(t)
-        .replace(/-?\s*Tipo:\s*(Recibo|Or[çc]amento|Contrato|Servi[çc]o)\b/gi, '')
-        .replace(/-?\s*Registro Inativo\/Cancelado na Planilha/gi, '')
-        .replace(/[\w.+-]+@[\w-]+\.[\w.]+/g, '')
-        .replace(/^[\s\-–|;,.]+|[\s\-–|;,]+$/g, '')
-        .trim()
-}
-
-function enderecoDoServico(cli: any, cidade: string, uf: string): string {
-    if (!cli) return ''
-    const rua = limpaTexto(cli.logradouro || cli.endereco)
-    if (!rua) return ''
-    let e = rua
-    if (cli.numero && !rua.includes(String(cli.numero))) e += `, ${limpaTexto(cli.numero)}`
-    if (cli.complemento) e += ` (${limpaTexto(cli.complemento)})`
-    if (cli.bairro) e += ` - ${limpaTexto(cli.bairro)}`
-    const cid = cidade || limpaTexto(cli.cidade)
-    const est = uf || limpaTexto(cli.uf)
-    // Só não repete a cidade quando a própria rua já termina com ela (bairro "Cidade Industrial de Curitiba" não conta)
-    if (cid && !rua.toLowerCase().endsWith(cid.toLowerCase())) e += `, ${cid}${est ? `/${est}` : ''}`
-    return e
-}
-
-function descricaoDaNota(os: any, cli: any, cidade: string, uf: string): string {
+function descricaoDaNota(os: any): string {
     const itens = (Array.isArray(os.itens) ? os.itens : []).map(linhaDoItem).filter(Boolean)
     if (itens.length === 0) {
         const antigo = nomeDoItem(os.descricao_servico || os.descricao)
@@ -166,28 +148,13 @@ function descricaoDaNota(os: any, cli: any, cidade: string, uf: string): string 
     const data = dataDoServico(os)
     const cabeca = `${servicos.length > 1 ? 'Serviços realizados' : 'Serviço realizado'}${data ? ` em ${data}` : ''}: `
 
-    const extras: string[] = []
-    const soma = (Array.isArray(os.itens) ? os.itens : []).reduce((t: number, it: any) => t + (Number(it?.total) || (Number(it?.qtd) || 1) * (Number(it?.valor_unitario) || 0)), 0)
-    const desconto = Math.round((soma - Number(os.valor_total || 0)) * 100) / 100
-    if (desconto >= 0.01) extras.push(`Desconto: ${brl(desconto)}`)
-    const cond = limpaTexto(cli?.empresa_condominio)
-    const end = enderecoDoServico(cli, cidade, uf)
-    if (end || cond) extras.push(`Local: ${[cond, end].filter(Boolean).join(' - ')}`)
-    const obs = observacoesLimpas(os.observacoes)
-    if (obs) extras.push(`Obs.: ${obs}`)
-
     const LIMITE = 1000
-    const montar = (lista: string[], resto: number, ext: string[]) =>
-        `${cabeca}${lista.join('; ')}${resto > 0 ? `; e mais ${resto} ${resto > 1 ? 'serviços' : 'serviço'}` : ''}.${ext.length ? ' ' + ext.map(x => x.replace(/\.+$/, '')).join('. ') + '.' : ''}`
-    // Se passar de 1.000: corta as observações, depois tira serviços do fim (avisando quantos faltaram)
-    let texto = montar(servicos, 0, extras)
-    if (texto.length > LIMITE && obs) {
-        const semObs = extras.filter(x => !x.startsWith('Obs.:'))
-        const espaco = LIMITE - montar(servicos, 0, semObs).length - 10
-        texto = espaco > 20 ? montar(servicos, 0, [...semObs, `Obs.: ${obs.slice(0, espaco).trim()}…`]) : montar(servicos, 0, semObs)
-    }
+    const montar = (lista: string[], resto: number) =>
+        `${cabeca}${lista.join('; ')}${resto > 0 ? `; e mais ${resto} ${resto > 1 ? 'serviços' : 'serviço'}` : ''}.`
+    // Se passar de 1.000: tira serviços do fim, avisando quantos faltaram
+    let texto = montar(servicos, 0)
     let n = servicos.length
-    while (texto.length > LIMITE && n > 1) { n--; texto = montar(servicos.slice(0, n), servicos.length - n, extras.filter(x => !x.startsWith('Obs.:'))) }
+    while (texto.length > LIMITE && n > 1) { n--; texto = montar(servicos.slice(0, n), servicos.length - n) }
     return texto.slice(0, LIMITE)
 }
 
@@ -243,7 +210,7 @@ serve(async (req) => {
         const empresaId = usuario.empresa_id as string
         const ehTecnico = ['tecnico', 'técnico'].includes(String(usuario.cargo || '').toLowerCase())
 
-        const { acao, token, cnpj, os_id, justificativa } = await req.json().catch(() => ({}))
+        const { acao, token, cnpj, os_id, justificativa, descricao } = await req.json().catch(() => ({}))
 
         const lerToken = async () => {
             const { data } = await admin.from('empresa_nfse_segredos').select('contora_token').eq('empresa_id', empresaId).maybeSingle()
@@ -256,12 +223,12 @@ serve(async (req) => {
         }
 
         // ===== Emissão pelas OS (qualquer usuário da empresa, como na Focus) =====
-        if (acao === 'emitir' || acao === 'status' || acao === 'cancelar') {
+        if (acao === 'previa' || acao === 'emitir' || acao === 'status' || acao === 'cancelar') {
             const t = await lerToken()
             if (!t) return json({ ok: false, erro: 'A Contora não está conectada. Vá em Configurações → Nota fiscal e salve o token.' })
 
             const { data: cfg } = await admin.from('empresa_nfse_config')
-                .select('provedor, contora_ambiente, contora_cnpj, contora_empresa_id, contora_total_tax_rate_sn, local_prestacao_cliente, info_complementar, info_complementar_retencao')
+                .select('provedor, contora_ambiente, contora_cnpj, contora_empresa_id, contora_total_tax_rate_sn, local_prestacao_cliente, info_complementar, info_complementar_retencao, info_tributos')
                 .eq('empresa_id', empresaId).maybeSingle()
             if (!cfg?.contora_cnpj || !cfg?.contora_empresa_id) {
                 return json({ ok: false, erro: 'Escolha a empresa emissora: Configurações → Nota fiscal → Testar conexão.' })
@@ -280,18 +247,18 @@ serve(async (req) => {
             }
             const docId = String(os.nfe_ref || '').startsWith('contora:') ? String(os.nfe_ref).slice(8) : null
 
-            // --- Emitir: rascunho + despacho ---
-            if (acao === 'emitir') {
-                if (os.nfe_status === 'autorizado' && docId) return json({ ok: true, estado: 'autorizado', os: {} })
+            // Monta a nota exatamente como vai para a Contora. A prévia e a emissão usam esta mesma
+            // função, então o que aparece na prévia é o que é enviado. Não cria nada na Contora.
+            const montarNota = async (): Promise<{ erro: string } | Record<string, any>> => {
                 const valor = Number(os.valor_total || 0)
-                if (!(valor > 0)) return json({ ok: false, erro: 'A OS está sem valor. Informe o valor antes de emitir a nota.' })
+                if (!(valor > 0)) return { erro: 'A OS está sem valor. Informe o valor antes de emitir a nota.' }
 
                 const emp = await contora(t, `/companies/${cfg.contora_empresa_id}`)
                 const s = emp.data?.data?.settings || {}
                 const regime = emp.data?.data?.tax_regime
                 const pctSimples = cfg.contora_total_tax_rate_sn != null ? Number(cfg.contora_total_tax_rate_sn) : null
                 if (regime === 'simples' && !(pctSimples! > 0)) {
-                    return json({ ok: false, erro: 'Falta o % total de tributos do Simples (DAS) em Configurações → Nota fiscal.' })
+                    return { erro: 'Falta o % total de tributos do Simples (DAS) em Configurações → Nota fiscal.' }
                 }
 
                 // Tomador (opcional no padrão nacional)
@@ -308,14 +275,14 @@ serve(async (req) => {
                 // Chave ligada: sem a cidade do cliente a nota sairia com a cidade da sede (errado).
                 // Para ANTES de criar a nota (sem efeito fiscal).
                 if (cfg.local_prestacao_cliente && !mun) {
-                    return json({ ok: false, erro: `Não achei a cidade do cliente para o "Local da prestação". Confira o CEP ou a cidade/UF no cadastro do cliente (hoje: CEP ${cli?.cep || '-'}, cidade ${cli?.cidade || '-'}/${cli?.uf || '-'}).` })
+                    return { erro: `Não achei a cidade do cliente para o "Local da prestação". Confira o CEP ou a cidade/UF no cadastro do cliente (hoje: CEP ${cli?.cep || '-'}, cidade ${cli?.cidade || '-'}/${cli?.uf || '-'}).` }
                 }
 
                 // ISS retido pelo cliente (chave no cadastro): exige CPF/CNPJ do tomador
                 const issRetido = !!cli?.iss_retido
                 const doc = soDigitos(cli?.cpf_cnpj || cli?.documento)
                 if (issRetido && !(doc.length === 11 || doc.length === 14)) {
-                    return json({ ok: false, erro: 'Este cliente está marcado como "retém o ISS", mas o cadastro está sem CPF/CNPJ válido. Complete o CPF/CNPJ antes de emitir.' })
+                    return { erro: 'Este cliente está marcado como "retém o ISS", mas o cadastro está sem CPF/CNPJ válido. Complete o CPF/CNPJ antes de emitir.' }
                 }
 
                 let taker: Record<string, unknown> | undefined
@@ -335,8 +302,11 @@ serve(async (req) => {
                     }
                 }
 
+                // Texto "de toda nota" (ex.: a garantia) vai junto da discriminação do serviço, pedido do Pedro
+                // em 21/10/2026; o quadro de informações complementares fica só para a frase da retenção.
+                const textoTodaNota = limpaTexto(cfg.info_complementar)
                 const servico: Record<string, unknown> = {
-                    description: descricaoDaNota(os, cli, cidade, uf),
+                    description: [descricaoDaNota(os), textoTodaNota].filter(Boolean).join(' ').slice(0, 1000),
                     iss_withheld: issRetido,
                     iss_tax_situation: 'tributavel',
                 }
@@ -352,16 +322,92 @@ serve(async (req) => {
                 // Com ISS retido o cliente paga o valor menos o ISS (alíquota da faixa do Simples, a mesma da nota)
                 const aliquota = Number(servico.iss_rate ?? 0)
                 if (issRetido && !(aliquota > 0)) {
-                    return json({ ok: false, erro: 'ISS retido precisa da alíquota do ISS no cadastro da empresa no painel da Contora.' })
+                    return { erro: 'ISS retido precisa da alíquota do ISS no cadastro da empresa no painel da Contora.' }
                 }
                 const liquido = issRetido ? Math.round((valor - valor * aliquota / 100) * 100) / 100 : valor
 
-                // Informações complementares (quadro no fim do DANFSe): texto de toda nota + texto da retenção.
+                // Informações complementares (quadro no fim do DANFSe): texto da retenção (só quando retém)
+                // e, embaixo, a linha dos totais aproximados dos tributos (toda nota).
                 // {aliquota} vira a alíquota do ISS desta nota (ex.: "2,00%").
                 const comAliquota = (t: unknown) => limpaTexto(t).replace(/\{\s*aliquota\s*\}/gi, `${aliquota.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`)
-                const infoCompl = [comAliquota(cfg.info_complementar), issRetido ? comAliquota(cfg.info_complementar_retencao) : '']
-                    .filter(Boolean).join(' ').slice(0, 2000)
+                // Com ISS retido a frase da retenção sempre sai: sem texto salvo em Configurações, usa o padrão do
+                // Simples (o mesmo do botão da tela Nota fiscal). Fora do Simples, só o texto que a empresa salvar.
+                const textoRetencao = limpaTexto(cfg.info_complementar_retencao) || (regime === 'simples' ? TEXTO_RETENCAO_PADRAO : '')
+                // Tributos: sem nada salvo (null) usa o padrão; texto apagado em Configurações ('') não manda a linha
+                const textoTributos = cfg.info_tributos == null ? TEXTO_TRIBUTOS_PADRAO : limpaTexto(cfg.info_tributos)
+                const infoCompl = [issRetido ? comAliquota(textoRetencao) : '', textoTributos]
+                    .filter(Boolean).join('\n').slice(0, 2000)
                 if (infoCompl) servico.additional_info = infoCompl
+
+                // Avisos para quem confere a prévia (não impedem a emissão)
+                const avisos: string[] = []
+                if (!issRetido && /reten[çc][ãa]o|iss\s+retido/i.test(String(os.observacoes || ''))) {
+                    avisos.push('As observações da OS falam em retenção de ISS, mas o cliente NÃO está marcado como "retém o ISS". Se ele retém, ligue a chave no cadastro do cliente e salve antes de emitir.')
+                }
+                if (issRetido && !textoRetencao) {
+                    avisos.push('ISS retido, mas o texto da retenção está vazio em Configurações → Nota fiscal → Informações complementares: a nota sai sem essa frase.')
+                }
+                if (!taker) avisos.push('Cliente sem CPF/CNPJ válido: a nota sai sem tomador identificado.')
+                else if (!taker.address) avisos.push('Endereço do cliente incompleto (rua, CEP ou cidade): a nota sai sem o endereço do tomador.')
+                if (cfg.contora_ambiente !== 'producao') avisos.push('Ambiente de homologação (teste): esta nota não vale como nota fiscal.')
+
+                // Dados do prestador para o PDF da prévia (só campos de cadastro; nunca senhas/tokens)
+                const e = emp.data?.data || {}
+                // Nome do município como o DANFSe escreve ("Mandirituba", não "MANDIRITUBA"): lista oficial do IBGE
+                const ufSede = String(e.state_code || '').toUpperCase()
+                const sede = (await municipiosDaUf(ufSede)).find(m => m.codigo === soDigitos(e.city_code))
+                const prestador = {
+                    razao_social: e.legal_name || '', cnpj: soDigitos(e.document), telefone: soDigitos(e.phone),
+                    endereco: [e.street, e.number].filter(Boolean).join(', ') + (e.district ? `, ${e.district}` : ''),
+                    municipio: (sede?.nome || e.city_name) ? `${sede?.nome || e.city_name} - ${ufSede}` : '', cep: soDigitos(e.postal_code),
+                    // E-mail do cadastro do emissor na Contora (o do FlowDrain pode ser de outra filial)
+                    email: String(e.email || ''),
+                    simples: regime === 'simples' ? 'Optante - ME/EPP' : 'Não optante',
+                }
+
+                return {
+                    servico, taker, valor, liquido, aliquota, issRetido, avisos, prestador,
+                    tomador: cli ? { nome: String(cli.nome_razao || cli.nome || '').trim(), documento: doc, cidade, uf } : null,
+                    local_prestacao: servico.incidence_city_code ? `${cidade}/${uf}` : `${emp.data?.data?.city_name || 'cidade da sede'} (sede)`,
+                }
+            }
+
+            // --- Prévia: mostra a nota montada, sem enviar nada ---
+            if (acao === 'previa') {
+                // Vale também para OS que já tem nota: é só conferência, nada é enviado
+                const n = await montarNota()
+                if ('erro' in n) return json({ ok: false, erro: n.erro })
+                return json({
+                    ok: true,
+                    previa: {
+                        tomador: n.tomador, descricao: n.servico.description, local_prestacao: n.local_prestacao,
+                        iss_retido: n.issRetido, aliquota: n.aliquota, valor: n.valor,
+                        valor_iss: Math.round(n.valor * n.aliquota) / 100, valor_liquido: n.liquido,
+                        info_complementar: n.servico.additional_info || '', codigo_servico: n.servico.national_tax_code || '',
+                        ambiente: cfg.contora_ambiente, avisos: n.avisos,
+                        // Para o PDF da prévia (mesmo conteúdo que vai para a Contora)
+                        prestador: n.prestador,
+                        tomador_nota: n.taker ? {
+                            nome: n.taker.name, documento: n.taker.document, email: n.taker.email || '', telefone: n.taker.phone || '',
+                            endereco: n.taker.address ? `${n.taker.address.street}, ${n.taker.address.number}, ${n.taker.address.district}` : '',
+                            municipio: n.taker.address ? `${n.taker.address.city || ''} - ${n.taker.address.state_code || ''}` : '',
+                            cep: n.taker.address?.postal_code || '',
+                        } : null,
+                        nbs: n.servico.nbs_code || '',
+                    },
+                })
+            }
+
+            // --- Emitir: rascunho + despacho ---
+            if (acao === 'emitir') {
+                if (os.nfe_status === 'autorizado' && docId) return json({ ok: true, estado: 'autorizado', os: {} })
+                const n = await montarNota()
+                if ('erro' in n) return json({ ok: false, erro: n.erro })
+                const { servico, taker, valor, liquido } = n
+                // Descrição revisada na prévia (vale só para esta nota; a OS não muda)
+                const revisada = limpaTexto(descricao)
+                if (descricao != null && revisada.length < 5) return json({ ok: false, erro: 'A descrição do serviço ficou vazia. Escreva o serviço feito.' })
+                if (revisada) servico.description = revisada.slice(0, 1000)
 
                 const falhar = async (msg: string) => {
                     await atualizarOS({ nfe_status: 'erro_autorizacao', nfe_mensagem_erro: msg, nfe_tipo: 'contora' })

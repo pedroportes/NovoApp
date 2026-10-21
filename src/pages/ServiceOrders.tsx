@@ -1,10 +1,10 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
-import { Plus, Search, FileText, Calendar, User, Trash2, Phone, MapPin, Receipt, FileSignature, Pencil, FileBadge, Loader2, Mic, MicOff, Building2, RefreshCw, AlertCircle } from 'lucide-react'
+import { Plus, Search, FileText, Calendar, User, Trash2, Phone, MapPin, Receipt, FileSignature, Pencil, FileBadge, Loader2, Mic, MicOff, Building2, RefreshCw, AlertCircle, FileSearch } from 'lucide-react'
 import { useVoiceRecognition } from '@/hooks/useVoiceRecognition'
 import { SearchAssistant, SmartFilter } from '@/services/searchAssistant'
 import { FocusNFeService } from '@/services/focusNFeService'
-import { ContoraNFSeService } from '@/services/contoraNFSeService'
+import { ContoraNFSeService, type PreviaNota } from '@/services/contoraNFSeService'
 import { db } from '@/lib/db'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -33,6 +33,7 @@ import { cn } from '@/lib/utils'
 import { SyncService } from '@/services/syncService'
 import { useOfflineServiceOrders, useOfflineClients, useOfflineTechnicians } from '@/hooks/useOfflineData'
 import { SeloAlerta } from '@/components/clients/AlertaCliente'
+import { abrirPdfPreviaNota } from '@/components/nfse/pdfPreviaNota'
 
 type ServiceOrder = any
 
@@ -181,6 +182,8 @@ export function ServiceOrders() {
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
     const [osToDelete, setOsToDelete] = useState<string | null>(null)
     const [cancelModalOpen, setCancelModalOpen] = useState(false)
+    // Prévia da NFS-e (Contora) antes de emitir: a descrição pode ser ajustada só para esta nota
+    const [previaNota, setPreviaNota] = useState<{ osId: string; dados: PreviaNota; descricao: string } | null>(null)
     const [osToCancel, setOsToCancel] = useState<any | null>(null)
     const [cancelJustificativa, setCancelJustificativa] = useState('Cancelamento de serviço solicitado pelo cliente')
     const [isCanceling, setIsCanceling] = useState(false)
@@ -480,14 +483,14 @@ export function ServiceOrders() {
 
     // Emissão/acompanhamento pela Contora. A Edge Function grava o resultado na OS;
     // aqui só atualizamos o banco local e avisamos o usuário (erro fica fixo no card).
-    const emitirOuConsultarContora = async (osId: string, jaEmitida: boolean) => {
+    const emitirOuConsultarContora = async (osId: string, jaEmitida: boolean, descricao?: string) => {
         const aplicar = async (campos?: Record<string, any>) => {
             if (campos && Object.keys(campos).length > 0) await db.ordens_servico.update(osId, { ...campos, synced: 1 } as any)
         }
 
         if (!jaEmitida) {
             toast.info('Enviando NFS-e pela Contora...')
-            const r = await ContoraNFSeService.emitir(osId)
+            const r = await ContoraNFSeService.emitir(osId, descricao)
             await aplicar(r.os)
             if (!r.ok) {
                 toast.error(`NFS-e não emitida: ${r.erro}`, { duration: 12000 })
@@ -539,7 +542,18 @@ export function ServiceOrders() {
                 ? ContoraNFSeService.ehContora(currentOs)
                 : provedorNfse === 'contora'
             if (usarContora) {
-                await emitirOuConsultarContora(osId, !isErroOuCancelada && !!currentOs?.nfe_ref)
+                const jaEmitida = !isErroOuCancelada && !!currentOs?.nfe_ref
+                if (jaEmitida) {
+                    await emitirOuConsultarContora(osId, true)
+                    return
+                }
+                // Nota nova: mostra a prévia; só emite quando o usuário confirmar
+                const r = await ContoraNFSeService.previa(osId)
+                if (!r.ok || !r.previa) {
+                    toast.error(`Não foi possível montar a nota: ${r.erro || 'tente de novo'}`, { duration: 12000 })
+                    return
+                }
+                setPreviaNota({ osId, dados: r.previa, descricao: r.previa.descricao })
                 return
             }
 
@@ -636,6 +650,31 @@ export function ServiceOrders() {
 
         } catch (error: any) {
             console.error('Erro ao emitir NFe:', error)
+            toast.error(`Erro ao emitir NFS-e: ${error.message}`)
+        } finally {
+            setEmittingIds(prev => {
+                const newSet = new Set(prev)
+                newSet.delete(osId)
+                return newSet
+            })
+        }
+    }
+
+    const confirmarPreviaNota = async () => {
+        if (!previaNota) return
+        const { osId, descricao } = previaNota
+        if (descricao.trim().length < 5) {
+            toast.error('Escreva a descrição do serviço antes de emitir.')
+            return
+        }
+        const p = previaNota.dados
+        const valor = p.valor_liquido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+        if (!confirm(`Enviar a nota para a prefeitura agora?\n\nTomador: ${p.tomador?.nome || 'sem cliente'}\nValor líquido: ${valor}\nISS retido: ${p.iss_retido ? 'Sim' : 'Não'}\n\nDepois de emitida não dá para desfazer, só cancelar.`)) return
+        setPreviaNota(null)
+        setEmittingIds(prev => new Set(prev).add(osId))
+        try {
+            await emitirOuConsultarContora(osId, false, descricao.trim())
+        } catch (error: any) {
             toast.error(`Erro ao emitir NFS-e: ${error.message}`)
         } finally {
             setEmittingIds(prev => {
@@ -1180,7 +1219,7 @@ export function ServiceOrders() {
                                                 ? 'NFS-e em Processamento na Receita (Clique para consultar)'
                                                 : os.nfe_status === 'erro_autorizacao' || os.nfe_status === 'erro'
                                                 ? `Erro na NFS-e: ${os.nfe_mensagem_erro || 'Rejeição na prefeitura/receita. Clique para consultar ou tentar novamente'}`
-                                                : 'Emitir NFS-e'
+                                                : provedorNfse === 'contora' ? 'Conferir e emitir NFS-e (abre a prévia antes)' : 'Emitir NFS-e'
                                         }
                                         disabled={emittingIds.has(os.id)}
                                         className={`h-7 w-7 md:h-8 md:w-7 rounded-lg transition-all hover:scale-105 cursor-pointer ${
@@ -1205,6 +1244,28 @@ export function ServiceOrders() {
                                             }`} />
                                         )}
                                     </Button>
+
+                                    {/* PDF de teste da nota (Contora): mesmo layout do DANFSe, sem emitir nada */}
+                                    {provedorNfse === 'contora' && (
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            title="PDF de teste da NFS-e (não emite, só para conferir)"
+                                            aria-label="PDF de teste da NFS-e"
+                                            className="h-7 w-7 md:h-8 md:w-7 rounded-lg transition-all hover:scale-105 cursor-pointer text-orange-600 bg-orange-50 border border-orange-300 shadow-sm hover:bg-orange-100"
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                abrirPdfPreviaNota(
+                                                    ContoraNFSeService.previa(os.id).then(r => {
+                                                        if (!r.ok || !r.previa) throw new Error(r.erro || 'tente de novo')
+                                                        return r.previa
+                                                    })
+                                                ).catch(err => toast.error(`Não foi possível gerar o PDF de teste: ${err?.message || err}`, { duration: 10000 }))
+                                            }}
+                                        >
+                                            <FileSearch className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                                        </Button>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -1246,6 +1307,108 @@ export function ServiceOrders() {
             </Dialog>
 
             
+            {/* Prévia da NFS-e (Contora): confere tudo antes de mandar para a prefeitura */}
+            <Dialog open={!!previaNota} onOpenChange={aberto => { if (!aberto) setPreviaNota(null) }}>
+                <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <FileBadge className="h-5 w-5 text-emerald-600 shrink-0" />
+                            Conferir a nota antes de emitir
+                        </DialogTitle>
+                        <DialogDescription>
+                            Nada foi enviado ainda. Confira os dados: a nota só vai para a prefeitura ao tocar em "Emitir nota".
+                        </DialogDescription>
+                    </DialogHeader>
+                    {previaNota && (() => {
+                        const p = previaNota.dados
+                        const reais = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                        const doc = p.tomador?.documento || ''
+                        const docFormatado = doc.length === 14
+                            ? doc.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5')
+                            : doc.length === 11 ? doc.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4') : ''
+                        return (
+                            <div className="space-y-4 py-1 text-sm">
+                                {p.avisos.length > 0 && (
+                                    <div className="space-y-2">
+                                        {p.avisos.map((a, i) => (
+                                            <div key={i} className="flex gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-amber-900">
+                                                <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                                                <span>{a}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-1">
+                                    <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tomador</div>
+                                    <div className="font-semibold text-slate-800">{p.tomador?.nome || 'Sem cliente'}</div>
+                                    <div className="text-slate-600">
+                                        {docFormatado || 'Sem CPF/CNPJ'}{p.tomador?.cidade ? ` · ${p.tomador.cidade}/${p.tomador.uf}` : ''}
+                                    </div>
+                                </div>
+                                <div>
+                                    <label htmlFor="previa-descricao" className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-1">
+                                        Descrição do serviço (pode ajustar)
+                                    </label>
+                                    <textarea
+                                        id="previa-descricao"
+                                        value={previaNota.descricao}
+                                        onChange={e => setPreviaNota(prev => prev ? { ...prev, descricao: e.target.value } : prev)}
+                                        maxLength={1000}
+                                        rows={4}
+                                        className="w-full rounded-xl border border-slate-300 bg-white p-3 text-base text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                    />
+                                    <p className="text-xs text-slate-500 mt-1">A mudança vale só para esta nota; a OS não é alterada.</p>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div className="rounded-xl border border-slate-200 p-3">
+                                        <div className="text-xs text-slate-500">Local da prestação</div>
+                                        <div className="font-semibold text-slate-800">{p.local_prestacao}</div>
+                                    </div>
+                                    <div className={cn('rounded-xl border p-3', p.iss_retido ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200')}>
+                                        <div className="text-xs text-slate-500">ISS retido pelo cliente</div>
+                                        <div className={cn('font-bold', p.iss_retido ? 'text-emerald-700' : 'text-slate-800')}>
+                                            {p.iss_retido ? '✅ Sim' : '⚪ Não'}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="rounded-xl border border-slate-200 p-3 space-y-1 tabular-nums">
+                                    <div className="flex justify-between gap-2"><span className="text-slate-600">Valor do serviço</span><strong>{reais(p.valor)}</strong></div>
+                                    <div className="flex justify-between gap-2"><span className="text-slate-600">ISS ({p.aliquota.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}%){p.iss_retido ? ' retido' : ''}</span><span>{reais(p.valor_iss)}</span></div>
+                                    <div className="flex justify-between gap-2 border-t border-slate-200 pt-1"><span className="font-semibold text-slate-800">Valor líquido da nota</span><strong className="text-emerald-700">{reais(p.valor_liquido)}</strong></div>
+                                </div>
+                                {p.info_complementar && (
+                                    <div className="rounded-xl border border-slate-200 p-3">
+                                        <div className="text-xs text-slate-500 mb-1">Informações complementares</div>
+                                        <div className="text-slate-700 whitespace-pre-line">{p.info_complementar}</div>
+                                    </div>
+                                )}
+                                {p.codigo_servico && <div className="text-xs text-slate-500">Código do serviço: {p.codigo_servico}</div>}
+                            </div>
+                        )
+                    })()}
+                    <DialogFooter className="gap-2 sm:gap-2 flex-col sm:flex-row">
+                        <Button type="button" variant="outline" className="h-11" onClick={() => setPreviaNota(null)}>
+                            Voltar e corrigir
+                        </Button>
+                        <Button type="button" variant="outline" className="h-11 gap-2 font-bold border-emerald-600 text-emerald-700"
+                            disabled={!previaNota}
+                            onClick={() => {
+                                if (!previaNota) return
+                                abrirPdfPreviaNota(previaNota.dados, previaNota.descricao.trim())
+                                    .catch(err => toast.error(`Não foi possível gerar o PDF da prévia: ${err?.message || err}`))
+                            }}>
+                            <FileText className="h-4 w-4" />
+                            Ver PDF da prévia
+                        </Button>
+                        <Button type="button" className="h-11 gap-2 font-bold bg-emerald-600 hover:bg-emerald-700 text-white" onClick={confirmarPreviaNota}
+                            disabled={!previaNota || previaNota.descricao.trim().length < 5}>
+                            <FileBadge className="h-4 w-4" />
+                            Emitir nota
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             {/* Modal de Cancelamento de NFS-e na Prefeitura */}
             <Dialog open={cancelModalOpen} onOpenChange={setCancelModalOpen}>
                 <DialogContent className="sm:max-w-md">

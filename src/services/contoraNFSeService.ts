@@ -6,11 +6,32 @@ import { supabase } from '@/lib/supabase'
 
 export type EstadoContora = 'processando' | 'autorizado' | 'erro' | 'cancelado' | 'processando_cancelamento'
 
+/** Nota montada pela Edge Function antes de emitir (nada é enviado à prefeitura) */
+export interface PreviaNota {
+    tomador: { nome: string; documento: string; cidade: string; uf: string } | null
+    descricao: string
+    local_prestacao: string
+    iss_retido: boolean
+    aliquota: number
+    valor: number
+    valor_iss: number
+    valor_liquido: number
+    info_complementar: string
+    codigo_servico: string
+    ambiente: string
+    avisos: string[]
+    // Para o PDF da prévia (layout do DANFSe)
+    prestador?: { razao_social: string; cnpj: string; telefone: string; endereco: string; municipio: string; cep: string; email: string; simples: string }
+    tomador_nota?: { nome: string; documento: string; email: string; telefone: string; endereco: string; municipio: string; cep: string } | null
+    nbs?: string
+}
+
 export interface RespostaContora {
     ok: boolean
     erro?: string
     estado?: EstadoContora
     os?: Record<string, any>
+    previa?: PreviaNota
 }
 
 async function chamar(body: Record<string, unknown>): Promise<RespostaContora> {
@@ -32,7 +53,9 @@ export const ContoraNFSeService = {
         return data?.provedor === 'contora' ? 'contora' : 'focus'
     },
 
-    emitir: (osId: string) => chamar({ acao: 'emitir', os_id: osId }),
+    previa: (osId: string) => chamar({ acao: 'previa', os_id: osId }),
+    /** descricao: texto revisado na prévia (vale só para esta nota) */
+    emitir: (osId: string, descricao?: string) => chamar({ acao: 'emitir', os_id: osId, ...(descricao !== undefined ? { descricao } : {}) }),
     consultar: (osId: string) => chamar({ acao: 'status', os_id: osId }),
     cancelar: (osId: string, justificativa: string) => chamar({ acao: 'cancelar', os_id: osId, justificativa }),
 }

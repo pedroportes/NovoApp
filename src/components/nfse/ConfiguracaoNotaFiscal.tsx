@@ -19,6 +19,7 @@ interface ConfigNfse {
     local_prestacao_cliente: boolean;
     info_complementar: string | null;
     info_complementar_retencao: string | null;
+    info_tributos: string | null; // null = texto padrão; '' = sem a linha
 }
 
 interface EmpresaContora {
@@ -49,10 +50,13 @@ const PADRAO: ConfigNfse = {
     local_prestacao_cliente: false,
     info_complementar: null,
     info_complementar_retencao: null,
+    info_tributos: null,
 };
 
 // Texto usual de quem é do Simples quando o cliente retém o ISS ({aliquota} vira "2,00%")
 const TEXTO_RETENCAO_PADRAO = 'RETENÇÃO ISS {aliquota} CFE. RESOLUÇÕES DO CGSN Nº 94/2011 E 135/2017. INSS NÃO RETIDO CFE ARTIGO 120 DA IN RFB 971/2009.';
+// Linha da Lei 12.741/2012 (a Edge Function nfse-contora usa o mesmo texto quando nada foi salvo)
+const TEXTO_TRIBUTOS_PADRAO = 'Totais Aproximados dos Tributos cfe. Lei nº 12.741/2012: Federais: 13,45%; Estaduais: 0,00%; Municipais: 4,76%';
 
 const NOMES: Record<Provedor, string> = { focus: 'Focus NFe', contora: 'Fiscal Contora' };
 
@@ -94,7 +98,7 @@ export function ConfiguracaoNotaFiscal({ empresaId }: { empresaId: string }) {
         try {
             const { data, error } = await (supabase as any)
                 .from('empresa_nfse_config')
-                .select('provedor, contora_ambiente, contora_cnpj, contora_empresa_id, contora_total_tax_rate_sn, local_prestacao_cliente, info_complementar, info_complementar_retencao')
+                .select('provedor, contora_ambiente, contora_cnpj, contora_empresa_id, contora_total_tax_rate_sn, local_prestacao_cliente, info_complementar, info_complementar_retencao, info_tributos')
                 .eq('empresa_id', empresaId)
                 .maybeSingle();
             if (error) throw error;
@@ -183,6 +187,7 @@ export function ConfiguracaoNotaFiscal({ empresaId }: { empresaId: string }) {
                 contora_ambiente: config.contora_ambiente, contora_total_tax_rate_sn: p, local_prestacao_cliente: config.local_prestacao_cliente,
                 info_complementar: config.info_complementar?.trim() || null,
                 info_complementar_retencao: config.info_complementar_retencao?.trim() || null,
+                info_tributos: config.info_tributos == null ? null : config.info_tributos.trim(),
             });
             toast.success('Configuração da Contora salva');
         } catch (e: any) {
@@ -366,11 +371,11 @@ export function ConfiguracaoNotaFiscal({ empresaId }: { empresaId: string }) {
                     {/* Informações complementares (quadro no fim do DANFSe) */}
                     <div className="rounded-lg border border-border p-3 space-y-3">
                         <div>
-                            <p className="text-sm font-semibold">Informações complementares da nota</p>
-                            <p className="text-xs text-muted-foreground">Aparecem no quadro "Informações complementares", no fim da nota.</p>
+                            <p className="text-sm font-semibold">Textos extras da nota</p>
+                            <p className="text-xs text-muted-foreground">O texto de toda nota sai junto da descrição do serviço; o da retenção, no quadro "Informações complementares".</p>
                         </div>
                         <div className="space-y-1">
-                            <Label htmlFor="nf-info-sempre" className="text-xs font-semibold">Em toda nota (opcional)</Label>
+                            <Label htmlFor="nf-info-sempre" className="text-xs font-semibold">Em toda nota, junto da descrição do serviço (opcional)</Label>
                             <textarea
                                 id="nf-info-sempre"
                                 maxLength={1000}
@@ -381,7 +386,7 @@ export function ConfiguracaoNotaFiscal({ empresaId }: { empresaId: string }) {
                             />
                         </div>
                         <div className="space-y-1">
-                            <Label htmlFor="nf-info-retencao" className="text-xs font-semibold">Só quando o cliente retém o ISS</Label>
+                            <Label htmlFor="nf-info-retencao" className="text-xs font-semibold">Só quando o cliente retém o ISS (quadro "Informações complementares")</Label>
                             <textarea
                                 id="nf-info-retencao"
                                 maxLength={1000}
@@ -401,6 +406,17 @@ export function ConfiguracaoNotaFiscal({ empresaId }: { empresaId: string }) {
                                     Escreva <code className="rounded bg-muted px-1">{'{aliquota}'}</code> onde deve sair a alíquota do ISS da nota (ex.: 2,00%). Cliente que retém: chave no cadastro do cliente.
                                 </p>
                             </div>
+                        </div>
+                        <div className="space-y-1">
+                            <Label htmlFor="nf-info-tributos" className="text-xs font-semibold">Totais aproximados dos tributos – Lei 12.741/2012 (toda nota, quadro "Informações complementares")</Label>
+                            <textarea
+                                id="nf-info-tributos"
+                                maxLength={500}
+                                value={config.info_tributos ?? TEXTO_TRIBUTOS_PADRAO}
+                                onChange={e => setConfig(c => ({ ...c, info_tributos: e.target.value }))}
+                                className="w-full min-h-[64px] rounded-lg border border-input bg-background p-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                            />
+                            <p className="text-xs text-muted-foreground">Confira os percentuais com o contador. Apague o texto para a nota sair sem esta linha.</p>
                         </div>
                         <p className="text-xs text-muted-foreground">Salve no botão "Salvar" abaixo.</p>
                     </div>

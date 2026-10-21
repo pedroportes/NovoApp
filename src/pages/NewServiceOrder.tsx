@@ -472,8 +472,12 @@ export function NewServiceOrder() {
             // DB field is valor_padrao
             const val = Number(service.valor_padrao) || 0
             const unidade = service.unidade || 'servico'
+            // Descrição igual ao nome (ex.: "Desentupimento de ralo") não se repete no item
+            const nome = String(service.nome || '').trim()
+            const detalhe = String(service.descricao || '').trim()
+            const repetido = !detalhe || detalhe.toLowerCase() === nome.toLowerCase()
             setItems(prev => [...prev, {
-                descricao: service.descricao ? `${service.nome} - ${service.descricao} ` : service.nome,
+                descricao: repetido ? nome : `${nome} - ${detalhe}`,
                 qtd: 1, // por metro/litro: o técnico troca pela quantidade de metros/litros
                 valor_unitario: val,
                 total: val,
