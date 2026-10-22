@@ -223,7 +223,7 @@ serve(async (req) => {
         }
 
         // ===== Emissão pelas OS (qualquer usuário da empresa, como na Focus) =====
-        if (acao === 'previa' || acao === 'emitir' || acao === 'status' || acao === 'cancelar') {
+        if (acao === 'previa' || acao === 'emitir' || acao === 'status' || acao === 'cancelar' || acao === 'diagnostico') {
             const t = await lerToken()
             if (!t) return json({ ok: false, erro: 'A Contora não está conectada. Vá em Configurações → Nota fiscal e salve o token.' })
 
@@ -443,6 +443,30 @@ serve(async (req) => {
             if (!docId) return json({ ok: false, erro: 'Esta nota não foi emitida pela Contora.' })
 
             const lerStatus = async () => (await contora(t, `/nfse/drafts/${docId}/status`, { headers: hdr })).data?.data || {}
+
+            // --- Diagnóstico (só leitura, só administrador): o que a Contora gravou e o trecho do ISS no XML ---
+            if (acao === 'diagnostico') {
+                if (ehTecnico) return json({ ok: false, erro: 'Somente o administrador pode ver o diagnóstico da nota' }, 403)
+                const docum = (await contora(t, `/nfse/drafts/${docId}`, { headers: hdr })).data?.data || {}
+                const trechosXml: Record<string, unknown> = {}
+                for (const art of ['xml_signed', 'xml_nfse']) {
+                    const r = await fetch(`${CONTORA_API}/nfse/drafts/${docId}/artifacts/${art}`, { headers: { 'Authorization': `Bearer ${t}`, ...hdr } })
+                    if (!r.ok) { trechosXml[art] = `HTTP ${r.status}`; continue }
+                    const xml = await r.text()
+                    const pega = (tag: string) => (xml.match(new RegExp(`<${tag}>[\\s\\S]*?</${tag}>`)) || [''])[0]
+                    trechosXml[art] = { tribMun: pega('tribMun'), valores: pega('valores'), totTrib: pega('totTrib'), tamanho: xml.length }
+                }
+                return json({
+                    ok: true,
+                    documento: {
+                        status: docum.status, nfse_number: docum.nfse_number, provider: docum.provider,
+                        last_error_code: docum.last_error_code, last_error_message: docum.last_error_message,
+                        service: docum.payload?.service, amounts: docum.payload?.amounts,
+                        taker_document: docum.payload?.taker?.document,
+                    },
+                    xml: trechosXml,
+                })
+            }
 
             // --- Consultar ---
             if (acao === 'status') {

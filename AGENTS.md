@@ -708,3 +708,41 @@ Todos configurados com **50% de comissão padrão** em `usuarios` e cadastrados 
 - Desligar "retém o ISS" da Kamila se foi só teste.
 - Endereço/CEP do prestador na Contora × prefeitura (contador). Percentuais da Lei 12.741 (contador).
 - Confirmar no próximo DANFSe real se a quebra de linha das informações complementares aparece (a Contora troca quebra de linha por ";" em outros documentos).
+
+
+---
+
+### 4T. 22/10/2026 — ISS RETIDO NÃO FUNCIONA PELA CONTORA (defeito deles, provado) — chamado #132 ABERTO — LER ANTES DE EMITIR NOTA COM RETENÇÃO
+
+> **Estado:** aguardando resposta da Contora ao chamado **#132** (aberto 22/10/2026 17:01, console → Suporte Técnico, `console/suporte/5f42063d-484a-40f3-b5aa-79ede4ad26ed`). Retomar quando houver resposta.
+
+**1. O que aconteceu**
+- NFS-e **nº 11** (Hospital Nossa Senhora do Pilar, OS `b4ad2a8d`, R$ 1.380,00, cliente com `iss_retido = true` e CNPJ) saiu **"Não retido"** e líquido R$ 1.380,00, embora a prévia mostrasse "Retido pelo Tomador" e líquido R$ 1.352,40. Já CANCELADA pelo Pedro.
+- A **nº 7** (Henrique, 07/10, OS `bb641606`) também saiu "Não retido". **Nenhuma nota com retenção saiu certa pela Contora desde 30/09** (quando a retenção foi feita). Nunca tinha sido confirmado numa nota real.
+
+**2. Prova (ação `diagnostico` da Edge `nfse-contora`)**
+- Rascunho gravado pela Contora (GET `/nfse/drafts/{id}`), nota 11: `service.iss_withheld = true`, `iss_rate = 2`, `total_tax_rate_sn = 2`, `incidence_city_code = 4106902`, `amounts.service_amount = 1380`, `amounts.net_amount = 1352.4`, tomador `76498013000102`.
+- XML gerado (`artifacts/xml_nfse`): `<tribMun><tribISSQN>1</tribISSQN><tpRetISSQN>1</tpRetISSQN></tribMun>` e `<valores><vLiq>1380.00</vLiq></valores>` (1 = não retido; líquido sem o desconto).
+- Nota 7: igual (`iss_withheld: true`, `net_amount: 2508.8` → XML `tpRetISSQN 1`, `vLiq 2560.00`).
+- Documentação da Contora relida (OpenAPI `/openapi/v1.json`, `/llms.txt`, manual `/documentacao/nfse`): o ÚNICO campo de retenção de ISS é `service.iss_withheld` e o líquido é `amounts.net_amount`. O app manda exatamente isso. A documentação não descreve regra especial de retenção para Simples ME/EPP (o campo nem tem descrição).
+- Conclusão: a Contora recebe e guarda a retenção, mas ao montar a DPS troca para "não retido". **Defeito da Contora.**
+
+**3. Lição (NÃO REPETIR)**
+- **A prévia e o PDF de teste NÃO provam o que a Contora vai gerar**: são montados pelo nosso código com o que pedimos. Para provar comportamento fiscal, conferir o **XML da nota emitida** (ação `diagnostico`) ou o DANFSe real.
+- Em 21/10 a retenção foi dada como "certa" só pela prévia. Erro de verificação.
+
+**4. Ação `diagnostico` (nova, Edge `nfse-contora`, publicada 22/10)**
+- Só leitura, **só administrador**, para nota já emitida pela Contora (`nfe_ref` `contora:<id>`): devolve status, payload gravado (`service`, `amounts`, documento do tomador) e os trechos `tribMun`, `valores`, `totTrib` do XML (`xml_signed` dá 404; o XML válido é `xml_nfse`, nome que está no manual).
+- Chamar com `{ acao: 'diagnostico', os_id }`. Não emite, não cancela, não altera nada.
+
+**5. Enquanto a Contora não responder**
+- Notas SEM retenção: normais pelo app.
+- Clientes que RETÊM ISS (Hospital Pilar, Henrique/Dacar, Cristal Glass; Kamila se retiver de verdade): **não emitir pela Contora**. Usar outro caminho (ex.: Emissor Nacional, como as notas 548 e 567).
+- Nota nº 9 (Cristal Glass) e nº 11 (Pilar): já canceladas; reemitir com retenção só quando houver caminho que funcione.
+
+**6. Deploy da Edge — comando que funciona de qualquer pasta**
+- `npx supabase functions deploy nfse-contora --project-ref dltqxfyrltgbudtzxzot --workdir C:\Users\pedro\NovoApp` (sem `--workdir`, rodado em `meu-app`, dá "Entrypoint path does not exist").
+
+**7. Quando a Contora responder**
+- Aplicar o que eles indicarem; emitir UMA nota real pequena com retenção, rodar o `diagnostico` e só aceitar se o XML tiver `<tpRetISSQN>2</tpRetISSQN>` e `vLiq` com o desconto; depois cancelar se for teste.
+- Texto do chamado também em `meu-app/chamado-contora-iss-retido.md`.
