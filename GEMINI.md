@@ -840,3 +840,43 @@ Todos configurados com **50% de comissão padrão** em `usuarios` e cadastrados 
 **Observação:** nos testes de troca troquei o `window.confirm` da página por um que responde sozinho (só no navegador do teste, não no código). Um cliente real vê a pergunta normal do navegador.
 
 **Pendências que continuam:** apagar a função `onboarding-pos-checkout`; 2 logins órfãos com senha fixa; empresas de teste antigas; limites de técnicos divergentes (tela × app × Stripe); afiliados não registrados pelo webhook; `STRIPE_TEST_WEBHOOK_SECRET` errado no Supabase (não atrapalha: aviso de teste é conferido pela API); empresa TESTE segue com assinatura de teste ativa (Pro), só modo teste.
+
+
+---
+
+### 4V. 05/11/2026 (noite) — NFS-e: LOCAL DO SERVIÇO separado do endereço da EMPRESA do cliente — LER ANTES DE MEXER EM NOTA FISCAL OU ENDEREÇO DE OS
+
+> Commit `e5d1c28b` (local, aguardando o Pedro publicar a Edge `nfse-contora` e fazer push). Migração `supabase/migrations/20261105_os_local_servico.sql` **JÁ APLICADA** no banco (só adiciona coluna vazia).
+
+**Problema (pergunta do Pedro):** empresa do cliente registrada em outra cidade/estado (ex.: SC) e serviço feito aqui (ex.: São José dos Pinhais). A OS não tinha endereço próprio: a nota usava o endereço do cadastro do cliente para o **tomador** E para o **local da prestação**. Resultado: ou o ISS ia para a cidade errada (SC), ou o endereço do tomador saía errado.
+
+**O que a lei diz (pesquisado em 05/11, fontes oficiais):**
+- **LC 116/2003, art. 3º, VII:** serviços do **subitem 7.10** (limpeza, manutenção e conservação de imóveis, chaminés, piscinas… e congêneres = código 071001 que usamos) têm o ISS devido **no local da execução** (não na sede do prestador nem na do tomador).
+- **LC 116/2003, art. 6º, §2º, II:** a **pessoa jurídica tomadora** de serviços do 7.10 é responsável por **reter** o ISS. O Código Tributário de São José dos Pinhais repete a regra para o 7.10 (prestador responde de forma subsidiária se o tomador não reter).
+- **LC 123/2006, art. 21, §4º (redação LC 155/2016):** optante do Simples sofre retenção pela **alíquota efetiva de ISS do mês anterior**, que tem de estar **escrita na nota** (inciso I). Sem ela, o tomador retém **5%** (inciso V). Mês de início de atividade: 2%.
+- **NFS-e Nacional:** endereço do tomador e local da prestação são campos separados. `cLocPrestacao` (Contora: `service.incidence_city_code`) = cidade do serviço; o sistema nacional gera o `cLocIncid` a partir do código do serviço e do local da prestação.
+- **Para o contador confirmar:** (1) se tomador PJ de FORA (SC) é obrigado a reter para SJP (LC 116 diz que sim; alguns municípios só exigem de tomador estabelecido nele); (2) alíquota de SJP para 7.10 (só importa se a nota sair sem a alíquota do Simples).
+- Fontes: planalto.gov.br/ccivil_03/leis/lcp/lcp116.htm; planalto.gov.br/ccivil_03/leis/lcp/lcp123.htm; leismunicipais.com.br (Código Tributário SJP); cigam.com.br (cLocIncid).
+
+**O que mudou**
+- Banco: `ordens_servico.local_servico jsonb` = `{cep, endereco, numero, bairro, cidade, uf, codigo_municipio}`; **NULL = serviço no endereço do cliente** (todas as OS antigas).
+- Nova/Editar OS (`src/components/os/LocalServico.tsx` + `NewServiceOrder.tsx`): logo abaixo do cliente, "Local do serviço": **Endereço do cliente** (padrão) / **Outro endereço** (CEP preenche rua, bairro, cidade, UF e código IBGE pelo ViaCEP). Só grava se tiver cidade + UF.
+- Sincronização (`syncService`): `local_servico` está em `allowedColumns` (envio) e no mapeamento do pull. **Regra antiga reforçada: campo novo da OS tem de entrar nos dois lugares, senão some** (aconteceu com `marca_id`).
+- Card da OS (`ServiceOrders.tsx`, `getClientAddress`): mostra e navega (Waze/Maps) para o local do serviço quando existe.
+- Nota (`nfse-contora`, `montarNota`, usada pela prévia e pela emissão):
+  - **Tomador** = endereço do **cadastro do cliente** (como antes).
+  - **Local da prestação** (`incidence_city_code`) = cidade do **local do serviço da OS**; sem ele, cidade do cliente; com a chave desligada, sede.
+  - Bloqueia antes de criar a nota se a chave estiver ligada e não achar a cidade do serviço (mensagem diz se é o cadastro ou a OS).
+  - Avisos na prévia: empresa e serviço em cidades diferentes ("o ISS é de X… confira se o cliente retém"); OS com local do serviço mas chave desligada.
+  - Prévia devolve `local_prestacao_origem` (`os` | `cliente` | `sede`) e `endereco_servico`; a janela "Conferir a nota" mostra "Local da prestação (onde o ISS é devido)" e de onde veio. PDF de teste usa a mesma cidade.
+- Configurações → Nota fiscal: a chave virou **"Local da prestação = cidade do serviço"** (mesma coluna `local_prestacao_cliente`).
+
+**Conferido:** tsc 127 erros (os mesmos de antes), lint sem erro no arquivo novo; na tela local (5173) a Nova OS mostra o campo e o CEP 83025-140 preencheu "Rua Barão do Cerro Azul, Bom Jesus, São José dos Pinhais/PR". Nada foi salvo nos testes.
+**Não testado ainda:** prévia/PDF da nota com uma OS que tenha local do serviço (depende do deploy da Edge).
+
+**Pendências**
+- Pedro: `npx supabase functions deploy nfse-contora --project-ref dltqxfyrltgbudtzxzot --workdir C:\Users\pedro\NovoApp --yes` e `git -C C:\Users\pedro\NovoApp push origin master`.
+- Recibo/orçamento/contrato impressos ainda mostram só o endereço do cliente (não o local do serviço).
+- Focus NFe (`focusNFeService`) não usa o local do serviço (o Pedro emite pela Contora).
+- Manual da FlowDrain IA (`aiService.ts`) não fala do campo novo.
+- Retenção pela Contora continua com defeito (chamado #132): notas com retenção saem "não retido".
