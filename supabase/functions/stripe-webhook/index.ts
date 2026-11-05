@@ -24,6 +24,8 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 // Dias de tolerância depois de um pagamento recusado (o app continua liberado e mostra o aviso)
 const DIAS_TOLERANCIA = 7
+// Situações em que a assinatura ainda vale (paga ou dentro da tolerância)
+const VIVAS = ['active', 'trialing', 'past_due', 'unpaid']
 
 // Contexto de cada aviso: modo real ou teste, e o cliente Stripe do modo certo
 interface Contexto { teste: boolean; stripe: Stripe }
@@ -84,10 +86,15 @@ async function gravarAssinatura(ctx: Contexto, sub: any, empresaIdDoCheckout?: s
         console.error(`⚠️ Assinatura ${sub.id} sem empresa ligada (cliente ${idDe(sub.customer)}). Nada gravado.`)
         return
     }
-    // Uma assinatura antiga não pode sobrescrever a atual da empresa
-    if (empresa.stripe_subscription_id && empresa.stripe_subscription_id !== sub.id && empresaIdInformado !== empresa.id) {
-        console.log(`Ignorado: assinatura ${sub.id} não é a atual da empresa ${empresa.id} (${empresa.stripe_subscription_id}).`)
-        return
+    // Outra assinatura só substitui a atual se for desta empresa e se não derrubar uma assinatura em dia
+    // (ex.: troca de plano com cartão recusado fica "incomplete" e não pode apagar o plano que já está pago)
+    if (empresa.stripe_subscription_id && empresa.stripe_subscription_id !== sub.id) {
+        const atualVale = VIVAS.includes(String(empresa.subscription_status))
+        const novaVale = VIVAS.includes(String(sub.status))
+        if (empresaIdInformado !== empresa.id || (atualVale && !novaVale)) {
+            console.log(`Ignorado: assinatura ${sub.id} (${sub.status}) não substitui a atual da empresa ${empresa.id} (${empresa.stripe_subscription_id}, ${empresa.subscription_status}).`)
+            return
+        }
     }
 
     const status = String(sub.status) // active, trialing, past_due, unpaid, canceled, incomplete...
@@ -191,15 +198,13 @@ serve(async (req) => {
                 break
             }
 
-            // Cobrança recusada: marca atraso e abre o prazo de tolerância
+            // Cobrança recusada: grava a situação REAL da assinatura na Stripe. Renovação recusada vira
+            // past_due (abre a tolerância); primeiro pagamento recusado fica incomplete (sem tolerância,
+            // senão quem nunca pagou ganharia 7 dias de plano)
             case 'invoice.payment_failed': {
                 const subId = idDe(obj.subscription ?? obj.parent?.subscription_details?.subscription)
                 if (!subId) break
-                const empresa = await acharEmpresa(ctx, { assinaturaId: subId })
-                if (!empresa) break
-                const campos: Record<string, unknown> = { subscription_status: 'past_due' }
-                if (!empresa.grace_period_end) campos.grace_period_end = new Date(Date.now() + DIAS_TOLERANCIA * 86400000).toISOString()
-                await atualizar(empresa.id, campos, ctx)
+                await gravarAssinatura(ctx, await ctx.stripe.subscriptions.retrieve(subId))
                 break
             }
 
