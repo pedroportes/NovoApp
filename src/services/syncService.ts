@@ -138,6 +138,7 @@ export const SyncService = {
                     id: o.id,
                     empresa_id: o.empresa_id || '',
                     marca_id: o.marca_id || null,
+                    local_servico: o.local_servico ?? null,
                     cliente_id: o.cliente_id || '',
                     cliente_nome: o.cliente_nome || undefined,
                     tecnico_id: o.tecnico_id || '',
@@ -337,7 +338,8 @@ export const SyncService = {
             'valor_total', 'itens', 'fotos', 'deslocamento_iniciado_em',
             'previsao_chegada', 'endereco', 'created_at', 'updated_at',
             'assinatura_cliente_url', 'orcamento_gerado', 'recibo_gerado', 'contrato_gerado',
-            'marca_id' // empresa (filial) que atendeu: sem isto a OS criada pelo app chegava ao banco sem empresa
+            'marca_id', // empresa (filial) que atendeu: sem isto a OS criada pelo app chegava ao banco sem empresa
+            'local_servico' // endereço do serviço quando diferente do cliente (local da prestação da NFS-e)
         ];
 
         const finalPayload: any = {};

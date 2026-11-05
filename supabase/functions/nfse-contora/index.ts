@@ -237,7 +237,7 @@ serve(async (req) => {
             const hdr = { 'X-Company-Document': cnpjEmissor }
 
             const { data: os } = await admin.from('ordens_servico')
-                .select('id, empresa_id, cliente_id, valor_total, descricao, descricao_servico, itens, observacoes, data_agendamento, created_at, nfe_status, nfe_ref, nfe_tipo')
+                .select('id, empresa_id, cliente_id, valor_total, descricao, descricao_servico, itens, observacoes, data_agendamento, created_at, nfe_status, nfe_ref, nfe_tipo, local_servico')
                 .eq('id', os_id).eq('empresa_id', empresaId).maybeSingle()
             if (!os) return json({ ok: false, erro: 'Ordem de serviço não encontrada.' }, 404)
 
@@ -265,17 +265,27 @@ serve(async (req) => {
                 const { data: cli } = os.cliente_id
                     ? await admin.from('clientes').select('nome_razao, nome, cpf_cnpj, documento, email, whatsapp, telefone, logradouro, endereco, numero, complemento, bairro, cidade, uf, cep, codigo_municipio, iss_retido, empresa_condominio').eq('id', os.cliente_id).maybeSingle()
                     : { data: null }
-                // Cidade do cliente (código IBGE oficial), achada pelo CEP ou pelo nome da cidade
+                // Cidade do CADASTRO do cliente (código IBGE oficial): vai no endereço do tomador
                 const cep = soDigitos(cli?.cep)
                 const mun = await municipioDoCliente(cli)
                 const ibge = mun?.ibge || ''
                 const cidade = mun?.cidade || ''
                 const uf = mun?.uf || ''
 
-                // Chave ligada: sem a cidade do cliente a nota sairia com a cidade da sede (errado).
+                // Cidade onde o SERVIÇO foi feito = local da prestação (onde o ISS é devido, LC 116 art. 3º VII,
+                // subitem 7.10). A OS pode ter um endereço próprio (empresa de fora, serviço aqui); sem ele,
+                // vale o endereço do cliente. Os campos de os.local_servico têm os mesmos nomes do cliente.
+                const servicoEmOutroLocal = !!(os.local_servico && (os.local_servico.cidade || os.local_servico.cep))
+                const munServico = servicoEmOutroLocal ? await municipioDoCliente(os.local_servico) : mun
+
+                // Chave ligada: sem a cidade do serviço a nota sairia com a cidade da sede (errado).
                 // Para ANTES de criar a nota (sem efeito fiscal).
-                if (cfg.local_prestacao_cliente && !mun) {
-                    return { erro: `Não achei a cidade do cliente para o "Local da prestação". Confira o CEP ou a cidade/UF no cadastro do cliente (hoje: CEP ${cli?.cep || '-'}, cidade ${cli?.cidade || '-'}/${cli?.uf || '-'}).` }
+                if (cfg.local_prestacao_cliente && !munServico) {
+                    return {
+                        erro: servicoEmOutroLocal
+                            ? `Não achei a cidade do local do serviço da OS para o "Local da prestação". Confira o CEP ou a cidade/UF em "Local do serviço" na OS (hoje: CEP ${os.local_servico?.cep || '-'}, cidade ${os.local_servico?.cidade || '-'}/${os.local_servico?.uf || '-'}).`
+                            : `Não achei a cidade do cliente para o "Local da prestação". Confira o CEP ou a cidade/UF no cadastro do cliente (hoje: CEP ${cli?.cep || '-'}, cidade ${cli?.cidade || '-'}/${cli?.uf || '-'}).`,
+                    }
                 }
 
                 // ISS retido pelo cliente (chave no cadastro): exige CPF/CNPJ do tomador
@@ -315,9 +325,10 @@ serve(async (req) => {
                 if (s.nfse_iss_rate_default != null) servico.iss_rate = Number(s.nfse_iss_rate_default)
                 if (/^\d{9}$/.test(soDigitos(s.nfse_nbs_default))) servico.nbs_code = soDigitos(s.nfse_nbs_default)
                 if (pctSimples! > 0) servico.total_tax_rate_sn = pctSimples
-                // Local da prestação = cidade do cliente (chave em Configurações → Nota fiscal).
-                // Sem o campo, a Contora usa a cidade da sede. Vai para <cLocPrestacao> da DPS nacional.
-                if (cfg.local_prestacao_cliente && ibge.length === 7) servico.incidence_city_code = ibge
+                // Local da prestação = cidade do serviço (chave em Configurações → Nota fiscal): local do serviço
+                // da OS ou, sem ele, a cidade do cliente. Sem o campo, a Contora usa a cidade da sede.
+                // Vai para <cLocPrestacao> da DPS nacional; o endereço do tomador continua o do cadastro.
+                if (cfg.local_prestacao_cliente && munServico?.ibge?.length === 7) servico.incidence_city_code = munServico.ibge
 
                 // Com ISS retido o cliente paga o valor menos o ISS (alíquota da faixa do Simples, a mesma da nota)
                 const aliquota = Number(servico.iss_rate ?? 0)
@@ -350,6 +361,12 @@ serve(async (req) => {
                 if (!taker) avisos.push('Cliente sem CPF/CNPJ válido: a nota sai sem tomador identificado.')
                 else if (!taker.address) avisos.push('Endereço do cliente incompleto (rua, CEP ou cidade): a nota sai sem o endereço do tomador.')
                 if (cfg.contora_ambiente !== 'producao') avisos.push('Ambiente de homologação (teste): esta nota não vale como nota fiscal.')
+                if (servicoEmOutroLocal && !cfg.local_prestacao_cliente) {
+                    avisos.push(`A OS tem local do serviço em ${munServico?.cidade || os.local_servico?.cidade}/${munServico?.uf || os.local_servico?.uf}, mas a chave "Local da prestação = cidade do serviço" está desligada em Configurações → Nota fiscal: a nota sai com a cidade da sede.`)
+                }
+                if (munServico && mun && munServico.ibge !== mun.ibge) {
+                    avisos.push(`Empresa do cliente em ${mun.cidade}/${mun.uf} e serviço em ${munServico.cidade}/${munServico.uf}: o ISS é de ${munServico.cidade}. Pessoa jurídica que contrata este serviço (subitem 7.10) costuma ter de reter o ISS — confira se o cliente está marcado como "retém o ISS".`)
+                }
 
                 // Dados do prestador para o PDF da prévia (só campos de cadastro; nunca senhas/tokens)
                 const e = emp.data?.data || {}
@@ -368,7 +385,11 @@ serve(async (req) => {
                 return {
                     servico, taker, valor, liquido, aliquota, issRetido, avisos, prestador,
                     tomador: cli ? { nome: String(cli.nome_razao || cli.nome || '').trim(), documento: doc, cidade, uf } : null,
-                    local_prestacao: servico.incidence_city_code ? `${cidade}/${uf}` : `${emp.data?.data?.city_name || 'cidade da sede'} (sede)`,
+                    local_prestacao: servico.incidence_city_code ? `${munServico!.cidade}/${munServico!.uf}` : `${emp.data?.data?.city_name || 'cidade da sede'} (sede)`,
+                    local_prestacao_origem: !servico.incidence_city_code ? 'sede' : servicoEmOutroLocal ? 'os' : 'cliente',
+                    endereco_servico: servicoEmOutroLocal
+                        ? [os.local_servico.endereco, os.local_servico.numero, os.local_servico.bairro].map((x: unknown) => String(x ?? '').trim()).filter(Boolean).join(', ')
+                        : '',
                 }
             }
 
@@ -381,6 +402,7 @@ serve(async (req) => {
                     ok: true,
                     previa: {
                         tomador: n.tomador, descricao: n.servico.description, local_prestacao: n.local_prestacao,
+                        local_prestacao_origem: n.local_prestacao_origem, endereco_servico: n.endereco_servico,
                         iss_retido: n.issRetido, aliquota: n.aliquota, valor: n.valor,
                         valor_iss: Math.round(n.valor * n.aliquota) / 100, valor_liquido: n.liquido,
                         info_complementar: n.servico.additional_info || '', codigo_servico: n.servico.national_tax_code || '',

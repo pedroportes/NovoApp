@@ -11,6 +11,9 @@ export interface PreviaNota {
     tomador: { nome: string; documento: string; cidade: string; uf: string } | null
     descricao: string
     local_prestacao: string
+    // De onde veio o local da prestação: endereço do serviço na OS, cadastro do cliente ou sede da empresa
+    local_prestacao_origem?: 'os' | 'cliente' | 'sede'
+    endereco_servico?: string
     iss_retido: boolean
     aliquota: number
     valor: number

@@ -58,7 +58,9 @@ export interface LocalServiceOrder {
     orcamento_gerado?: boolean;
     recibo_gerado?: boolean;
     contrato_gerado?: boolean;
-    
+    // Endereço do serviço quando diferente do cadastro do cliente (local da prestação da NFS-e); null = endereço do cliente
+    local_servico?: { cep: string; endereco: string; numero: string; bairro: string; cidade: string; uf: string; codigo_municipio: string } | null;
+
     // NFe Fields
     nfe_status?: string;
     nfe_ref?: string | null;

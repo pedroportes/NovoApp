@@ -16,6 +16,7 @@ import { compressImage } from '@/lib/utils'
 import { WebmaniaService } from '@/services/webmaniaService'
 import { toast } from 'sonner'
 import { AlertaNivel, CampoAlerta, FaixaAlerta, SeloAlerta, perguntaConfirmacao, useAlertasConfig } from '@/components/clients/AlertaCliente'
+import { CampoLocalServico, LocalServico, localParaGravar } from '@/components/os/LocalServico'
 
 interface ServiceItem {
     descricao: string
@@ -65,6 +66,8 @@ export function NewServiceOrder() {
         }
     }, [id, selectedBrandId, brands, formData.marca_id])
 
+    // Endereço do serviço quando é diferente do cadastro do cliente (null = endereço do cliente)
+    const [localServico, setLocalServico] = useState<LocalServico | null>(null)
     const [items, setItems] = useState<ServiceItem[]>([])
     const [photos, setPhotos] = useState<{ antes: string[], depois: string[] }>({ antes: [], depois: [] })
     const [signatureBlob, setSignatureBlob] = useState<Blob | null>(null)
@@ -351,6 +354,7 @@ export function NewServiceOrder() {
                     status: osData.status || 'PENDENTE',
                     marca_id: osData.marca_id || (brands[0]?.id || '')
                 })
+                setLocalServico(osData.local_servico || null)
                 const rawItens = (osData.itens as ServiceItem[]) || []
                 if (rawItens.length === 0 && Number(osData.valor_total) > 0) {
                     const val = Number(osData.valor_total)
@@ -424,6 +428,7 @@ export function NewServiceOrder() {
                     status: osData.status || 'PENDENTE',
                     marca_id: osData.marca_id || (brands[0]?.id || '')
                 })
+                setLocalServico(osData.local_servico || null)
                 const rawFetchItens = (osData.itens as ServiceItem[]) || []
                 if (rawFetchItens.length === 0 && Number(osData.valor_total) > 0) {
                     const val = Number(osData.valor_total)
@@ -659,7 +664,9 @@ export function NewServiceOrder() {
                 desconto: discountPercent,
                 itens: items,
                 fotos: { antes: photos.antes, depois: photos.depois },
-                valor_total: total
+                valor_total: total,
+                // Local do serviço (NFS-e: local da prestação); null = endereço do cliente
+                local_servico: localParaGravar(localServico)
             }
 
             if (finalStatus) {
@@ -1027,6 +1034,11 @@ export function NewServiceOrder() {
                             </div>
                         )}
                     </div>
+
+                    {formData.cliente_id && (
+                        <CampoLocalServico valor={localServico} onChange={setLocalServico}
+                            cidadeCliente={[clienteAtual?.cidade, clienteAtual?.uf].filter(Boolean).join('/')} />
+                    )}
 
                     <div className="space-y-3">
                         <Label className="text-slate-600 font-medium ml-1">Tipo de Documento</Label>

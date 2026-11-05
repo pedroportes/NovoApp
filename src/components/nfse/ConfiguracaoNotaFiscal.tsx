@@ -344,13 +344,13 @@ export function ConfiguracaoNotaFiscal({ empresaId }: { empresaId: string }) {
                     {/* Local da prestação */}
                     <div className="rounded-lg border border-border p-3 space-y-1.5">
                         <label className="flex items-center justify-between gap-3 cursor-pointer">
-                            <span className="text-sm font-semibold">Local da prestação = cidade do cliente</span>
+                            <span className="text-sm font-semibold">Local da prestação = cidade do serviço</span>
                             <Switch
                                 checked={config.local_prestacao_cliente}
                                 onCheckedChange={async v => {
                                     try {
                                         await gravar({ local_prestacao_cliente: v });
-                                        toast.success(v ? 'Local da prestação: cidade do cliente (salvo)' : 'Local da prestação: cidade da sede (salvo)');
+                                        toast.success(v ? 'Local da prestação: cidade do serviço (salvo)' : 'Local da prestação: cidade da sede (salvo)');
                                     } catch (e: any) {
                                         toast.error(`Não foi possível salvar: ${e.message}`);
                                     }
@@ -359,7 +359,7 @@ export function ConfiguracaoNotaFiscal({ empresaId }: { empresaId: string }) {
                         </label>
                         <p className="text-xs text-muted-foreground">
                             {config.local_prestacao_cliente
-                                ? 'Ligado: a nota sai com a cidade do endereço do cliente (pelo CEP). Serviço em Curitiba sai "Curitiba". Cliente sem CEP sai com a cidade da sede.'
+                                ? 'Ligado: a nota sai com a cidade onde o serviço foi feito: o "Local do serviço" da OS, ou, se a OS não tiver, a cidade do cadastro do cliente (pelo CEP). O endereço do tomador na nota continua sendo o do cadastro do cliente.'
                                 : 'Desligado: toda nota sai com a cidade da sede da empresa.'}
                         </p>
                         <p className="text-xs text-muted-foreground">

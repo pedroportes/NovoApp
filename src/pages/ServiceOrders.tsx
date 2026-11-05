@@ -738,6 +738,12 @@ export function ServiceOrders() {
     }
 
     const getClientAddress = (os: ServiceOrder) => {
+        // Serviço em outro endereço (OS com "Local do serviço"): é para lá que o técnico vai
+        const l = (os as any).local_servico
+        if (l && (l.endereco || l.cidade)) {
+            return [`${l.endereco || ''}${l.numero ? `, ${l.numero}` : ''}`, l.bairro || '', l.cidade ? `${l.cidade}${l.uf ? `/${l.uf}` : ''}` : '']
+                .map((x: string) => x.trim()).filter(Boolean).join(' - ')
+        }
         const c = os.clientes
         if (!c) {
             return (os as any).cliente_endereco || (os as any).endereco || ''
@@ -1361,8 +1367,13 @@ export function ServiceOrders() {
                                 </div>
                                 <div className="grid grid-cols-2 gap-2">
                                     <div className="rounded-xl border border-slate-200 p-3">
-                                        <div className="text-xs text-slate-500">Local da prestação</div>
+                                        <div className="text-xs text-slate-500">Local da prestação (onde o ISS é devido)</div>
                                         <div className="font-semibold text-slate-800">{p.local_prestacao}</div>
+                                        <div className="text-xs text-slate-500">
+                                            {p.local_prestacao_origem === 'os'
+                                                ? `Local do serviço da OS${p.endereco_servico ? `: ${p.endereco_servico}` : ''}`
+                                                : p.local_prestacao_origem === 'cliente' ? 'Endereço do cadastro do cliente' : 'Cidade da sede'}
+                                        </div>
                                     </div>
                                     <div className={cn('rounded-xl border p-3', p.iss_retido ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200')}>
                                         <div className="text-xs text-slate-500">ISS retido pelo cliente</div>
