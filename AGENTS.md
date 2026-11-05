@@ -782,3 +782,33 @@ Todos configurados com **50% de comissão padrão** em `usuarios` e cadastrados 
 - Limites de técnicos divergem: tela Planos (Essencial 3, Pro 5, Operacional 10) × app (1, 3, 8) × descrição Stripe (Essencial 2) — decisão do Pedro.
 - Afiliados: `afiliados_vendas` e funções existem, mas o webhook não registra venda/comissão (affiliate_id só vai nos metadados).
 - Tipos gerados (`src/types/supabase.ts`) sem `grace_period_end`.
+
+### 4U (continuação, 05/11 noite) — MODO TESTE da Stripe: testado de ponta a ponta — PUBLICADO
+
+> Publicado pelo Pedro: `create-checkout-session` v52+ e `stripe-webhook` v63; push feito (master inclui `21c0bec7`, `d81c679c`, `4e029b12`).
+
+**Como testar sem cobrar nada (só super admin)**
+- Empresa de teste: **`2566b8f7-1714-434c-a3a7-e67453b2aa0a` "TESTE ASSINATURA (Stripe teste)"** (o servidor só aceita empresa cujo nome começa com `TESTE `).
+- Abrir `https://app.gerenciaservicos.com.br/plans?teste=2566b8f7-1714-434c-a3a7-e67453b2aa0a` (aparece faixa amarela "MODO TESTE"). Cartões da Stripe: 4242… aprova; 4000 0000 0000 0002 recusa.
+- Checkout de teste usa `STRIPE_TEST_SECRET_KEY` e monta o preço com o MESMO valor do plano real (`price_data`); os metadados levam o `price_id` REAL, então o banco grava o mesmo plano que um cliente real.
+- Destino de webhook de teste na Stripe (modo teste/"Área restrita"): `we_1T1tLVC2SBfOxdrqawlHMbg6`, mesmos 6 eventos e mesma versão da API (2025-12-15.clover) do real, **Ativo**.
+- **Conferência dos avisos de teste:** o `STRIPE_TEST_WEBHOOK_SECRET` gravado no Supabase NÃO é o segredo desse destino (gravado 4x com o mesmo valor errado, resumo `7d0ff…`). Por isso o webhook, só para aviso com `livemode: false`, tenta o segredo de teste e, se não bater, **busca o mesmo aviso na Stripe pela API** (`events.retrieve` com a chave de teste) e usa a versão de lá. Aviso real continua exigindo a assinatura com `STRIPE_WEBHOOK_SECRET`, sem exceção.
+- Para conferir se um segredo gravado bate sem expor o valor: `npx supabase secrets list` mostra o SHA-256 do valor; comparar com o SHA-256 do `whsec_` revelado na página do destino.
+
+**Resultados (banco conferido em cada passo)**
+| Teste | Resultado |
+|---|---|
+| Pagamento aprovado (Solo, 4242) | `active`, `price_1T02TL…` (Solo), vence 05/12, tela /sucesso "Plano Solo está ativo" |
+| Cancelar na Stripe (Imediatamente) | `canceled` em segundos → app sem plano |
+| Cartão recusado ao assinar (Essencial, 0002) | Stripe "cartão recusado"; empresa `incomplete`, sem tolerância → sem plano |
+| Recusado e depois outro cartão na mesma tela (4242) | `incomplete` → `active` Essencial, /sucesso "Essencial está ativo" |
+| Renovação recusada (past_due + 7 dias) | **NÃO testado ao vivo**: o painel da Stripe não salvou a troca do cartão da assinatura para o 4000 0000 0000 0341. Código revisado. |
+
+**Erros achados nos testes e corrigidos (`4e029b12`)**
+1. `invoice.payment_failed` marcava `past_due` + 7 dias sem olhar a assinatura: no 1º pagamento recusado, dependendo da ordem dos avisos, quem nunca pagou ganharia 7 dias. Agora busca a assinatura na Stripe e grava o status real (renovação recusada = `past_due` com tolerância; 1º pagamento = `incomplete`).
+2. Uma assinatura `incomplete`/cancelada de outra tentativa substituía a assinatura em dia da empresa (cliente pagante que tenta trocar de plano com cartão recusado perderia o plano). Agora só substitui se a nova estiver valendo ou a atual não estiver (`VIVAS` = active, trialing, past_due, unpaid).
+
+**Pendências novas**
+- **Troca de plano cobra em dobro:** assinar outro plano pela tela /plans cria uma 2ª assinatura e a antiga continua ativa na Stripe. O certo é trocar o preço da assinatura existente (ou portal do cliente da Stripe).
+- Testar a renovação recusada com relógio de teste (test clock) ou pelo portal, quando houver tempo.
+- Empresa TESTE ficou com uma assinatura de teste ativa (Essencial, `sub_1UYYeLC2SBfOxdrqPvwX8DvA`, cliente de teste com cartões 4242 e 0341). Só modo teste, nada cobrado.
