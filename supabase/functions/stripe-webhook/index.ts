@@ -111,15 +111,27 @@ async function gravarAssinatura(ctx: Contexto, sub: any, empresaIdDoCheckout?: s
     await atualizar(empresa.id, campos, ctx)
 }
 
-// Confere a assinatura digital do aviso: primeiro com o segredo do destino real, depois com o de teste
+// Confere o aviso. Real: assinatura digital com o segredo do destino real (sem exceção).
+// Teste: assinatura com o segredo de teste, se bater; senão busca o MESMO aviso na Stripe pela API
+// com a chave de teste e usa a versão que veio de lá (aviso inventado não existe na Stripe e é recusado).
 async function verificarAviso(body: string, assinatura: string): Promise<{ event: any; ctx: Contexto }> {
     try {
         const event = await stripeReal.webhooks.constructEventAsync(body, assinatura, SEGREDO_REAL)
         return { event, ctx: { teste: false, stripe: stripeReal } }
     } catch (errReal) {
-        if (!SEGREDO_TESTE || !stripeTeste) throw errReal
-        const event = await stripeTeste.webhooks.constructEventAsync(body, assinatura, SEGREDO_TESTE)
-        if (event.livemode) throw new Error('Aviso real assinado com o segredo de teste')
+        if (!stripeTeste) throw errReal
+        let recebido: any
+        try { recebido = JSON.parse(body) } catch { throw errReal }
+        // Aviso do modo real nunca entra pelo caminho de teste
+        if (recebido?.livemode !== false || typeof recebido?.id !== 'string') throw errReal
+        if (SEGREDO_TESTE) {
+            try {
+                const event = await stripeTeste.webhooks.constructEventAsync(body, assinatura, SEGREDO_TESTE)
+                return { event, ctx: { teste: true, stripe: stripeTeste } }
+            } catch { /* segredo de teste ausente ou diferente: confere pela API abaixo */ }
+        }
+        const event = await stripeTeste.events.retrieve(recebido.id)
+        if (event.livemode) throw new Error('Aviso real no caminho de teste')
         return { event, ctx: { teste: true, stripe: stripeTeste } }
     }
 }
