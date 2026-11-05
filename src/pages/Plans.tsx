@@ -77,6 +77,10 @@ export function Plans() {
     // Plano de R$ 1,99 só para o super admin testar a cobrança
     const planosVisiveis = PLANS.filter(p => p.id !== 'teste' || userData?.isSuperAdmin)
 
+    // Modo teste da Stripe (cartão 4242…, nada é cobrado): /plans?teste=<id da empresa "TESTE …">, só super admin.
+    // O servidor confere de novo (super admin + empresa "TESTE …") e usa a chave e os preços de teste.
+    const testeEmpresaId = userData?.isSuperAdmin ? new URLSearchParams(window.location.search).get('teste') : null
+
     const handleSubscribe = async (priceId: string) => {
         // A assinatura é sempre da empresa de quem está logado: sem login, cria a conta (escolhendo a senha) e volta aqui
         if (!userData?.empresa_id) {
@@ -91,6 +95,7 @@ export function Plans() {
             const { data, error } = await supabase.functions.invoke('create-checkout-session', {
                 body: {
                     price_id: priceId,
+                    ...(testeEmpresaId ? { teste_empresa_id: testeEmpresaId } : {}),
                     affiliate_id: affiliateId,
                     success_url: `${window.location.origin}/sucesso`,
                     cancel_url: `${window.location.origin}/plans`,
@@ -122,6 +127,11 @@ export function Plans() {
 
     return (
         <div className="min-h-screen bg-slate-50 py-12 px-4">
+            {testeEmpresaId && (
+                <div className="max-w-3xl mx-auto mb-8 rounded-xl border-2 border-amber-400 bg-amber-50 p-4 text-center text-amber-900 font-semibold">
+                    MODO TESTE da Stripe: use o cartão 4242 4242 4242 4242 (nada é cobrado). A assinatura vai para a empresa de teste, não para a sua.
+                </div>
+            )}
             <div className="max-w-7xl mx-auto text-center mb-12">
                 <h1 className="text-4xl font-bold text-slate-900 mb-4">Escolha o Plano Ideal</h1>
                 <p className="text-xl text-slate-600">Potencialize sua desentupidora com as ferramentas certas.</p>

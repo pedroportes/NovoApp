@@ -21,9 +21,12 @@ type Estado = 'aguardando' | 'ativo' | 'demorando' | 'sem_login'
 
 export function PlansSuccess() {
     const navigate = useNavigate()
-    const { user, empresaId, loading } = useAuth()
+    const { user, empresaId: empresaDoUsuario, userData, loading } = useAuth()
     const [estado, setEstado] = useState<Estado>('aguardando')
     const [plano, setPlano] = useState('')
+    // Modo teste (só super admin): acompanha a empresa de teste em vez da própria
+    const empresaTeste = userData?.isSuperAdmin ? new URLSearchParams(window.location.search).get('teste') : null
+    const empresaId = empresaTeste || empresaDoUsuario
 
     useEffect(() => {
         if (loading) return
