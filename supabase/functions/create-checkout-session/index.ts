@@ -24,15 +24,16 @@ const PRECOS_VALIDOS = new Set([
 ])
 const PRECO_TESTE = 'price_1SsOJhC2SBfOxdrqy7Jf2xNO'
 
-// MODO TESTE da Stripe (cartão 4242…, nada é cobrado): preço real → preço equivalente no modo teste.
-// Só o super admin usa, e só numa empresa cujo nome começa com "TESTE " (nunca encosta em empresa real).
-const PRECO_NO_MODO_TESTE: Record<string, string> = {
-    'price_1T02TLC2SBfOxdrqrdbCvFEQ': 'price_1Su5WxC2SBfOxdrq59392S2M', // Solo
-    'price_1T02Y8C2SBfOxdrqfPf01e1C': 'price_1Su5XbC2SBfOxdrqQryK1y1Q', // Essencial
-    'price_1SsUaDC2SBfOxdrq9LBbQkcl': 'price_1Su5a1C2SBfOxdrqPhCj6qXz', // Pro Fluxo
-    'price_1SsUe8C2SBfOxdrqRMtj4wjh': 'price_1Su5aVC2SBfOxdrqn8K8wS6t', // Operacional
-    'price_1SsUkBC2SBfOxdrqofDd7Euj': 'price_1Su5b8C2SBfOxdrqV2fJ7z4X', // Prime Fleet
-    'price_1SsOJhC2SBfOxdrqy7Jf2xNO': 'price_1Su5bTC2SBfOxdrqKe2j4p45', // Teste de valor
+// MODO TESTE da Stripe (cartão 4242…, nada é cobrado). Só o super admin usa, e só numa empresa cujo
+// nome começa com "TESTE " (nunca encosta em empresa real). O modo teste da conta não tem os mesmos
+// preços, então o preço de teste é montado com o MESMO valor, moeda e periodicidade do plano real.
+const PLANO_REAL: Record<string, { nome: string; centavos: number }> = {
+    'price_1T02TLC2SBfOxdrqrdbCvFEQ': { nome: 'Plano Solo', centavos: 5990 },
+    'price_1T02Y8C2SBfOxdrqfPf01e1C': { nome: 'Essencial', centavos: 9890 },
+    'price_1SsUaDC2SBfOxdrq9LBbQkcl': { nome: 'Pro Fluxo', centavos: 12990 },
+    'price_1SsUe8C2SBfOxdrqRMtj4wjh': { nome: 'Operacional', centavos: 24990 },
+    'price_1SsUkBC2SBfOxdrqofDd7Euj': { nome: 'Prime Fleet', centavos: 49990 },
+    'price_1SsOJhC2SBfOxdrqy7Jf2xNO': { nome: 'Teste de valor', centavos: 199 },
 }
 
 function getCorsHeaders(origin: string | null) {
@@ -107,7 +108,10 @@ serve(async (req) => {
             apiVersion: '2023-10-16',
             httpClient: Stripe.createFetchHttpClient(),
         })
-        const precoStripe = modoTeste ? PRECO_NO_MODO_TESTE[String(price_id)] : String(price_id)
+        const plano = PLANO_REAL[String(price_id)]
+        const itemDoCheckout = modoTeste
+            ? { price_data: { currency: 'brl', unit_amount: plano.centavos, recurring: { interval: 'month' as const }, product_data: { name: `${plano.nome} (modo teste)` } }, quantity: 1 }
+            : { price: String(price_id), quantity: 1 }
 
         // 2. Um cliente da Stripe por empresa (reaproveita o que já existir; no modo teste cria um de teste)
         const { data: empresa } = await admin.from('empresas').select('nome, stripe_customer_id').eq('id', empresaId).maybeSingle()
@@ -131,7 +135,7 @@ serve(async (req) => {
         const session = await stripe.checkout.sessions.create({
             customer: customerId,
             client_reference_id: empresaId,
-            line_items: [{ price: precoStripe, quantity: 1 }],
+            line_items: [itemDoCheckout],
             mode: 'subscription',
             subscription_data: { metadata: metadados },
             metadata: metadados,
