@@ -22,6 +22,7 @@ const PRECOS_VALIDOS = new Set([
     'price_1SsUkBC2SBfOxdrqofDd7Euj', // Prime Fleet
     'price_1SsOJhC2SBfOxdrqy7Jf2xNO', // Teste de valor (R$ 1,99)
 ])
+const PRECO_TESTE = 'price_1SsOJhC2SBfOxdrqy7Jf2xNO'
 
 function getCorsHeaders(origin: string | null) {
     const isAllowed = origin && allowedOrigins.includes(origin)
@@ -77,7 +78,7 @@ serve(async (req) => {
         const { data: { user } } = await supabaseClient.auth.getUser()
         if (!user) return responder({ error: 'Entre na sua conta (ou crie uma) antes de assinar.' })
 
-        const { data: profile } = await admin.from('usuarios').select('empresa_id, cargo').eq('id', user.id).maybeSingle()
+        const { data: profile } = await admin.from('usuarios').select('empresa_id, cargo, is_super_admin').eq('id', user.id).maybeSingle()
         const empresaId = profile?.empresa_id as string | undefined
         if (!empresaId) return responder({ error: 'Sua conta não tem empresa cadastrada.' })
         if (['tecnico', 'técnico'].includes(String(profile?.cargo || '').toLowerCase())) {
@@ -86,6 +87,8 @@ serve(async (req) => {
 
         const { price_id, affiliate_id, success_url, cancel_url } = await req.json()
         if (!PRECOS_VALIDOS.has(String(price_id))) return responder({ error: 'Plano inválido.' })
+        // O plano de R$ 1,99 libera recursos do Pro: só o super admin pode comprá-lo (para testar a cobrança)
+        if (price_id === PRECO_TESTE && !profile?.is_super_admin) return responder({ error: 'Plano inválido.' })
 
         // 2. Um cliente da Stripe por empresa (reaproveita o que já existir)
         const { data: empresa } = await admin.from('empresas').select('nome, stripe_customer_id').eq('id', empresaId).maybeSingle()
