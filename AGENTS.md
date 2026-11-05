@@ -812,3 +812,31 @@ Todos configurados com **50% de comissão padrão** em `usuarios` e cadastrados 
 - **Troca de plano cobra em dobro:** assinar outro plano pela tela /plans cria uma 2ª assinatura e a antiga continua ativa na Stripe. O certo é trocar o preço da assinatura existente (ou portal do cliente da Stripe).
 - Testar a renovação recusada com relógio de teste (test clock) ou pelo portal, quando houver tempo.
 - Empresa TESTE ficou com uma assinatura de teste ativa (Essencial, `sub_1UYYeLC2SBfOxdrqPvwX8DvA`, cliente de teste com cartões 4242 e 0341). Só modo teste, nada cobrado.
+
+### 4U (final, 05/11 noite) — Troca de plano sem cobrança em dobro — PUBLICADO E TESTADO
+
+> Commit `fc8bff34` (checkout v57 publicado pelo Pedro + push/Vercel). **Corrige a pendência "troca de plano cobra em dobro"** da continuação acima.
+
+**Como funciona (`create-checkout-session`)**
+- Empresa SEM assinatura valendo → abre o Checkout da Stripe (igual antes).
+- Empresa com assinatura `active`/`trialing` → **NÃO abre outra assinatura**: troca o preço do item da assinatura atual (`subscriptions.update`), com `proration_behavior: 'always_invoice'` (cobra ou credita a diferença na hora) e `payment_behavior: 'pending_if_incomplete'` (se o cartão recusar a diferença, a Stripe não aplica a troca e o cliente continua no plano antigo; a tela mostra "O pagamento da diferença foi recusado…").
+- Depois da troca, uma 2ª chamada grava `metadata.price_id` novo (a Stripe não aceita metadados junto com `pending_if_incomplete`).
+- Antes de trocar, o servidor devolve `{ confirmar: "Você já assina o X. Trocar para o Y? …" }`; a tela (`Plans.tsx`) pergunta e só repete a chamada com `confirmar_troca: true` se o cliente aceitar.
+- `past_due`/`unpaid` → bloqueia: "Há um pagamento pendente… Regularize antes de trocar de plano."
+- Mesmo plano → "Este já é o seu plano atual."
+- Modo teste: o preço novo usa `price_data` com um produto de teste criado na hora (na troca a Stripe não aceita `product_data`).
+- `PlansSuccess.tsx`: com `?troca=<price>` mostra "Plano alterado!" e só quando o `subscription_price_id` gravado já for o novo.
+
+**Testado no modo teste (empresa TESTE, conferido no banco e no painel da Stripe)**
+| Teste | Resultado |
+|---|---|
+| Essencial → Pro Fluxo (confirmando) | Mesma assinatura `sub_1UYYeLC2SBfOxdrqPvwX8DvA` agora Pro; Stripe: **1 assinatura só**; diferença cobrada **R$ 30,98** (≈ 129,90 − 98,90, proporcional); tela "Plano alterado! Pro Fluxo está ativo" |
+| Escolher o plano que já tem | Aviso "Este já é o seu plano atual." |
+| Pro → Essencial respondendo NÃO | Nada mudou (continua Pro) |
+| Aviso atrasado da assinatura antiga cancelada | Webhook registrou "Ignorado: … (canceled) não substitui a atual … (active)" — prova a correção `4e029b12` |
+
+**Não testado ao vivo:** diferença recusada na troca (o painel não salvou o cartão 0341 como cartão da assinatura) e renovação recusada (`past_due` + 7 dias). Os dois caminhos estão no código e revisados.
+
+**Observação:** nos testes de troca troquei o `window.confirm` da página por um que responde sozinho (só no navegador do teste, não no código). Um cliente real vê a pergunta normal do navegador.
+
+**Pendências que continuam:** apagar a função `onboarding-pos-checkout`; 2 logins órfãos com senha fixa; empresas de teste antigas; limites de técnicos divergentes (tela × app × Stripe); afiliados não registrados pelo webhook; `STRIPE_TEST_WEBHOOK_SECRET` errado no Supabase (não atrapalha: aviso de teste é conferido pela API); empresa TESTE segue com assinatura de teste ativa (Pro), só modo teste.
