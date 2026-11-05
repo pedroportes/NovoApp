@@ -880,3 +880,5 @@ Todos configurados com **50% de comissão padrão** em `usuarios` e cadastrados 
 - Focus NFe (`focusNFeService`) não usa o local do serviço (o Pedro emite pela Contora).
 - Manual da FlowDrain IA (`aiService.ts`) não fala do campo novo.
 - Retenção pela Contora continua com defeito (chamado #132): notas com retenção saem "não retido".
+
+**Estado em 05/11/2026 23h (fim do dia):** Edge `nfse-contora` **v17 publicada** e **push feito** (commits `e5d1c28b`, `8291c9e6`). Prévia SEM local do serviço conferida na OS do Hospital Pilar `b4ad2a8d-ebc9-4dd2-ba18-310b296f3397`: tomador Curitiba/PR, local da prestação Curitiba/PR (origem cliente), ISS retido sim. **FALTA (retomar 06/11):** o Pedro pôr "Outro endereço" nessa OS (CEP 83025-140, nº 3059) pelo app — o agente foi bloqueado de gravar em produção —, rodar a prévia (esperado: tomador Curitiba/PR, local São José dos Pinhais/PR, origem "os", aviso de cidades diferentes) e depois voltar a OS para "Endereço do cliente".
