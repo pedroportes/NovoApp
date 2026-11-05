@@ -746,3 +746,39 @@ Todos configurados com **50% de comissão padrão** em `usuarios` e cadastrados 
 **7. Quando a Contora responder**
 - Aplicar o que eles indicarem; emitir UMA nota real pequena com retenção, rodar o `diagnostico` e só aceitar se o XML tiver `<tpRetISSQN>2</tpRetISSQN>` e `vLiq` com o desconto; depois cancelar se for teste.
 - Texto do chamado também em `meu-app/chamado-contora-iss-retido.md`.
+
+
+---
+
+### 4U. 05/11/2026 — Assinaturas (Stripe): cadastro → pagamento → plano ligado à empresa; webhook completo — EM TESTE — LER ANTES DE MEXER EM PLANOS/STRIPE
+
+> **Estado:** funções `stripe-webhook` (v55) e `create-checkout-session` (v48) PUBLICADAS pelo Pedro; webhook testado com reenvio de evento (200, lógica nova rodou). **Pendente do Pedro:** (1) republicar `create-checkout-session` com a trava do Plano Teste (commit `d99fad54`); (2) `git -C C:\Users\pedro\NovoApp push origin master` (3 commits: `3d17d0f9` diagnóstico NFS-e, `d15b4507` assinatura, `d99fad54` trava) — o envio pelo agente foi bloqueado pela trava de segurança; (3) teste real: conta NOVA em janela anônima (ex.: `pedrosportes+teste1@gmail.com`), Plano Solo R$ 59,90 com o cartão do Pedro, conferir ativação, depois cancelar (Imediatamente) e reembolsar na Stripe e conferir que a empresa de teste perde o plano. O agente NÃO paga nem cria conta em produção.
+
+**1. O que estava errado (diagnóstico 05/11)**
+- Cancelar na Stripe não tirava o plano: `stripe-webhook` só tratava `checkout.session.completed` (a Stripe entregava `customer.subscription.deleted` com 200 e nada mudava).
+- Webhook achava a empresa pelo e-mail digitado na Stripe, criava login com senha fixa "FlowDrain 123" se o e-mail não existisse, não gravava o plano. `PlansSuccess.tsx` mostrava "FlowDrain 123" na tela.
+- `Plans.tsx` usava preços `price_1Su5…` que NÃO existem na conta (404) → "Assinar Agora" falhava. `/plans` pública (pagava sem login).
+- 7 assinaturas de teste (R$ 1,99, cartão do Pedro) não estavam ligadas a nenhuma empresa; canceladas pelo Pedro em 05/11.
+
+**2. O que mudou**
+- `Plans.tsx`: preços reais (Solo `price_1T02TLC2SBfOxdrqrdbCvFEQ`, Essencial `price_1T02Y8C2SBfOxdrqfPf01e1C`, Pro `price_1SsUaDC2SBfOxdrq9LBbQkcl`, Operacional `price_1SsUe8C2SBfOxdrqRMtj4wjh`, Prime `price_1SsUkBC2SBfOxdrqofDd7Euj`, Teste R$ 1,99 `price_1SsOJhC2SBfOxdrqy7Jf2xNO`); sem login → `/signup?next=/plans`; Plano Teste só para super admin.
+- `SignUp.tsx`: depois de criar a conta (senha escolhida pela pessoa) volta para `?next` (só caminhos do app).
+- `create-checkout-session`: exige login + empresa + não técnico; só preços da lista; Plano Teste só super admin; um cliente Stripe por empresa (`empresas.stripe_customer_id`); `client_reference_id` = empresa_id, `metadata` e `subscription_data.metadata` com empresa_id/price_id/affiliate_id; volta só para o próprio app; erros com status 200 para a tela ler.
+- `stripe-webhook`: liga pela empresa (client_reference_id/metadata → assinatura gravada → cliente gravado); grava `stripe_subscription_id`, `stripe_customer_id`, `subscription_status` (status real da Stripe), `subscription_price_id`, `current_period_end` (no formato novo fica em `items.data[0]`); trata `customer.subscription.created/updated/deleted`, `invoice.payment_succeeded/paid`, `invoice.payment_failed` (status `past_due` + `grace_period_end` = +7 dias); assinatura antiga não sobrescreve a atual; erro → 500 (Stripe tenta de novo); NUNCA cria login.
+- `useLicenseCheck.ts`: plano pago vale com `active`/`trialing` ou `past_due`/`unpaid` dentro do `grace_period_end`; senão vira grátis (teste de 7 dias já vencido para contas antigas → não cria cliente/OS/técnico). Bloqueio é só de tela.
+- `PlansSuccess.tsx`: espera o webhook (até ~1 min) e mostra "<Plano> está ativo"; sem senha.
+- Stripe (destino `we_1T28NPC2SBfOxdrqHWefxm3s`): eventos agora = `checkout.session.completed`, `customer.subscription.created/updated/deleted`, `invoice.payment_succeeded`, `invoice.payment_failed` (alterado pelo painel; a conexão Composio da Stripe só tem leitura).
+
+**3. Regras (NÃO QUEBRAR)**
+1. Assinatura é sempre da empresa de quem está logado; ligar pelo `empresa_id`, nunca pelo e-mail.
+2. Nunca criar login no webhook nem senha fixa.
+3. Plano Teste (R$ 1,99 = Pro) só para super admin, na tela E no servidor.
+4. Nunca testar cancelamento na empresa verdadeira do Pedro (`58f0512e…`): ela perderia o plano.
+5. Stripe via Composio (só leitura); nunca pegar chave secreta pelo DevTools.
+
+**4. Pendências**
+- Apagar a função `onboarding-pos-checkout` (publicada, fora do repositório, troca senha de quem tiver um session_id): `npx supabase functions delete onboarding-pos-checkout --project-ref dltqxfyrltgbudtzxzot`.
+- 2 logins órfãos com senha fixa (`desentupidorabatel15@`, `deriospereiraronaldo@`); empresas de teste (cópia `aaaaaaaa…`, Graça, Batel x3, O Desentupidor, Seven serv de 08/01, "Teste") — decidir com o Pedro.
+- Limites de técnicos divergem: tela Planos (Essencial 3, Pro 5, Operacional 10) × app (1, 3, 8) × descrição Stripe (Essencial 2) — decisão do Pedro.
+- Afiliados: `afiliados_vendas` e funções existem, mas o webhook não registra venda/comissão (affiliate_id só vai nos metadados).
+- Tipos gerados (`src/types/supabase.ts`) sem `grace_period_end`.
