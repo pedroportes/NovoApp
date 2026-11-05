@@ -87,7 +87,7 @@ serve(async (req) => {
             return responder({ error: 'Só o administrador da empresa pode assinar um plano.' })
         }
 
-        const { price_id, affiliate_id, success_url, cancel_url, teste_empresa_id } = await req.json()
+        const { price_id, affiliate_id, success_url, cancel_url, teste_empresa_id, confirmar_troca } = await req.json()
         if (!PRECOS_VALIDOS.has(String(price_id))) return responder({ error: 'Plano inválido.' })
         // O plano de R$ 1,99 libera recursos do Pro: só o super admin pode comprá-lo (para testar a cobrança)
         if (price_id === PRECO_TESTE && !profile?.is_super_admin) return responder({ error: 'Plano inválido.' })
@@ -113,8 +113,56 @@ serve(async (req) => {
             ? { price_data: { currency: 'brl', unit_amount: plano.centavos, recurring: { interval: 'month' as const }, product_data: { name: `${plano.nome} (modo teste)` } }, quantity: 1 }
             : { price: String(price_id), quantity: 1 }
 
-        // 2. Um cliente da Stripe por empresa (reaproveita o que já existir; no modo teste cria um de teste)
-        const { data: empresa } = await admin.from('empresas').select('nome, stripe_customer_id').eq('id', empresaId).maybeSingle()
+        const { data: empresa } = await admin.from('empresas')
+            .select('nome, stripe_customer_id, stripe_subscription_id, subscription_status, subscription_price_id')
+            .eq('id', empresaId).maybeSingle()
+
+        // 2. Já tem assinatura valendo: TROCA o plano dessa assinatura em vez de abrir outra
+        //    (abrir outra deixava a antiga cobrando junto = cobrança em dobro)
+        const statusAtual = String(empresa?.subscription_status || '')
+        if (empresa?.stripe_subscription_id && ['active', 'trialing', 'past_due', 'unpaid'].includes(statusAtual)) {
+            if (statusAtual === 'past_due' || statusAtual === 'unpaid') {
+                return responder({ error: 'Há um pagamento pendente na sua assinatura. Regularize o pagamento antes de trocar de plano.' })
+            }
+            if (empresa.subscription_price_id === String(price_id)) {
+                return responder({ error: 'Este já é o seu plano atual.' })
+            }
+            // Primeiro só avisa: a troca cobra a diferença na hora, então a tela pede confirmação antes
+            if (!confirmar_troca) {
+                const nomeAtual = PLANO_REAL[String(empresa.subscription_price_id)]?.nome || 'seu plano atual'
+                return responder({
+                    confirmar: `Você já assina o ${nomeAtual}. Trocar para o ${plano.nome}? A diferença do mês é cobrada (ou creditada) agora no cartão da assinatura, e a próxima mensalidade passa a ser do novo plano.`,
+                })
+            }
+            const sub = await stripe.subscriptions.retrieve(empresa.stripe_subscription_id)
+            const item = sub.items?.data?.[0]
+            if (!item) throw new Error('Assinatura atual sem item na Stripe.')
+
+            // Modo teste: o preço precisa de um produto de teste (na troca a Stripe não aceita product_data)
+            let novoItem: Record<string, unknown> = { id: item.id, price: String(price_id) }
+            if (modoTeste) {
+                const produto = await stripe.products.create({ name: `${plano.nome} (modo teste)` })
+                novoItem = { id: item.id, price_data: { currency: 'brl', unit_amount: plano.centavos, recurring: { interval: 'month' }, product: produto.id } }
+            }
+
+            // Cobra (ou credita) a diferença na hora. "pending_if_incomplete": se o cartão recusar a diferença,
+            // a Stripe NÃO aplica a troca e o cliente continua no plano antigo.
+            const atualizada: any = await stripe.subscriptions.update(sub.id, {
+                items: [novoItem],
+                proration_behavior: 'always_invoice',
+                payment_behavior: 'pending_if_incomplete',
+            } as any)
+            if (atualizada.pending_update) {
+                return responder({ error: 'O pagamento da diferença foi recusado. Seu plano continua o mesmo; atualize o cartão e tente de novo.' })
+            }
+            // Metadados numa segunda chamada (a Stripe não aceita metadados junto com pending_if_incomplete)
+            await stripe.subscriptions.update(sub.id, { metadata: { ...(sub.metadata || {}), empresa_id: empresaId!, price_id: String(price_id) } })
+
+            const sucesso = enderecoDoApp(success_url, origin)
+            return responder({ url: `${sucesso}?troca=${encodeURIComponent(String(price_id))}${modoTeste ? `&teste=${empresaId}` : ''}` })
+        }
+
+        // 3. Um cliente da Stripe por empresa (reaproveita o que já existir; no modo teste cria um de teste)
         let customerId = modoTeste ? null : (empresa?.stripe_customer_id as string | null)
         if (!customerId) {
             const customer = await stripe.customers.create({
@@ -126,7 +174,7 @@ serve(async (req) => {
             if (!modoTeste) await admin.from('empresas').update({ stripe_customer_id: customerId }).eq('id', empresaId)
         }
 
-        // 3. Sessão de pagamento ligada à empresa (price_id dos metadados é SEMPRE o preço real,
+        // 4. Sessão de pagamento ligada à empresa (price_id dos metadados é SEMPRE o preço real,
         //    para o webhook gravar o mesmo plano que um cliente real teria)
         const metadados: Record<string, string> = { empresa_id: empresaId!, price_id: String(price_id) }
         if (affiliate_id) metadados.affiliate_id = String(affiliate_id)

@@ -27,6 +27,8 @@ export function PlansSuccess() {
     // Modo teste (só super admin): acompanha a empresa de teste em vez da própria
     const empresaTeste = userData?.isSuperAdmin ? new URLSearchParams(window.location.search).get('teste') : null
     const empresaId = empresaTeste || empresaDoUsuario
+    // Troca de plano: só mostra "ativo" quando o plano novo já estiver gravado
+    const precoDaTroca = new URLSearchParams(window.location.search).get('troca')
 
     useEffect(() => {
         if (loading) return
@@ -41,7 +43,8 @@ export function PlansSuccess() {
                 .maybeSingle()
             if (parar) return
             const status = (data as any)?.subscription_status
-            if (status === 'active' || status === 'trialing') {
+            const planoNovoGravado = !precoDaTroca || (data as any)?.subscription_price_id === precoDaTroca
+            if ((status === 'active' || status === 'trialing') && planoNovoGravado) {
                 setPlano(NOME_DO_PLANO[(data as any)?.subscription_price_id] || 'Seu plano')
                 setEstado('ativo')
                 return
@@ -52,7 +55,7 @@ export function PlansSuccess() {
         }
         conferir(0)
         return () => { parar = true }
-    }, [user, empresaId, loading])
+    }, [user, empresaId, loading, precoDaTroca])
 
     return (
         <div className="min-h-[80vh] flex flex-col items-center justify-center p-4 text-center">
@@ -70,7 +73,7 @@ export function PlansSuccess() {
                         <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
                             <CheckCircle2 className="w-12 h-12 text-emerald-600" />
                         </div>
-                        <h1 className="text-3xl font-black text-slate-900 mb-2">Assinatura ativada!</h1>
+                        <h1 className="text-3xl font-black text-slate-900 mb-2">{precoDaTroca ? 'Plano alterado!' : 'Assinatura ativada!'}</h1>
                         <p className="text-slate-600 mb-8">
                             <span className="font-bold text-slate-800">{plano}</span> está ativo na sua empresa. Todos os recursos do plano já estão liberados.
                         </p>

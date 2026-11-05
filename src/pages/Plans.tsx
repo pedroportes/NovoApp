@@ -81,7 +81,7 @@ export function Plans() {
     // O servidor confere de novo (super admin + empresa "TESTE …") e usa a chave e os preços de teste.
     const testeEmpresaId = userData?.isSuperAdmin ? new URLSearchParams(window.location.search).get('teste') : null
 
-    const handleSubscribe = async (priceId: string) => {
+    const handleSubscribe = async (priceId: string, confirmarTroca = false): Promise<void> => {
         // A assinatura é sempre da empresa de quem está logado: sem login, cria a conta (escolhendo a senha) e volta aqui
         if (!userData?.empresa_id) {
             navigate('/signup?next=/plans')
@@ -96,6 +96,7 @@ export function Plans() {
                 body: {
                     price_id: priceId,
                     ...(testeEmpresaId ? { teste_empresa_id: testeEmpresaId } : {}),
+                    ...(confirmarTroca ? { confirmar_troca: true } : {}),
                     affiliate_id: affiliateId,
                     success_url: `${window.location.origin}/sucesso`,
                     cancel_url: `${window.location.origin}/plans`,
@@ -111,6 +112,13 @@ export function Plans() {
             if (data && (data as any).error) {
                 console.error('Erro retornado pelo Stripe:', data)
                 throw new Error((data as any).error)
+            }
+
+            // Já tem assinatura: o servidor pede confirmação antes de trocar o plano (cobra a diferença na hora)
+            if ((data as any)?.confirmar) {
+                setLoading(null)
+                if (window.confirm((data as any).confirmar)) await handleSubscribe(priceId, true)
+                return
             }
 
             if (data?.url) {
