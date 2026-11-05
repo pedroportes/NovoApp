@@ -72,9 +72,11 @@ export function SignUp() {
             // Success! The database triggers will handle 'empresas' and 'usuarios' creation.
             setSuccess(true)
 
-            // Redirect to Dashboard
+            // Volta para onde a pessoa estava (ex.: escolher o plano); só caminhos do próprio app
+            const next = new URLSearchParams(window.location.search).get('next') || ''
+            const destino = next.startsWith('/') && !next.startsWith('//') ? next : '/'
             setTimeout(() => {
-                navigate('/')
+                navigate(destino)
             }, 2000)
 
         } catch (error: any) {

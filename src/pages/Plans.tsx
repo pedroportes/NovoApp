@@ -10,11 +10,11 @@ export function Plans() {
     const navigate = useNavigate()
     const [loading, setLoading] = useState<string | null>(null)
 
-    // TODO: Substitua pelos IDs REAIS do seu Stripe (copie do painel)
+    // Preços REAIS da conta Stripe (conferidos pela API em 05/11/2026; os antigos price_1Su5… não existiam)
     const PLANS = [
         {
             id: 'solo',
-            stripe_price_id: 'price_1Su5WxC2SBfOxdrq59392S2M', // Plano Solo - R$ 59,90/mês
+            stripe_price_id: 'price_1T02TLC2SBfOxdrqrdbCvFEQ', // Plano Solo - R$ 59,90/mês
             name: 'Plano Solo',
             price: 'R$ 59,90',
             period: '/mês',
@@ -24,7 +24,7 @@ export function Plans() {
         },
         {
             id: 'essencial',
-            stripe_price_id: 'price_1Su5XbC2SBfOxdrqQryK1y1Q', // Plano Essencial - R$ 98,90/mês
+            stripe_price_id: 'price_1T02Y8C2SBfOxdrqfPf01e1C', // Plano Essencial - R$ 98,90/mês
             name: 'Essencial',
             price: 'R$ 98,90',
             period: '/mês',
@@ -34,7 +34,7 @@ export function Plans() {
         },
         {
             id: 'pro',
-            stripe_price_id: 'price_1Su5a1C2SBfOxdrqPhCj6qXz', // Plano Pro Fluxo - R$ 129,90/mês
+            stripe_price_id: 'price_1SsUaDC2SBfOxdrq9LBbQkcl', // Plano Pro Fluxo - R$ 129,90/mês
             name: 'Pro Fluxo',
             price: 'R$ 129,90',
             period: '/mês',
@@ -44,7 +44,7 @@ export function Plans() {
         },
         {
             id: 'operacional',
-            stripe_price_id: 'price_1Su5aVC2SBfOxdrqn8K8wS6t', // Plano Operacional - R$ 249,90/mês
+            stripe_price_id: 'price_1SsUe8C2SBfOxdrqRMtj4wjh', // Plano Operacional - R$ 249,90/mês
             name: 'Operacional',
             price: 'R$ 249,90',
             period: '/mês',
@@ -54,7 +54,7 @@ export function Plans() {
         },
         {
             id: 'prime',
-            stripe_price_id: 'price_1Su5b8C2SBfOxdrqV2fJ7z4X', // Plano Prime Fleet - R$ 499,90/mês
+            stripe_price_id: 'price_1SsUkBC2SBfOxdrqofDd7Euj', // Plano Prime Fleet - R$ 499,90/mês
             name: 'Prime Fleet',
             price: 'R$ 499,90',
             period: '/mês',
@@ -64,7 +64,7 @@ export function Plans() {
         },
         {
             id: 'teste',
-            stripe_price_id: 'price_1Su5bTC2SBfOxdrqKe2j4p45', // Plano Teste - R$ 1,99/mês
+            stripe_price_id: 'price_1SsOJhC2SBfOxdrqy7Jf2xNO', // Plano Teste - R$ 1,99/mês
             name: 'Plano Teste',
             price: 'R$ 1,99',
             period: '/mês',
@@ -74,7 +74,15 @@ export function Plans() {
         }
     ]
 
+    // Plano de R$ 1,99 só para o super admin testar a cobrança
+    const planosVisiveis = PLANS.filter(p => p.id !== 'teste' || userData?.isSuperAdmin)
+
     const handleSubscribe = async (priceId: string) => {
+        // A assinatura é sempre da empresa de quem está logado: sem login, cria a conta (escolhendo a senha) e volta aqui
+        if (!userData?.empresa_id) {
+            navigate('/signup?next=/plans')
+            return
+        }
         try {
             setLoading(priceId)
 
@@ -120,7 +128,7 @@ export function Plans() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-7xl mx-auto">
-                {PLANS.map((plan) => {
+                {planosVisiveis.map((plan) => {
                     const Icon = plan.icon
                     return (
                         <div

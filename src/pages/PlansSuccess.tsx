@@ -1,96 +1,103 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CheckCircle2, Home, ArrowRight, Lock } from 'lucide-react'
+import { CheckCircle2, Home, Loader2, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { confetti } from 'https://esm.sh/canvas-confetti@1.6.0'
+import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/contexts/AuthContext'
+
+// Volta da Stripe depois do pagamento. A pessoa continua logada (mesmo navegador): esta página
+// só espera o stripe-webhook gravar a assinatura na empresa e mostra o plano. Nenhuma senha aparece aqui.
+
+const NOME_DO_PLANO: Record<string, string> = {
+    price_1T02TLC2SBfOxdrqrdbCvFEQ: 'Plano Solo',
+    price_1T02Y8C2SBfOxdrqfPf01e1C: 'Essencial',
+    price_1SsUaDC2SBfOxdrq9LBbQkcl: 'Pro Fluxo',
+    price_1SsUe8C2SBfOxdrqRMtj4wjh: 'Operacional',
+    price_1SsUkBC2SBfOxdrqofDd7Euj: 'Prime Fleet',
+    price_1SsOJhC2SBfOxdrqy7Jf2xNO: 'Plano Teste',
+}
+
+type Estado = 'aguardando' | 'ativo' | 'demorando' | 'sem_login'
 
 export function PlansSuccess() {
     const navigate = useNavigate()
-
-    const searchParams = new URLSearchParams(window.location.search)
-    const sessionEmail = searchParams.get('email')
+    const { user, empresaId, loading } = useAuth()
+    const [estado, setEstado] = useState<Estado>('aguardando')
+    const [plano, setPlano] = useState('')
 
     useEffect(() => {
-        // Disparar confetes ao carregar
-        const duration = 3 * 1000;
-        const animationEnd = Date.now() + duration;
-        const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
+        if (loading) return
+        if (!user || !empresaId) { setEstado('sem_login'); return }
 
-        const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
-
-        const interval: any = setInterval(function () {
-            const timeLeft = animationEnd - Date.now();
-
-            if (timeLeft <= 0) {
-                return clearInterval(interval);
+        let parar = false
+        const conferir = async (tentativa: number) => {
+            const { data } = await supabase
+                .from('empresas')
+                .select('subscription_status, subscription_price_id')
+                .eq('id', empresaId)
+                .maybeSingle()
+            if (parar) return
+            const status = (data as any)?.subscription_status
+            if (status === 'active' || status === 'trialing') {
+                setPlano(NOME_DO_PLANO[(data as any)?.subscription_price_id] || 'Seu plano')
+                setEstado('ativo')
+                return
             }
-
-            const particleCount = 50 * (timeLeft / duration);
-            (window as any).confetti && (window as any).confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } }));
-            (window as any).confetti && (window as any).confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } }));
-        }, 250);
-
-        return () => clearInterval(interval)
-    }, [])
+            // O aviso da Stripe costuma chegar em poucos segundos; espera até ~1 minuto
+            if (tentativa >= 20) { setEstado('demorando'); return }
+            setTimeout(() => conferir(tentativa + 1), 3000)
+        }
+        conferir(0)
+        return () => { parar = true }
+    }, [user, empresaId, loading])
 
     return (
         <div className="min-h-[80vh] flex flex-col items-center justify-center p-4 text-center">
-            <div className="bg-white rounded-3xl shadow-2xl p-8 md:p-12 max-w-lg w-full border border-slate-100 animate-in zoom-in duration-500">
-                <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <CheckCircle2 className="w-12 h-12 text-emerald-600 animate-bounce" />
-                </div>
+            <div className="bg-white rounded-3xl shadow-2xl p-8 md:p-12 max-w-lg w-full border border-slate-100">
+                {estado === 'aguardando' && (
+                    <>
+                        <Loader2 className="w-12 h-12 text-emerald-600 animate-spin mx-auto mb-6" />
+                        <h1 className="text-2xl font-black text-slate-900 mb-2">Confirmando seu pagamento…</h1>
+                        <p className="text-slate-600">Isso leva só alguns segundos. Não feche esta página.</p>
+                    </>
+                )}
 
-                <h1 className="text-3xl font-black text-slate-900 mb-2">Assinatura Ativada!</h1>
-                <p className="text-slate-600 mb-8">
-                    Parabéns! Sua empresa agora está em um novo nível. Todos os recursos do seu plano já estão liberados.
-                </p>
-
-                <div className="space-y-3">
-                    <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-6 mb-6">
-                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Seu Acesso</p>
-
-                        {sessionEmail && (
-                            <div className="mb-4">
-                                <p className="text-sm text-slate-500 mb-1">E-mail registrado:</p>
-                                <p className="text-lg font-bold text-slate-900">{sessionEmail}</p>
-                            </div>
-                        )}
-
-                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Senha Temporária</p>
-                        <div className="flex items-center justify-center gap-2 mb-2">
-                            <Lock className="w-4 h-4 text-emerald-600" />
-                            <span className="text-xl font-mono font-black text-slate-800 tracking-tight">FlowDrain 123</span>
+                {estado === 'ativo' && (
+                    <>
+                        <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <CheckCircle2 className="w-12 h-12 text-emerald-600" />
                         </div>
-                        <p className="text-sm text-slate-500 leading-relaxed">
-                            Use esta senha para seu primeiro acesso. <br />
-                            <span className="font-bold text-slate-700">O sistema solicitará a troca imediata.</span>
+                        <h1 className="text-3xl font-black text-slate-900 mb-2">Assinatura ativada!</h1>
+                        <p className="text-slate-600 mb-8">
+                            <span className="font-bold text-slate-800">{plano}</span> está ativo na sua empresa. Todos os recursos do plano já estão liberados.
                         </p>
-                    </div>
+                        <Button onClick={() => navigate('/')} className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl gap-2">
+                            Ir para o painel
+                            <Home className="w-4 h-4" />
+                        </Button>
+                    </>
+                )}
 
-                    <Button
-                        onClick={() => navigate(`/login?email=${sessionEmail || ''}`)}
-                        className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl gap-2 shadow-lg shadow-emerald-500/20"
-                    >
-                        Fazer Login Agora
-                        <ArrowRight className="w-4 h-4" />
-                    </Button>
+                {estado === 'demorando' && (
+                    <>
+                        <AlertCircle className="w-12 h-12 text-amber-500 mx-auto mb-6" />
+                        <h1 className="text-2xl font-black text-slate-900 mb-2">Pagamento recebido, ativação a caminho</h1>
+                        <p className="text-slate-600 mb-8">
+                            A confirmação da Stripe está demorando mais que o normal. Seu plano será ativado sozinho em instantes; se não aparecer em alguns minutos, fale com o suporte.
+                        </p>
+                        <Button onClick={() => navigate('/')} className="w-full h-12 font-bold rounded-2xl">Ir para o painel</Button>
+                    </>
+                )}
 
-                    <Button
-                        variant="ghost"
-                        onClick={() => navigate('/')}
-                        className="w-full h-12 text-slate-600 font-bold rounded-2xl gap-2 hover:bg-slate-50"
-                    >
-                        Página Inicial
-                        <Home className="w-4 h-4" />
-                    </Button>
-                </div>
-
-                <p className="mt-8 text-[10px] text-slate-400 uppercase tracking-widest font-bold">
-                    Obrigado por confiar no FlowDrain
-                </p>
+                {estado === 'sem_login' && (
+                    <>
+                        <AlertCircle className="w-12 h-12 text-amber-500 mx-auto mb-6" />
+                        <h1 className="text-2xl font-black text-slate-900 mb-2">Entre na sua conta</h1>
+                        <p className="text-slate-600 mb-8">Entre com o e-mail e a senha que você cadastrou para ver o seu plano.</p>
+                        <Button onClick={() => navigate('/login')} className="w-full h-12 font-bold rounded-2xl">Entrar</Button>
+                    </>
+                )}
             </div>
-
-            <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
         </div>
     )
 }

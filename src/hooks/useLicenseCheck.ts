@@ -51,9 +51,10 @@ export function useLicenseCheck() {
         if (!empresaId) return
         try {
             // 1. Get Company Details (Created At & Subscription)
-            const { data: companyData, error: companyError } = await supabase
+            // grace_period_end existe no banco mas não nos tipos gerados (src/types/supabase.ts desatualizado)
+            const { data: companyData, error: companyError } = await (supabase as any)
                 .from('empresas')
-                .select('created_at, subscription_status, subscription_price_id, current_period_end')
+                .select('created_at, subscription_status, subscription_price_id, current_period_end, grace_period_end')
                 .eq('id', empresaId || '')
                 .single()
 
@@ -66,8 +67,16 @@ export function useLicenseCheck() {
             // Operacional: price_1Sn42t2HN3YhJoauLrtAaWr0
             // Prime Fleet: price_1Sn44d2HN3YhJoaumqXIuvAg
 
+            // Plano pago vale com assinatura ativa (ou em teste da Stripe) e também em atraso
+            // dentro do prazo de tolerância (grace_period_end, gravado pelo stripe-webhook).
+            // Cancelada ou atraso vencido = volta ao plano grátis (teste de 7 dias, que já venceu para contas antigas).
+            const status = companyData.subscription_status
+            const dentroDaTolerancia = (status === 'past_due' || status === 'unpaid')
+                && !!(companyData as any).grace_period_end && new Date((companyData as any).grace_period_end).getTime() > Date.now()
+            const assinaturaValida = status === 'active' || status === 'trialing' || dentroDaTolerancia
+
             let plan: PlanType = 'free'
-            if (companyData.subscription_status === 'active') {
+            if (assinaturaValida) {
                 const priceId = companyData.subscription_price_id
                 // Mapeamento de IDs de Produção (Live) - Sincronizado com Plans.tsx e com atalhos do Super Admin
                 if (priceId === 'price_1T02Y8C2SBfOxdrqfPf01e1C' || priceId === 'essencial') plan = 'essencial'
