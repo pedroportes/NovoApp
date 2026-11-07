@@ -346,7 +346,17 @@ serve(async (req) => {
                 const textoRetencao = limpaTexto(cfg.info_complementar_retencao) || (regime === 'simples' ? TEXTO_RETENCAO_PADRAO : '')
                 // Tributos: sem nada salvo (null) usa o padrão; texto apagado em Configurações ('') não manda a linha
                 const textoTributos = cfg.info_tributos == null ? TEXTO_TRIBUTOS_PADRAO : limpaTexto(cfg.info_tributos)
-                const infoCompl = [issRetido ? comAliquota(textoRetencao) : '', textoTributos]
+                // Endereço onde o serviço foi feito, quando a OS tem "Outro endereço": a NFS-e só guarda a CIDADE
+                // do local da prestação e o tomador só tem o endereço da empresa; a rua vai por escrito aqui.
+                let textoLocal = ''
+                if (servicoEmOutroLocal) {
+                    const l = os.local_servico
+                    const cepLocal = soDigitos(l.cep)
+                    const cidadeLocal = munServico ? `${munServico.cidade}/${munServico.uf}` : [l.cidade, l.uf].map((x: unknown) => limpaTexto(x)).filter(Boolean).join('/')
+                    const rua = [limpaTexto(l.endereco), limpaTexto(l.numero)].filter(Boolean).join(', ')
+                    textoLocal = `Local de execução do serviço: ${[rua, limpaTexto(l.bairro), cidadeLocal, cepLocal.length === 8 ? `CEP ${cepLocal.slice(0, 5)}-${cepLocal.slice(5)}` : ''].filter(Boolean).join(' – ')}`
+                }
+                const infoCompl = [issRetido ? comAliquota(textoRetencao) : '', textoLocal, textoTributos]
                     .filter(Boolean).join('\n').slice(0, 2000)
                 if (infoCompl) servico.additional_info = infoCompl
 
